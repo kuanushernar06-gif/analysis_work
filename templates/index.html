@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Апталар тізімі — JUZ40{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <h1>Апта сабақ тапсыруларын анализдеу</h1>
+    <p class="section-intro">
+      Әр апта сайынғы сабақ тапсыру нәтижесін осы жерге қосыңыз: кураторлардың Google Sheets
+      кестесін импорттап, содан кейін олардың сапалы анализін (Google Docs-тан көшіріп) қосыңыз.
+      Сайт барлығын біріктіріп, ортақ анализ есебін шығарады.
+    </p>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Жаңа апта қосу</h2>
+  <form method="post" action="{{ url_for('create_week') }}" class="form-grid">
+    <label class="col-span-2">
+      Апта атауы
+      <input type="text" name="title" placeholder="Мысалы: 2026-жыл, 1-апта (14–20 шілде)" required>
+    </label>
+    <label>
+      Басталу күні
+      <input type="date" name="start_date">
+    </label>
+    <label>
+      Аяқталу күні
+      <input type="date" name="end_date">
+    </label>
+    <label class="col-span-2">
+      Өту пайызы, % (әдепкі 50%)
+      <input type="number" step="1" min="0" max="100" name="passing_score" placeholder="50">
+    </label>
+    <div class="col-span-2">
+      <button type="submit" class="btn btn-primary">Апта құру</button>
+    </div>
+  </form>
+</div>
+
+<div class="card">
+  <h2>Апталар тізімі</h2>
+  {% if weeks %}
+    <div class="nav-cards">
+      {% for item in weeks %}
+      <a class="nav-card" href="{{ url_for('week_overview', week_id=item.week['id']) }}">
+        <span class="nav-card-ic">🗂️</span>
+        <div class="nav-card-title">{{ item.week['title'] }}</div>
+        <div class="nav-card-sub">
+          {{ item.week['start_date'] or '—' }}{% if item.week['end_date'] %} – {{ item.week['end_date'] }}{% endif %}
+        </div>
+        <div class="nav-card-sub">{{ item.result_count }} нәтиже · {{ item.note_count }} куратор анализі</div>
+      </a>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p class="muted">Әзірге апта қосылмаған.</p>
+  {% endif %}
+</div>
+
+{% endblock %}

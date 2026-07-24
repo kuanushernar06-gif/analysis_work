@@ -1,0 +1,67 @@
+{% extends "week_base.html" %}
+{% block title %}{{ week['title'] }} — Куратор анализі{% endblock %}
+
+{% block week_content %}
+<div class="page-head">
+  <div>
+    <h1>Кураторлардың сапалы анализі</h1>
+    <p class="muted">{{ week['title'] }}</p>
+  </div>
+</div>
+
+<div class="card">
+  <p class="section-intro">
+    Куратор Google Docs-та жазған анализінен тиісті бөліктерін көшіріп, төмендегі сәйкес өрістерге
+    қойыңыз. Бос қалдырылған өрістер ортақ есепке қосылмайды. Әр куратор үшін бөлек пішін
+    толтырыңыз.
+  </p>
+  <form method="post" action="{{ url_for('add_note', week_id=week['id']) }}" class="form-grid">
+    <label class="col-span-2">
+      Куратор аты-жөні
+      <input type="text" name="curator" required placeholder="Мысалы: Айгүл Ахметова">
+    </label>
+    <label class="col-span-2">
+      Оқушылар неге максималды балл алды?
+      <textarea name="max_score_reasons" rows="3"></textarea>
+    </label>
+    <label class="col-span-2">
+      Ең көп қате жіберілген тақырыптар (куратордың өз бақылауы)
+      <textarea name="mistaken_topics" rows="3"></textarea>
+    </label>
+    <label class="col-span-2">
+      Дайындыққа не нәрсе әсер етті?
+      <textarea name="prep_factors" rows="3"></textarea>
+    </label>
+    <label class="col-span-2">
+      ҰБТ/СТ ортақ балл төмен болу себептері
+      <textarea name="low_score_reasons" rows="3"></textarea>
+    </label>
+    <label class="col-span-2">
+      Жалпы пікір / қосымша ескертпе
+      <textarea name="general_comment" rows="2"></textarea>
+    </label>
+    <button type="submit" class="btn btn-primary">Анализды қосу</button>
+  </form>
+</div>
+
+{% if notes %}
+<div class="card">
+  <h2>Қосылған кураторлар анализі ({{ notes|length }})</h2>
+  {% for n in notes %}
+    <div class="note-card">
+      <div class="note-head">
+        <strong>{{ n['curator'] }}</strong>
+        <form method="post" action="{{ url_for('delete_note', week_id=week['id'], note_id=n['id']) }}">
+          <button type="submit" class="btn btn-danger btn-small">Жою</button>
+        </form>
+      </div>
+      {% if n['max_score_reasons'] %}<p><b>Максимал балл себебі:</b> {{ n['max_score_reasons'] }}</p>{% endif %}
+      {% if n['mistaken_topics'] %}<p><b>Қате тақырыптар:</b> {{ n['mistaken_topics'] }}</p>{% endif %}
+      {% if n['prep_factors'] %}<p><b>Дайындыққа әсер еткен:</b> {{ n['prep_factors'] }}</p>{% endif %}
+      {% if n['low_score_reasons'] %}<p><b>Төмен балл себебі:</b> {{ n['low_score_reasons'] }}</p>{% endif %}
+      {% if n['general_comment'] %}<p><b>Жалпы пікір:</b> {{ n['general_comment'] }}</p>{% endif %}
+    </div>
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

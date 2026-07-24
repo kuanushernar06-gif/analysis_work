@@ -1,0 +1,44 @@
+{% extends "week_base.html" %}
+{% block title %}{{ week['title'] }} — Нәтижелер{% endblock %}
+
+{% block week_content %}
+<div class="page-head">
+  <div>
+    <h1>Импортталған нәтижелер</h1>
+    <p class="muted">{{ week['title'] }} · барлығы {{ result_count }} жазба (соңғы 300-і көрсетілген)</p>
+  </div>
+  <a class="btn btn-outline no-print" href="{{ url_for('week_import', week_id=week['id']) }}">+ Тағы кесте импорттау</a>
+</div>
+
+<div class="card">
+  {% if results %}
+  <div class="table-scroll">
+    <table class="table">
+      <thead>
+        <tr><th>Куратор</th><th>Оқушы</th><th>Пән</th><th>Тақырып</th><th>Балл</th><th>Максимум</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for r in results %}
+        <tr>
+          <td>{{ r['curator'] or '—' }}</td>
+          <td>{{ r['student'] }}</td>
+          <td>{{ r['subject'] or '—' }}</td>
+          <td>{{ r['topic'] or '—' }}</td>
+          <td>{{ r['score'] }}</td>
+          <td>{{ r['max_score'] or '—' }}</td>
+          <td class="no-print">
+            <form method="post" action="{{ url_for('delete_result', week_id=week['id'], result_id=r['id']) }}">
+              <button type="submit" class="btn btn-danger btn-small">✕</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+    <p class="muted">Әзірге ешбір нәтиже импортталмаған.</p>
+    <a class="btn btn-primary" href="{{ url_for('week_import', week_id=week['id']) }}">Кестені импорттау</a>
+  {% endif %}
+</div>
+{% endblock %}

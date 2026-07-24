@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="kk">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}JUZ40 — Апталық анализ{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  {% block header %}
+  <header class="topbar">
+    <a class="brand" href="{{ url_for('index') }}">JUZ40 · Апталық анализ</a>
+  </header>
+  {% endblock %}
+
+  {% block body %}
+  <main class="container">
+    {% include "_flashes.html" %}
+    {% block content %}{% endblock %}
+  </main>
+  {% endblock %}
+
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
