@@ -310,6 +310,12 @@ def _merge_analyses(chunk_analyses):
 
 def generate_curator_analysis(doc_text: str, report=None) -> dict:
     api_key = os.environ.get("GEMINI_API_KEY")
+    if api_key:
+        # Ортам айнымалысын веб-интерфейс арқылы қою кезінде кейде көзге
+        # көрінбейтін ASCII емес таңбалар (мыс. бос орынның басқа түрі)
+        # ілесіп қалады — олар кілтті шын мәнінде бұзбаса да, HTTP сұрау
+        # жолын кодтау кезінде түсініксіз UnicodeEncodeError тудырады.
+        api_key = "".join(ch for ch in api_key.strip() if ch.isascii() and ch.isprintable())
     if not api_key:
         raise CuratorAnalysisError(
             "GEMINI_API_KEY орнатылмаған. .env файлына тегін Gemini API кілтін қосыңыз "
