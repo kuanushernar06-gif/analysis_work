@@ -246,9 +246,19 @@ def _call_gemini(prompt, api_key):
 
     text = _strip_code_fence(text)
     try:
-        return json.loads(text)
+        parsed = json.loads(text)
     except json.JSONDecodeError as e:
         raise CuratorAnalysisError(f"Gemini API жауабын JSON ретінде оқи алмадым: {e}") from e
+
+    if not isinstance(parsed, dict):
+        # Кейде модель күтілген объект орнына тізім немесе басқа пішінде
+        # жауап қайтарады — мұны төменгі деңгейде (мыс. build_summary_text
+        # ішінде) түсініксіз AttributeError ретінде емес, осы жерде анық
+        # хабарламамен ұстау керек.
+        raise CuratorAnalysisError(
+            "Gemini API жауабы күтілген құрылымда (JSON объект) болмады — қайта жүктеп көріңіз."
+        )
+    return parsed
 
 
 def _analyze_chunk(chunk_text, stats_section, api_key):
