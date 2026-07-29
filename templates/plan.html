@@ -1,0 +1,28 @@
+{% extends "week_base.html" %}
+{% block title %}{{ week['title'] }} — Жоспар{% endblock %}
+
+{% block week_content %}
+<div class="page-head">
+  <div>
+    <h1>Апталық жоспар</h1>
+    <p class="muted">{{ week['title'] }}</p>
+  </div>
+</div>
+
+{% if plan_sections and plan_sections.topics %}
+<div class="plan-grid">
+  <div class="card plan-cell">
+    <h3 class="plan-cell-label">ТАҚЫРЫПТАР</h3>
+    <div class="doc-text" style="max-height:none;">{{ plan_sections.topics }}</div>
+  </div>
+</div>
+{% else %}
+<div class="card">
+  <p class="muted">
+    Бұл аптаға жоспар әлі қосылмаған. Жоспар бүкіл бағдарламаға (барлық потоктарға) бір рет
+    қосылады — <a href="{{ url_for('program_detail', slug=program['slug']) }}">{{ program['name'] }}
+    бағдарламасының бетіне</a> өтіп, Google Docs жоспар сілтемесін енгізіңіз.
+  </p>
+</div>
+{% endif %}
+{% endblock %}

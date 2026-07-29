@@ -10,6 +10,9 @@
   {% block header %}
   <header class="topbar">
     <a class="brand" href="{{ url_for('index') }}">JUZ40 · Апталық анализ</a>
+    <form method="post" action="{{ url_for('logout') }}" class="logout-form">
+      <button type="submit" class="btn btn-outline btn-small">Шығу</button>
+    </form>
   </header>
   {% endblock %}
 
@@ -20,6 +23,6 @@
   </main>
   {% endblock %}
 
-  <script src="{{ url_for('static', filename='app.js') }}"></script>
+  {% block scripts %}{% endblock %}
 </body>
 </html>

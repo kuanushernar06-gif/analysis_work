@@ -7,16 +7,67 @@ import psycopg2.extras
 
 SQLITE_PATH = Path(__file__).parent / "data" / "app.db"
 
+# Программалар мен потоктар — Юз40-тың нақты бағыттары мен потоктары. Жаңа поток
+# ашылғанда осы тізімге қосу жеткілікті.
+DEFAULT_PROGRAMS = [
+    (
+        "smart",
+        "Smart",
+        1,
+        ["Т-01", "Т-11", "Т-21", "Т-31", "Т-41", "Т-51", "Т-61", "Т-71", "Т-81", "Т-91", "Т-101"],
+    ),
+    (
+        "junior",
+        "Junior",
+        2,
+        ["J-01", "J-11", "J-21", "J-31", "J-41", "J-51", "J-61", "J-71", "J-81", "J-91", "J-101"],
+    ),
+]
+
+# Бағдарлама бойынша курс ұзақтығы (ай саны); әр ай 4 аптадан тұрады.
+PROGRAM_MONTHS = {"smart": 5, "junior": 5}
+WEEKS_PER_MONTH = 4
+
 # Постгрес (Neon/Vercel) диалектісі
 SCHEMA_PG = """
+CREATE TABLE IF NOT EXISTS programs (
+    id SERIAL PRIMARY KEY,
+    slug TEXT UNIQUE NOT NULL,
+    name TEXT NOT NULL,
+    sort_order INTEGER DEFAULT 0,
+    plan_doc_url TEXT,
+    plan_doc_fetch_error TEXT
+);
+
+CREATE TABLE IF NOT EXISTS streams (
+    id SERIAL PRIMARY KEY,
+    program_id INTEGER NOT NULL REFERENCES programs(id) ON DELETE CASCADE,
+    code TEXT NOT NULL,
+    sort_order INTEGER DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    UNIQUE(program_id, code)
+);
+
 CREATE TABLE IF NOT EXISTS weeks (
     id SERIAL PRIMARY KEY,
+    stream_id INTEGER REFERENCES streams(id) ON DELETE CASCADE,
+    month_number INTEGER,
+    week_number INTEGER,
     title TEXT NOT NULL,
     start_date TEXT,
     end_date TEXT,
     passing_score REAL,
     max_score REAL DEFAULT 140,
+    gold_threshold REAL,
+    silver_threshold REAL,
+    target_score REAL,
     summary TEXT,
+    curators_doc_url TEXT,
+    curators_doc_text TEXT,
+    curators_doc_fetch_error TEXT,
+    curators_analysis_json TEXT,
+    curators_analysis_error TEXT,
+    plan_text TEXT,
     created_at TIMESTAMPTZ DEFAULT now()
 );
 
@@ -25,8 +76,10 @@ CREATE TABLE IF NOT EXISTS imports (
     week_id INTEGER NOT NULL REFERENCES weeks(id) ON DELETE CASCADE,
     sheet_url TEXT,
     curator TEXT,
+    sheet_count INTEGER,
     row_count INTEGER,
     skipped_count INTEGER,
+    target_score REAL,
     created_at TIMESTAMPTZ DEFAULT now()
 );
 
@@ -47,15 +100,14 @@ CREATE TABLE IF NOT EXISTS curator_notes (
     id SERIAL PRIMARY KEY,
     week_id INTEGER NOT NULL REFERENCES weeks(id) ON DELETE CASCADE,
     curator TEXT NOT NULL,
-    max_score_reasons TEXT,
-    mistaken_topics TEXT,
-    prep_factors TEXT,
-    low_score_reasons TEXT,
-    general_comment TEXT,
+    doc_url TEXT,
+    doc_text TEXT,
+    fetch_error TEXT,
     created_at TIMESTAMPTZ DEFAULT now(),
     updated_at TIMESTAMPTZ DEFAULT now()
 );
 
+CREATE INDEX IF NOT EXISTS idx_streams_program ON streams(program_id);
 CREATE INDEX IF NOT EXISTS idx_results_week ON results(week_id);
 CREATE INDEX IF NOT EXISTS idx_notes_week ON curator_notes(week_id);
 CREATE INDEX IF NOT EXISTS idx_imports_week ON imports(week_id);
@@ -65,14 +117,44 @@ CREATE INDEX IF NOT EXISTS idx_imports_week ON imports(week_id);
 # (нөлдік баптаумен preview көру мақсатында; Postgres 3.35+ RETURNING-мен
 # сәйкес келу үшін SQLite 3.35+ қажет)
 SCHEMA_SQLITE = """
+CREATE TABLE IF NOT EXISTS programs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    slug TEXT UNIQUE NOT NULL,
+    name TEXT NOT NULL,
+    sort_order INTEGER DEFAULT 0,
+    plan_doc_url TEXT,
+    plan_doc_fetch_error TEXT
+);
+
+CREATE TABLE IF NOT EXISTS streams (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    program_id INTEGER NOT NULL REFERENCES programs(id) ON DELETE CASCADE,
+    code TEXT NOT NULL,
+    sort_order INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(program_id, code)
+);
+
 CREATE TABLE IF NOT EXISTS weeks (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    stream_id INTEGER REFERENCES streams(id) ON DELETE CASCADE,
+    month_number INTEGER,
+    week_number INTEGER,
     title TEXT NOT NULL,
     start_date TEXT,
     end_date TEXT,
     passing_score REAL,
     max_score REAL DEFAULT 140,
+    gold_threshold REAL,
+    silver_threshold REAL,
+    target_score REAL,
     summary TEXT,
+    curators_doc_url TEXT,
+    curators_doc_text TEXT,
+    curators_doc_fetch_error TEXT,
+    curators_analysis_json TEXT,
+    curators_analysis_error TEXT,
+    plan_text TEXT,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -81,8 +163,10 @@ CREATE TABLE IF NOT EXISTS imports (
     week_id INTEGER NOT NULL REFERENCES weeks(id) ON DELETE CASCADE,
     sheet_url TEXT,
     curator TEXT,
+    sheet_count INTEGER,
     row_count INTEGER,
     skipped_count INTEGER,
+    target_score REAL,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -103,15 +187,14 @@ CREATE TABLE IF NOT EXISTS curator_notes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     week_id INTEGER NOT NULL REFERENCES weeks(id) ON DELETE CASCADE,
     curator TEXT NOT NULL,
-    max_score_reasons TEXT,
-    mistaken_topics TEXT,
-    prep_factors TEXT,
-    low_score_reasons TEXT,
-    general_comment TEXT,
+    doc_url TEXT,
+    doc_text TEXT,
+    fetch_error TEXT,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE INDEX IF NOT EXISTS idx_streams_program ON streams(program_id);
 CREATE INDEX IF NOT EXISTS idx_results_week ON results(week_id);
 CREATE INDEX IF NOT EXISTS idx_notes_week ON curator_notes(week_id);
 CREATE INDEX IF NOT EXISTS idx_imports_week ON imports(week_id);
@@ -172,9 +255,128 @@ def get_connection():
     return _get_sqlite_connection()
 
 
+def _column_exists(conn, table, column):
+    if getattr(conn, "backend", None) == "postgres":
+        row = conn.execute(
+            "SELECT column_name FROM information_schema.columns WHERE table_name = ? AND column_name = ?",
+            (table, column),
+        ).fetchone()
+        return row is not None
+    row = conn.execute(f"PRAGMA table_info({table})").fetchall()
+    return any(r["name"] == column for r in row)
+
+
+def _migrate(conn):
+    """Осыдан бұрын құрылған дерекқорларда жоқ бағандарды қосады (мыс. streams
+    кестесі енгізілгенге дейін жасалған weeks кестесіне stream_id қосу)."""
+    if not _column_exists(conn, "weeks", "stream_id"):
+        conn.execute(
+            "ALTER TABLE weeks ADD COLUMN stream_id INTEGER REFERENCES streams(id) ON DELETE CASCADE"
+        )
+        conn.commit()
+    if not _column_exists(conn, "weeks", "month_number"):
+        conn.execute("ALTER TABLE weeks ADD COLUMN month_number INTEGER")
+        conn.commit()
+    if not _column_exists(conn, "weeks", "week_number"):
+        conn.execute("ALTER TABLE weeks ADD COLUMN week_number INTEGER")
+        conn.commit()
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_weeks_stream ON weeks(stream_id)")
+    conn.commit()
+    if not _column_exists(conn, "weeks", "curators_doc_url"):
+        conn.execute("ALTER TABLE weeks ADD COLUMN curators_doc_url TEXT")
+        conn.commit()
+    if not _column_exists(conn, "weeks", "curators_doc_text"):
+        conn.execute("ALTER TABLE weeks ADD COLUMN curators_doc_text TEXT")
+        conn.commit()
+    if not _column_exists(conn, "weeks", "curators_doc_fetch_error"):
+        conn.execute("ALTER TABLE weeks ADD COLUMN curators_doc_fetch_error TEXT")
+        conn.commit()
+    if not _column_exists(conn, "weeks", "curators_analysis_json"):
+        conn.execute("ALTER TABLE weeks ADD COLUMN curators_analysis_json TEXT")
+        conn.commit()
+    if not _column_exists(conn, "weeks", "curators_analysis_error"):
+        conn.execute("ALTER TABLE weeks ADD COLUMN curators_analysis_error TEXT")
+        conn.commit()
+    if not _column_exists(conn, "imports", "sheet_count"):
+        conn.execute("ALTER TABLE imports ADD COLUMN sheet_count INTEGER")
+        conn.commit()
+    if not _column_exists(conn, "weeks", "gold_threshold"):
+        conn.execute("ALTER TABLE weeks ADD COLUMN gold_threshold REAL")
+        conn.commit()
+    if not _column_exists(conn, "weeks", "silver_threshold"):
+        conn.execute("ALTER TABLE weeks ADD COLUMN silver_threshold REAL")
+        conn.commit()
+    if not _column_exists(conn, "imports", "target_score"):
+        conn.execute("ALTER TABLE imports ADD COLUMN target_score REAL")
+        conn.commit()
+    if not _column_exists(conn, "weeks", "target_score"):
+        conn.execute("ALTER TABLE weeks ADD COLUMN target_score REAL")
+        conn.commit()
+    if not _column_exists(conn, "weeks", "plan_text"):
+        conn.execute("ALTER TABLE weeks ADD COLUMN plan_text TEXT")
+        conn.commit()
+    if not _column_exists(conn, "programs", "plan_doc_url"):
+        conn.execute("ALTER TABLE programs ADD COLUMN plan_doc_url TEXT")
+        conn.commit()
+    if not _column_exists(conn, "programs", "plan_doc_fetch_error"):
+        conn.execute("ALTER TABLE programs ADD COLUMN plan_doc_fetch_error TEXT")
+        conn.commit()
+
+
+def _seed_defaults(conn):
+    for slug, name, order, stream_codes in DEFAULT_PROGRAMS:
+        row = conn.execute("SELECT id FROM programs WHERE slug = ?", (slug,)).fetchone()
+        if row is None:
+            program_id = conn.execute(
+                "INSERT INTO programs (slug, name, sort_order) VALUES (?, ?, ?) RETURNING id",
+                (slug, name, order),
+            ).fetchone()["id"]
+        else:
+            program_id = row["id"]
+
+        for i, code in enumerate(stream_codes):
+            existing = conn.execute(
+                "SELECT id FROM streams WHERE program_id = ? AND code = ?", (program_id, code)
+            ).fetchone()
+            if existing is None:
+                conn.execute(
+                    "INSERT INTO streams (program_id, code, sort_order) VALUES (?, ?, ?)",
+                    (program_id, code, i),
+                )
+    conn.commit()
+
+
+def _seed_weeks(conn):
+    """Әр потокқа бекітілген оқу күнтізбесін алдын ала толтырады: Smart/Junior — 5 ай,
+    әр ай 4 аптадан ('N-АЙ M-АПТА')."""
+    programs = conn.execute("SELECT * FROM programs").fetchall()
+    for p in programs:
+        months = PROGRAM_MONTHS.get(p["slug"])
+        if not months:
+            continue
+        streams = conn.execute("SELECT * FROM streams WHERE program_id = ?", (p["id"],)).fetchall()
+        for s in streams:
+            existing_count = conn.execute(
+                "SELECT COUNT(*) AS c FROM weeks WHERE stream_id = ?", (s["id"],)
+            ).fetchone()["c"]
+            if existing_count > 0:
+                continue
+            for month in range(1, months + 1):
+                for week in range(1, WEEKS_PER_MONTH + 1):
+                    title = f"{month}-АЙ {week}-АПТА"
+                    conn.execute(
+                        "INSERT INTO weeks (stream_id, month_number, week_number, title) VALUES (?, ?, ?, ?)",
+                        (s["id"], month, week, title),
+                    )
+    conn.commit()
+
+
 def init_db():
     conn = get_connection()
     schema = SCHEMA_PG if getattr(conn, "backend", None) == "postgres" else SCHEMA_SQLITE
     conn.executescript(schema)
     conn.commit()
+    _migrate(conn)
+    _seed_defaults(conn)
+    _seed_weeks(conn)
     conn.close()

@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}{{ stream['code'] }} — JUZ40{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <a class="back-link" href="{{ url_for('program_detail', slug=program['slug']) }}">← {{ program['name'] }}</a>
+    <h1>{{ program['name'] }} · {{ stream['code'] }}</h1>
+    <p class="muted">Айды, содан кейін аптаны таңдаңыз.</p>
+  </div>
+</div>
+
+{% for month_number, weeks in months %}
+<div class="card">
+  <h2>{% if month_number %}{{ month_number }}-АЙ{% else %}Басқа апталар{% endif %}</h2>
+  <div class="nav-cards">
+    {% for item in weeks %}
+    <a class="nav-card" href="{{ url_for('week_import', week_id=item.week['id']) }}">
+      <span class="nav-card-ic">📅</span>
+      <div class="nav-card-title">{{ item.week['title'] }}</div>
+      <div class="nav-card-sub">{{ item.result_count }} нәтиже · {% if item.note_count %}куратор анализі қосылған{% else %}куратор анализі жоқ{% endif %}</div>
+    </a>
+    {% endfor %}
+  </div>
+</div>
+{% else %}
+<div class="card">
+  <p class="muted">Бұл потокта әзірге апта жоқ.</p>
+</div>
+{% endfor %}
+
+{% endblock %}

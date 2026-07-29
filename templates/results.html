@@ -4,41 +4,105 @@
 {% block week_content %}
 <div class="page-head">
   <div>
-    <h1>Импортталған нәтижелер</h1>
-    <p class="muted">{{ week['title'] }} · барлығы {{ result_count }} жазба (соңғы 300-і көрсетілген)</p>
+    <h1>Барлық рейтингтердің ортақ нәтижелері</h1>
+    <p class="muted">{{ week['title'] }} · барлығы {{ result_count }} жазба</p>
   </div>
-  <a class="btn btn-outline no-print" href="{{ url_for('week_import', week_id=week['id']) }}">+ Тағы кесте импорттау</a>
 </div>
 
+{% if report and report.has_data %}
 <div class="card">
-  {% if results %}
-  <div class="table-scroll">
-    <table class="table">
-      <thead>
-        <tr><th>Куратор</th><th>Оқушы</th><th>Пән</th><th>Тақырып</th><th>Балл</th><th>Максимум</th><th></th></tr>
-      </thead>
-      <tbody>
-        {% for r in results %}
-        <tr>
-          <td>{{ r['curator'] or '—' }}</td>
-          <td>{{ r['student'] }}</td>
-          <td>{{ r['subject'] or '—' }}</td>
-          <td>{{ r['topic'] or '—' }}</td>
-          <td>{{ r['score'] }}</td>
-          <td>{{ r['max_score'] or '—' }}</td>
-          <td class="no-print">
-            <form method="post" action="{{ url_for('delete_result', week_id=week['id'], result_id=r['id']) }}">
-              <button type="submit" class="btn btn-danger btn-small">✕</button>
-            </form>
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+  <h2>Талдау</h2>
+  <div class="stat-grid">
+    {% if report.has_targets %}
+    <div class="stat-tile {{ 'stat-good' if report.target_achievement_percent is not none and report.target_achievement_percent >= 100 else 'stat-warn' }}">
+      <div class="stat-value">
+        {% if report.target_achievement_percent is not none %}{{ report.target_achievement_percent }}%{% else %}—{% endif %}
+      </div>
+      <div class="stat-label">Мақсат орындалу пайызы (мақсат: {{ week['target_score'] }})</div>
+    </div>
+    {% endif %}
+    <div class="stat-tile">
+      <div class="stat-value">{{ report.overall_avg_score }}</div>
+      <div class="stat-label">СТ ортақ балл (шикі)</div>
+    </div>
+    <div class="stat-tile stat-good">
+      <div class="stat-value">{{ report.max_achiever_students }}</div>
+      <div class="stat-label">Ең жоғарғы балл жинаған оқушы</div>
+    </div>
+    <div class="stat-tile stat-warn">
+      <div class="stat-value">{{ report.zero_students }}</div>
+      <div class="stat-label">0 балл жинаған оқушы</div>
+    </div>
+    {% if report.best_curator %}
+    <div class="stat-tile stat-good">
+      <div class="stat-value">{{ report.best_curator.avg_score }}</div>
+      <div class="stat-label">Ең жоғары ортақ балл куратор — {{ report.best_curator.curator }}</div>
+    </div>
+    {% endif %}
+    {% if report.worst_curator %}
+    <div class="stat-tile stat-warn">
+      <div class="stat-value">{{ report.worst_curator.avg_score }}</div>
+      <div class="stat-label">Ең төмен ортақ балл куратор — {{ report.worst_curator.curator }}</div>
+    </div>
+    {% endif %}
   </div>
-  {% else %}
-    <p class="muted">Әзірге ешбір нәтиже импортталмаған.</p>
-    <a class="btn btn-primary" href="{{ url_for('week_import', week_id=week['id']) }}">Кестені импорттау</a>
-  {% endif %}
+
+  <h3>Лига бойынша үлес</h3>
+  <div class="stat-grid">
+    <div class="stat-tile">
+      <div class="stat-value">{{ report.gold_share }}%</div>
+      <div class="stat-label">Алтын лига · {{ report.gold_count }} оқушы</div>
+    </div>
+    <div class="stat-tile">
+      <div class="stat-value">{{ report.silver_share }}%</div>
+      <div class="stat-label">Күміс лига · {{ report.silver_count }} оқушы</div>
+    </div>
+    <div class="stat-tile">
+      <div class="stat-value">{{ report.bronze_share }}%</div>
+      <div class="stat-label">Қола лига · {{ report.bronze_count }} оқушы</div>
+    </div>
+  </div>
+  <p class="chart-legend-note">Пайыздар барлық оқушы санына ({{ report.unique_students }}) қатысты есептелген.</p>
+
+  <form method="post" action="{{ url_for('update_league_thresholds', week_id=week['id']) }}" class="inline-form no-print">
+    <label>Алтын шегі (балл)
+      <input type="number" step="0.01" name="gold_threshold" autocomplete="off"
+             value="{{ week['gold_threshold'] if week['gold_threshold'] is not none else '' }}" placeholder="Мысалы: 13">
+    </label>
+    <label>Күміс шегі (балл)
+      <input type="number" step="0.01" name="silver_threshold" autocomplete="off"
+             value="{{ week['silver_threshold'] if week['silver_threshold'] is not none else '' }}" placeholder="Мысалы: 10">
+    </label>
+    <label>Қола (өту) шегі (балл)
+      <input type="number" step="0.01" name="passing_score" autocomplete="off"
+             value="{{ week['passing_score'] if week['passing_score'] is not none else '' }}" placeholder="Мысалы: 7">
+    </label>
+    <button type="submit" class="btn btn-outline btn-small">Жаңарту</button>
+  </form>
+  <p class="chart-legend-note">Балл кестені импорттау кезіндегі максимум баллға қатысты пайызға автоматты айналдырылады.</p>
+
+  <div class="import-submit-row no-print" id="clear-results-area">
+    <button type="button" class="btn btn-danger btn-small" id="clear-results-btn">Барлық нәтижелерді өшіру</button>
+    <div id="clear-results-confirm" style="display:none">
+      <p class="muted">
+        Осы аптаның барлық импортталған рейтинг нәтижелерін (барлығы {{ result_count }} жазба)
+        толық өшіру керек пе? Бұл әрекетті қайтару мүмкін емес.
+      </p>
+      <form method="post" action="{{ url_for('clear_results', week_id=week['id']) }}" style="display:inline">
+        <button type="submit" class="btn btn-danger btn-small">Иә, толық өшіру</button>
+      </form>
+      <button type="button" class="btn btn-outline btn-small" id="clear-results-cancel">Болдырмау</button>
+    </div>
+  </div>
 </div>
+{% else %}
+<div class="card">
+  <p class="muted">Әзірге ешбір нәтиже импортталмаған.</p>
+  <a class="btn btn-primary" href="{{ url_for('week_import', week_id=week['id']) }}">Кестені импорттау</a>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='results.js') }}"></script>
 {% endblock %}

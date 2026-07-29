@@ -4,14 +4,19 @@
 {% block body %}
 <div class="app-shell">
   <aside class="sidebar no-print">
-    <a class="sidebar-back" href="{{ url_for('index') }}">← Апталар тізіміне</a>
+    {% if stream %}
+      <a class="sidebar-back" href="{{ url_for('stream_detail', stream_id=stream['id']) }}">← {{ stream['code'] }} апталарына</a>
+      <div class="sidebar-breadcrumb">{{ program['name'] }} / {{ stream['code'] }}</div>
+    {% else %}
+      <a class="sidebar-back" href="{{ url_for('index') }}">← Бағдарламаларға</a>
+    {% endif %}
     <div class="sidebar-title">{{ week['title'] }}</div>
     <div class="sidebar-meta">
       {{ week['start_date'] or '—' }}{% if week['end_date'] %} – {{ week['end_date'] }}{% endif %}
     </div>
     <nav class="sidebar-nav">
-      <a href="{{ url_for('week_overview', week_id=week['id']) }}" class="{{ 'active' if active_page == 'overview' else '' }}">
-        <span class="ic">🏠</span> Шолу
+      <a href="{{ url_for('week_plan', week_id=week['id']) }}" class="{{ 'active' if active_page == 'plan' else '' }}">
+        <span class="ic">🗓️</span> Жоспар
       </a>
       <a href="{{ url_for('week_import', week_id=week['id']) }}" class="{{ 'active' if active_page == 'import' else '' }}">
         <span class="ic">📥</span> Кестені импорттау

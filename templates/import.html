@@ -7,81 +7,52 @@
     <h1>Кестені импорттау</h1>
     <p class="muted">{{ week['title'] }}</p>
   </div>
+  <a class="btn btn-outline no-print" href="{{ url_for('week_results', week_id=week['id']) }}">Нәтижелерді көру →</a>
 </div>
 
 <div class="card">
   <p class="section-intro">
-    Куратордың Google Sheets кестесін «Файл → Ортаққа бөлу → Сілтеме алу» арқылы ашық қылып қойыңыз
-    да, сол сілтемені осында қойыңыз. Алдымен «Алдын ала қарау» батырмасын басып, қай баған нені
-    білдіретінін көрсетіңіз. Әр куратордың кестесін бөлек импорттауға болады — нәтижелер бір апта
-    ішінде қосылып отырады.
+    Рейтинг сілтемесін (Google Sheets кестесін) «Файл → Ортаққа бөлу → Сілтемесі бар кез келген
+    адам → Көруші» етіп ашық қылып қойыңыз да, сілтемесін осында қойыңыз. Кестеде әр куратордың
+    нәтижесі бөлек парақта (лист) тұруы керек — сайт кестенің барлық парақтарын оқиды және әр
+    парақтың атауын сол парақтағы оқушылардың куратор аты ретінде пайдаланады (бір кестеде
+    30-ға дейін парақ болуы мүмкін). Оқушы аты мен балл бағандарын сайт өзі автоматты түрде
+    таниды — қолмен таңдаудың қажеті жоқ. Төмендегі «+ Рейтинг қосу» батырмасымен бірнеше
+    рейтинг сілтемесін қатарынан қосыңыз да, барлығын дайындап болған соң ең астыңғы «Анализ
+    шығару» батырмасын бір-ақ рет басыңыз — сайт барлық рейтингті бірден өңдеп, нәтижесін
+    «Нәтижелер» бетінде біріктіреді.
   </p>
-
-  <div class="form-grid">
-    <label class="col-span-2">
-      Google Sheets сілтемесі
-      <input type="text" id="sheet-url-input" placeholder="https://docs.google.com/spreadsheets/d/...">
-    </label>
-    <label>
-      Бұл кестедегі куратор (егер кестеде «Куратор» бағаны болмаса)
-      <input type="text" id="fixed-curator-input" placeholder="Мысалы: Айгүл Ахметова">
-    </label>
-    <label>
-      Әдепкі максимум балл (баған болмаса)
-      <input type="number" step="0.01" id="default-max-score-input" placeholder="Мысалы: 20">
-    </label>
-    <div>
-      <button type="button" class="btn btn-outline" id="preview-btn">Алдын ала қарау</button>
-    </div>
-  </div>
-
-  <div id="preview-status" class="muted"></div>
-
-  <div id="mapping-area" style="display:none">
-    <h3>Бағандарды сәйкестендіру</h3>
-    <div class="form-grid" id="mapping-fields"></div>
-
-    <div class="table-scroll">
-      <table class="table" id="preview-table"></table>
-    </div>
-
-    <form method="post" action="{{ url_for('import_sheet', week_id=week['id']) }}" id="import-form">
-      <input type="hidden" name="sheet_url" id="import-sheet-url">
-      <input type="hidden" name="fixed_curator" id="import-fixed-curator">
-      <input type="hidden" name="default_max_score" id="import-default-max-score">
-      <input type="hidden" name="col_student" id="col_student">
-      <input type="hidden" name="col_subject" id="col_subject">
-      <input type="hidden" name="col_topic" id="col_topic">
-      <input type="hidden" name="col_score" id="col_score">
-      <input type="hidden" name="col_max_score" id="col_max_score">
-      <input type="hidden" name="col_curator" id="col_curator">
-      <button type="submit" class="btn btn-primary">Осы кестені импорттау</button>
-    </form>
-  </div>
 </div>
 
-{% if imports %}
 <div class="card">
-  <h2>Импорт тарихы</h2>
-  <div class="table-scroll">
-    <table class="table">
-      <thead><tr><th>Уақыты</th><th>Куратор</th><th>Қосылған жол</th><th>Өткізілген жол</th></tr></thead>
-      <tbody>
-        {% for imp in imports %}
-        <tr>
-          <td>{{ imp['created_at'] }}</td>
-          <td>{{ imp['curator'] or '—' }}</td>
-          <td>{{ imp['row_count'] }}</td>
-          <td>{{ imp['skipped_count'] }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-  <form method="post" action="{{ url_for('clear_results', week_id=week['id']) }}"
-        onsubmit="return confirm('Осы аптаның барлық импортталған нәтижелерін жою керек пе?');">
-    <button type="submit" class="btn btn-danger btn-small">Барлық нәтижелерді тазалау</button>
+  <h2>Мақсат</h2>
+  <p class="muted">
+    Осы аптаның барлық рейтинг нәтижелеріне бірдей қойылатын мақсат балл (міндетті емес — кейде
+    нақты мақсат болмайды). Қойылса, «Нәтижелер» бетінде мақсат орындалу пайызы автоматты
+    есептеледі.
+  </p>
+  <form method="post" action="{{ url_for('update_week_target', week_id=week['id']) }}" class="inline-form no-print">
+    <label>Мақсат балл (міндетті емес)
+      <input type="number" step="0.01" name="target_score" autocomplete="off" value="{{ week['target_score'] if week['target_score'] is not none else '' }}" placeholder="Мысалы: 12">
+    </label>
+    <button type="submit" class="btn btn-outline btn-small">Сақтау</button>
   </form>
 </div>
-{% endif %}
+
+<div class="card">
+  <form method="post" action="{{ url_for('import_sheet', week_id=week['id']) }}" id="import-form">
+    <div id="rating-rows"></div>
+    <p id="rating-empty-hint" class="muted">Әзірге рейтинг қосылмаған. Бастау үшін төмендегі батырманы басыңыз.</p>
+
+    <button type="button" class="btn btn-outline" id="add-rating-btn">+ Рейтинг қосу</button>
+
+    <div class="import-submit-row">
+      <button type="submit" class="btn btn-primary">Анализ шығару</button>
+    </div>
+  </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='import.js') }}"></script>
 {% endblock %}

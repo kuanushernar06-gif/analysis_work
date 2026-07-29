@@ -1,0 +1,123 @@
+{% if week['curators_analysis_error'] %}
+  <p class="flash flash-error">{{ week['curators_analysis_error'] }}</p>
+{% elif curator_analysis %}
+  {% set a = curator_analysis %}
+  {% if a.curator_count is not none %}
+  <div class="stat-grid">
+    <div class="stat-tile">
+      <div class="stat-value">{{ a.curator_count }}</div>
+      <div class="stat-label">Талданған куратор саны</div>
+    </div>
+  </div>
+  {% endif %}
+  {% if a.main_goal %}
+  <p class="muted"><b>Негізгі мақсат:</b> {{ a.main_goal }}</p>
+  {% endif %}
+
+  <div class="analysis-grid">
+    {% if a.top_error_topics %}
+    <div class="analysis-block">
+      <h4>Ең көп қате кеткен тақырыптар</h4>
+      <div class="barchart">
+        {% for t in a.top_error_topics %}
+        <div class="bar-row-stacked">
+          <div class="bar-name">{{ t.name }}</div>
+          <div class="bar-line">
+            <div class="bar-track"><div class="bar-fill status-critical" style="width: {{ t.percent }}%"></div></div>
+            <div class="bar-value">{{ t.percent }}%</div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    {% if a.low_result_reasons %}
+    <div class="analysis-block">
+      <h4>Неге төмен нәтиже көрсетті</h4>
+      <div class="barchart">
+        {% for r in a.low_result_reasons %}
+        <div class="bar-row-stacked">
+          <div class="bar-name">{{ r.name }}</div>
+          <div class="bar-line">
+            <div class="bar-track"><div class="bar-fill status-warning" style="width: {{ r.percent }}%"></div></div>
+            <div class="bar-value">{{ r.percent }}%</div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    {% if a.curator_mistakes %}
+    <div class="analysis-block">
+      <h4>Кураторлар жіберген негізгі қателіктер</h4>
+      <div class="barchart">
+        {% for m in a.curator_mistakes %}
+        <div class="bar-row-stacked">
+          <div class="bar-name">{{ m.name }}</div>
+          <div class="bar-line">
+            <div class="bar-track"><div class="bar-fill status-critical" style="width: {{ m.percent }}%"></div></div>
+            <div class="bar-value">{{ m.percent }}%</div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    {% if a.level_distribution %}
+    <div class="analysis-block">
+      <h4>Оқушылар деңгейі бойынша үлес</h4>
+      <div class="barchart">
+        {% for lvl in a.level_distribution %}
+        <div class="bar-row-stacked">
+          <div class="bar-name">{{ lvl.label }}</div>
+          <div class="bar-line">
+            <div class="bar-track"><div class="bar-fill status-good" style="width: {{ lvl.percent }}%"></div></div>
+            <div class="bar-value">{{ lvl.percent }}%</div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  {% if a.top_solutions %}
+  <div class="analysis-block" style="margin-top: 12px;">
+    <h4>Кураторлар ұсынған шешімдер</h4>
+    <div class="barchart">
+      {% for s in a.top_solutions %}
+      <div class="bar-row-stacked">
+        <div class="bar-name">{{ s.name }}</div>
+        <div class="bar-line">
+          <div class="bar-track"><div class="bar-fill status-good" style="width: {{ s.percent }}%"></div></div>
+          <div class="bar-value">{{ s.percent }}%</div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% if a.priority_directions %}
+  <div class="analysis-block" style="margin-top: 12px;">
+    <h4>Басымдық беру керек бағыттар</h4>
+    <ol class="priority-list">
+      {% for p in a.priority_directions %}<li>{{ p }}</li>{% endfor %}
+    </ol>
+  </div>
+  {% endif %}
+
+  {% if a.overall_summary %}
+  <div class="analysis-summary" style="margin-top: 12px;">
+    {{ a.overall_summary }}
+  </div>
+  {% endif %}
+
+{% elif week['curators_doc_text'] %}
+  <p class="muted">Мәтін жүктелді, бірақ талдау әлі жасалмаған. «Қайта жүктеу» батырмасын басыңыз.</p>
+{% else %}
+  <p class="muted">Мәтін әлі жүктелмеген.</p>
+{% endif %}

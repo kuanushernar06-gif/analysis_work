@@ -12,27 +12,25 @@
 
 {% if not report.has_data %}
 <div class="card">
-  <p class="muted">Есеп шығару үшін алдымен кестені импорттаңыз.</p>
+  <p class="muted">
+    Сандық деректер әлі жоқ (кесте импортталмаған), сондықтан балл бойынша есеп көрсетілмейді.
+    Бірақ кураторлардың сапалы анализін төменде қоса аласыз.
+  </p>
   <a class="btn btn-primary" href="{{ url_for('week_import', week_id=week['id']) }}">Кестені импорттау</a>
 </div>
 {% else %}
 
-<div class="card no-print">
-  <form method="post" action="{{ url_for('update_passing_score', week_id=week['id']) }}" class="inline-form">
-    <label>Өту пайызы, %
-      <input type="number" step="1" min="0" max="100" name="passing_score" value="{{ report.passing_percent }}">
-    </label>
-    <button type="submit" class="btn btn-outline btn-small">Жаңарту</button>
-  </form>
-</div>
-
 <div class="card">
   <h2>Жалпы көрсеткіштер</h2>
   <div class="stat-grid">
-    <div class="stat-tile">
-      <div class="stat-value">{{ report.overall_avg_percent }}%</div>
-      <div class="stat-label">Ортақ орташа балл (пайызбен)</div>
+    {% if report.has_targets %}
+    <div class="stat-tile {{ 'stat-good' if report.target_achievement_percent is not none and report.target_achievement_percent >= 100 else 'stat-warn' }}">
+      <div class="stat-value">
+        {% if report.target_achievement_percent is not none %}{{ report.target_achievement_percent }}%{% else %}—{% endif %}
+      </div>
+      <div class="stat-label">Мақсат орындалу пайызы (мақсат: {{ week['target_score'] }})</div>
     </div>
+    {% endif %}
     <div class="stat-tile">
       <div class="stat-value">{{ report.overall_avg_score }}</div>
       <div class="stat-label">Ортақ орташа балл (шикі)</div>
@@ -42,8 +40,8 @@
       <div class="stat-label">Барлық оқушы саны</div>
     </div>
     <div class="stat-tile stat-warn">
-      <div class="stat-value">{{ report.fail_unique_students }}</div>
-      <div class="stat-label">Проходной балл жинамаған оқушы</div>
+      <div class="stat-value">{{ report.zero_students }}</div>
+      <div class="stat-label">0 балл жинаған оқушы</div>
     </div>
     <div class="stat-tile stat-good">
       <div class="stat-value">{{ report.max_achiever_count }}</div>
@@ -53,49 +51,7 @@
 </div>
 
 <div class="card">
-  <h2>Пәндер бойынша орташа балл</h2>
-  <div class="barchart">
-    {% for s in report.subjects %}
-    <div class="bar-row">
-      <div class="bar-name" title="{{ s.name }}">{{ s.name }}</div>
-      <div class="bar-track">
-        <div class="bar-fill" style="width: {{ s.avg_percent }}%"></div>
-        <div class="bar-ref" style="left: {{ report.passing_percent }}%"></div>
-      </div>
-      <div class="bar-value">{{ s.avg_percent }}%</div>
-    </div>
-    {% endfor %}
-  </div>
-  <p class="chart-legend-note">┊ пунктир — өту шегі ({{ report.passing_percent }}%)</p>
-  <div class="table-scroll">
-    <table class="table">
-      <thead><tr><th>Пән</th><th>Жазба саны</th><th>Орташа балл</th><th>Орташа %</th><th>Өтпегендер</th></tr></thead>
-      <tbody>
-        {% for s in report.subjects %}
-        <tr>
-          <td>{{ s.name }}</td>
-          <td>{{ s.count }}</td>
-          <td>{{ s.avg_score }}</td>
-          <td>{{ s.avg_percent }}%</td>
-          <td>{{ s.fail }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-</div>
-
-<div class="card">
-  <h3>Неге оқушылар максималды балл алды</h3>
-  {% if report.notes_by_field.max_score_reasons %}
-    <ul class="note-list">
-      {% for item in report.notes_by_field.max_score_reasons %}
-        <li><b>{{ item.curator }}:</b> {{ item.text }}</li>
-      {% endfor %}
-    </ul>
-  {% else %}
-    <p class="muted">Кураторлар әлі бұл бөлім бойынша анализ қоспаған. <a href="{{ url_for('week_notes', week_id=week['id']) }}">Куратор анализі бетіне өту →</a></p>
-  {% endif %}
+  <h3>Максималды балл алған оқушылар</h3>
   {% if report.max_achievers %}
     <details>
       <summary>{{ report.max_achiever_count }} максималды нәтиженің тізімі</summary>
@@ -107,101 +63,80 @@
     </details>
   {% endif %}
 
-  <h3>Проходной балл жинамаған оқушылар</h3>
-  <p>Барлығы <b>{{ report.fail_unique_students }}</b> оқушы, <b>{{ report.fail_count_entries }}</b> жазбада
-     ({{ report.passing_percent }}% шегінен төмен) нәтиже көрсетті.</p>
-  {% if report.fail_rows %}
-    <details>
-      <summary>Толық тізімді көрсету</summary>
-      <div class="table-scroll">
-        <table class="table">
-          <thead><tr><th>Оқушы</th><th>Пән</th><th>Тақырып</th><th>Балл</th><th>%</th></tr></thead>
-          <tbody>
-            {% for f in report.fail_rows %}
-            <tr>
-              <td>{{ f.student }}</td>
-              <td>{{ f.subject }}</td>
-              <td>{{ f.topic or '—' }}</td>
-              <td>{{ f.score }} / {{ f.max_score or '—' }}</td>
-              <td>{{ f.percent }}%</td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    </details>
-  {% endif %}
+  <h3>0 балл жинаған оқушылар</h3>
+  <p>Барлығы <b>{{ report.zero_students }}</b> оқушы 0 балл жинады.</p>
 </div>
 
-<div class="card">
-  <h2>Көп қателескен тақырыптар</h2>
-  {% if report.worst_topics %}
-    <div class="barchart">
-      {% for t in report.worst_topics %}
-      <div class="bar-row">
-        <div class="bar-name" title="{{ t.name }}">{{ t.name }}</div>
-        <div class="bar-track">
-          <div class="bar-fill {{ 'status-critical' if t.avg_percent < report.passing_percent else '' }}" style="width: {{ t.avg_percent }}%"></div>
-          <div class="bar-ref" style="left: {{ report.passing_percent }}%"></div>
-        </div>
-        <div class="bar-value">{{ t.avg_percent }}%</div>
-      </div>
-      {% endfor %}
-    </div>
-    <p class="chart-legend-note">┊ пунктир — өту шегі ({{ report.passing_percent }}%) · қызыл — шектен төмен</p>
-  {% else %}
-    <p class="muted">Тақырып деректері жоқ (кесте импорттағанда «Тақырып» бағанын таңдаңыз).</p>
-  {% endif %}
-  {% if report.notes_by_field.mistaken_topics %}
-    <ul class="note-list">
-      {% for item in report.notes_by_field.mistaken_topics %}
-        <li><b>{{ item.curator }}:</b> {{ item.text }}</li>
-      {% endfor %}
-    </ul>
-  {% endif %}
-</div>
+{% endif %}
 
 <div class="card">
-  <h3>Дайындыққа не нәрсе әсер етті</h3>
-  {% if report.notes_by_field.prep_factors %}
-    <ul class="note-list">
-      {% for item in report.notes_by_field.prep_factors %}
-        <li><b>{{ item.curator }}:</b> {{ item.text }}</li>
-      {% endfor %}
-    </ul>
+  <h2>Кураторлардың жиынтық анализі</h2>
+  {% if week['curators_doc_url'] %}
+    {% if week['curators_doc_fetch_error'] %}
+      <p class="flash flash-error">{{ week['curators_doc_fetch_error'] }}</p>
+    {% else %}
+      {% include "_curator_analysis.html" %}
+    {% endif %}
   {% else %}
-    <p class="muted">Кураторлар әлі бұл бөлім бойынша анализ қоспаған.</p>
-  {% endif %}
-
-  <h3>ҰБТ/СТ ортақ балл төмен болуының себептері</h3>
-  {% if report.notes_by_field.low_score_reasons %}
-    <ul class="note-list">
-      {% for item in report.notes_by_field.low_score_reasons %}
-        <li><b>{{ item.curator }}:</b> {{ item.text }}</li>
-      {% endfor %}
-    </ul>
-  {% else %}
-    <p class="muted">Кураторлар әлі бұл бөлім бойынша анализ қоспаған.</p>
-  {% endif %}
-
-  {% if report.notes_by_field.general_comment %}
-    <h3>Қосымша ескертпелер</h3>
-    <ul class="note-list">
-      {% for item in report.notes_by_field.general_comment %}
-        <li><b>{{ item.curator }}:</b> {{ item.text }}</li>
-      {% endfor %}
-    </ul>
+    <p class="muted">Кураторлар анализі әлі қосылмаған. <a href="{{ url_for('week_notes', week_id=week['id']) }}">Куратор анализі бетіне өту →</a></p>
   {% endif %}
 </div>
 
 <div class="card" id="summary">
   <h2>Жалпы қорытынды</h2>
-  <p class="muted">Жоғарыдағы деректер мен кураторлар анализі негізінде осы аптаның жалпы қорытындысын жазыңыз.</p>
-  <form method="post" action="{{ url_for('save_summary', week_id=week['id']) }}">
-    <textarea name="summary" rows="8" placeholder="Осы аптаның жалпы қорытындысын осында жазыңыз...">{{ week['summary'] or '' }}</textarea>
-    <button type="submit" class="btn btn-primary no-print" style="margin-top:10px">Қорытындыны сақтау</button>
+  <p class="muted">
+    Бұл қорытындыны жоғарыдағы деректер мен кураторлар анализі негізінде AI толық өзі жазады.
+  </p>
+  {% if week['curators_doc_text'] %}
+  <form method="post" action="{{ url_for('generate_summary', week_id=week['id']) }}" class="no-print">
+    <button type="submit" class="btn btn-outline btn-small">
+      {% if week['summary'] %}Қорытындыны қайта жасау{% else %}Қорытынды анализ шығару{% endif %}
+    </button>
   </form>
+  {% else %}
+  <p class="muted">
+    Алдымен <a href="{{ url_for('week_notes', week_id=week['id']) }}">Куратор анализі</a>
+    бетінде Google Docs сілтемесін қосыңыз.
+  </p>
+  {% endif %}
+  {% if week['summary'] %}
+  <div id="summary-view">
+    <div class="summary-display">{{ week['summary'] | summary_html }}</div>
+    <div class="import-submit-row no-print" style="margin-top:10px">
+      <button type="button" class="btn btn-danger btn-small" id="summary-delete-btn">Қорытындыны жою</button>
+    </div>
+    <div id="summary-delete-confirm" class="no-print" style="display:none; margin-top:10px">
+      <p class="muted">Жалпы қорытындыны толық өшіру керек пе? Бұл әрекетті қайтару мүмкін емес.</p>
+      <form method="post" action="{{ url_for('delete_summary', week_id=week['id']) }}" style="display:inline">
+        <button type="submit" class="btn btn-danger btn-small">Иә, толық өшіру</button>
+      </form>
+      <button type="button" class="btn btn-outline btn-small" id="summary-delete-cancel">Болдырмау</button>
+    </div>
+  </div>
+  {% endif %}
 </div>
 
+{% if week['summary'] %}
+<script>
+  (function () {
+    const btn = document.getElementById("summary-delete-btn");
+    const confirmArea = document.getElementById("summary-delete-confirm");
+    const cancelBtn = document.getElementById("summary-delete-cancel");
+    if (!btn || !confirmArea) return;
+
+    btn.addEventListener("click", () => {
+      btn.parentElement.style.display = "none";
+      confirmArea.style.display = "block";
+    });
+
+    if (cancelBtn) {
+      cancelBtn.addEventListener("click", () => {
+        confirmArea.style.display = "none";
+        btn.parentElement.style.display = "";
+      });
+    }
+  })();
+</script>
 {% endif %}
+
 {% endblock %}

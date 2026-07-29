@@ -1,6 +1,10 @@
 """Апта нәтижелері бойынша ортақ анализ есептеу."""
 
+from collections import Counter
+
 DEFAULT_PASSING_PERCENT = 50.0
+DEFAULT_GOLD_PERCENT = 90.0
+DEFAULT_SILVER_PERCENT = 70.0
 WORST_TOPICS_LIMIT = 10
 
 
@@ -13,6 +17,27 @@ def _percent(score, max_score):
         return None
 
 
+def _reference_max_score(results):
+    """Апта ішінде ең жиі кездесетін максимум баллды анықтайды — лига
+    шектерін (алтын/күміс/қола) енді пайызбен емес, нақты балл түрінде
+    енгізу үшін, сол баллды пайызға айналдыруға қажет."""
+    values = [r["max_score"] for r in results if r["max_score"] not in (None, 0)]
+    if not values:
+        return None
+    return Counter(values).most_common(1)[0][0]
+
+
+def _raw_threshold_to_percent(raw_value, ref_max_score, default_percent):
+    if raw_value is None:
+        return default_percent
+    if not ref_max_score:
+        return default_percent
+    try:
+        return (float(raw_value) / float(ref_max_score)) * 100.0
+    except (TypeError, ValueError, ZeroDivisionError):
+        return default_percent
+
+
 def compute_report(conn, week_id):
     week = conn.execute("SELECT * FROM weeks WHERE id = ?", (week_id,)).fetchone()
     if week is None:
@@ -23,11 +48,16 @@ def compute_report(conn, week_id):
         (week_id,),
     ).fetchall()
 
-    passing_percent = week["passing_score"] if week["passing_score"] is not None else DEFAULT_PASSING_PERCENT
+    ref_max_score = _reference_max_score(results)
+    passing_percent = _raw_threshold_to_percent(week["passing_score"], ref_max_score, DEFAULT_PASSING_PERCENT)
+    gold_percent = _raw_threshold_to_percent(week["gold_threshold"], ref_max_score, DEFAULT_GOLD_PERCENT)
+    silver_percent = _raw_threshold_to_percent(week["silver_threshold"], ref_max_score, DEFAULT_SILVER_PERCENT)
 
     report = {
         "week": week,
         "passing_percent": passing_percent,
+        "gold_percent": gold_percent,
+        "silver_percent": silver_percent,
         "total_entries": len(results),
         "unique_students": 0,
         "overall_avg_score": None,
@@ -38,36 +68,36 @@ def compute_report(conn, week_id):
         "fail_rows": [],
         "max_achievers": [],
         "max_achiever_count": 0,
+        "max_achiever_students": 0,
+        "zero_students": 0,
+        "gold_count": 0,
+        "silver_count": 0,
+        "bronze_count": 0,
+        "gold_share": 0.0,
+        "silver_share": 0.0,
+        "bronze_share": 0.0,
         "worst_topics": [],
-        "curator_notes": [],
-        "notes_by_field": {
-            "max_score_reasons": [],
-            "mistaken_topics": [],
-            "prep_factors": [],
-            "low_score_reasons": [],
-            "general_comment": [],
-        },
         "has_data": len(results) > 0,
+        "has_targets": False,
+        "target_achievement_percent": None,
+        "best_curator": None,
+        "worst_curator": None,
     }
 
     if not results:
-        notes = conn.execute(
-            "SELECT * FROM curator_notes WHERE week_id = ? ORDER BY curator", (week_id,)
-        ).fetchall()
-        report["curator_notes"] = notes
-        for n in notes:
-            for field in report["notes_by_field"]:
-                val = n[field]
-                if val and val.strip():
-                    report["notes_by_field"][field].append({"curator": n["curator"], "text": val.strip()})
         return report
+
+    report["has_targets"] = week["target_score"] is not None
 
     students = set()
     scores = []
     percents = []
     fail_students = set()
+    max_achiever_students = set()
+    student_percents = {}
     subject_map = {}
     topic_map = {}
+    curator_scores = {}
 
     for r in results:
         student = (r["student"] or "").strip()
@@ -77,12 +107,18 @@ def compute_report(conn, week_id):
         max_score = r["max_score"]
         pct = _percent(score, max_score)
 
+        curator = (r["curator"] or "").strip()
+
         if student:
             students.add(student)
+            if pct is not None:
+                student_percents.setdefault(student, []).append(pct)
         if score is not None:
             scores.append(float(score))
         if pct is not None:
             percents.append(pct)
+        if curator and score is not None:
+            curator_scores.setdefault(curator, []).append(float(score))
 
         subj = subject_map.setdefault(
             subject, {"name": subject, "count": 0, "scores": [], "percents": [], "fail": 0}
@@ -104,6 +140,8 @@ def compute_report(conn, week_id):
 
         if score is not None and max_score is not None and float(score) >= float(max_score) and float(max_score) > 0:
             report["max_achievers"].append({"student": student, "subject": subject, "topic": topic})
+            if student:
+                max_achiever_students.add(student)
 
         if topic:
             t = topic_map.setdefault(topic, {"name": topic, "count": 0, "percents": []})
@@ -114,8 +152,45 @@ def compute_report(conn, week_id):
     report["unique_students"] = len(students)
     report["overall_avg_score"] = round(sum(scores) / len(scores), 2) if scores else None
     report["overall_avg_percent"] = round(sum(percents) / len(percents), 1) if percents else None
+    if week["target_score"] and report["overall_avg_score"] is not None:
+        report["target_achievement_percent"] = round(
+            report["overall_avg_score"] / week["target_score"] * 100, 1
+        )
     report["fail_unique_students"] = len(fail_students)
     report["max_achiever_count"] = len(report["max_achievers"])
+    report["max_achiever_students"] = len(max_achiever_students)
+
+    curator_averages = [
+        {"curator": name, "avg_score": round(sum(vals) / len(vals), 2)}
+        for name, vals in curator_scores.items()
+        if vals
+    ]
+    if curator_averages:
+        report["best_curator"] = max(curator_averages, key=lambda c: c["avg_score"])
+        report["worst_curator"] = min(curator_averages, key=lambda c: c["avg_score"])
+
+    zero_students = 0
+    gold_count = silver_count = bronze_count = 0
+    for student_pcts in student_percents.values():
+        avg_pct = sum(student_pcts) / len(student_pcts)
+        if avg_pct == 0:
+            zero_students += 1
+        if avg_pct >= gold_percent:
+            gold_count += 1
+        elif avg_pct >= silver_percent:
+            silver_count += 1
+        elif avg_pct >= passing_percent:
+            bronze_count += 1
+
+    total_students = len(student_percents)
+    report["zero_students"] = zero_students
+    report["gold_count"] = gold_count
+    report["silver_count"] = silver_count
+    report["bronze_count"] = bronze_count
+    if total_students:
+        report["gold_share"] = round(gold_count / total_students * 100, 1)
+        report["silver_share"] = round(silver_count / total_students * 100, 1)
+        report["bronze_share"] = round(bronze_count / total_students * 100, 1)
 
     subj_list = []
     for s in subject_map.values():
@@ -139,15 +214,5 @@ def compute_report(conn, week_id):
         topic_list.append({"name": t["name"], "count": t["count"], "avg_percent": round(avg, 1)})
     topic_list.sort(key=lambda x: x["avg_percent"])
     report["worst_topics"] = topic_list[:WORST_TOPICS_LIMIT]
-
-    notes = conn.execute(
-        "SELECT * FROM curator_notes WHERE week_id = ? ORDER BY curator", (week_id,)
-    ).fetchall()
-    report["curator_notes"] = notes
-    for n in notes:
-        for field in report["notes_by_field"]:
-            val = n[field]
-            if val and val.strip():
-                report["notes_by_field"][field].append({"curator": n["curator"], "text": val.strip()})
 
     return report

@@ -100,6 +100,9 @@ a { color: var(--series-1); }
   background: var(--surface);
   border-bottom: 1px solid var(--border);
   padding: 14px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 .brand {
   font-weight: 700;
@@ -108,6 +111,7 @@ a { color: var(--series-1); }
   text-decoration: none;
   letter-spacing: -0.01em;
 }
+.logout-form { margin: 0; }
 
 .container {
   max-width: 1000px;
@@ -137,7 +141,14 @@ a { color: var(--series-1); }
   color: var(--text-muted);
   text-decoration: none;
   font-size: 0.8rem;
-  margin-bottom: 14px;
+  margin-bottom: 6px;
+}
+.sidebar-breadcrumb {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 10px;
 }
 .sidebar-title {
   font-weight: 700;
@@ -170,6 +181,7 @@ a { color: var(--series-1); }
 .sidebar-nav a .ic { font-size: 1rem; width: 1.2em; text-align: center; }
 .sidebar-nav a:hover { background: var(--border-strong); color: var(--text-primary); }
 .sidebar-nav a.active { background: var(--series-1-soft); color: var(--series-1); }
+.sidebar-logout { margin-top: 24px; }
 .sidebar-nav .badge {
   margin-left: auto;
   background: var(--border);
@@ -198,6 +210,12 @@ a { color: var(--series-1); }
 }
 .page-head h1 { margin: 0 0 6px; font-size: 1.5rem; letter-spacing: -0.01em; }
 .page-head .muted { margin: 0; }
+.back-link { display: inline-block; color: var(--text-muted); text-decoration: none; font-size: 0.8rem; margin-bottom: 8px; }
+.back-link:hover { color: var(--series-1); }
+
+.centered-head { text-align: center; margin: 32px 0 36px; }
+.centered-head h1 { font-size: 1.6rem; margin: 0 0 6px; letter-spacing: -0.01em; }
+.centered-head .muted { margin: 0; }
 
 @media (max-width: 860px) {
   .app-shell { flex-direction: column; }
@@ -275,8 +293,16 @@ input, select, textarea {
   border-radius: var(--radius-sm);
   padding: 8px 10px;
 }
-textarea { resize: vertical; }
+textarea { resize: vertical; width: 100%; box-sizing: border-box; }
 input:focus, select:focus, textarea:focus { outline: 2px solid var(--series-1); outline-offset: -1px; }
+
+/* Сан енгізу өрістерінің жоғары/төмен көрсеткіш батырмаларын жасыру */
+input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
 
 .btn {
   font: inherit;
@@ -298,6 +324,21 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--series-1); 
   gap: 10px;
   align-items: end;
   margin-bottom: 16px;
+}
+
+.rating-row {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 14px 16px;
+  margin-bottom: 12px;
+  background: var(--page);
+}
+.rating-row .form-grid { margin-bottom: 0; }
+#rating-empty-hint { margin: 4px 0 16px; }
+.import-submit-row {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
 }
 
 /* ---------- Tables ---------- */
@@ -327,6 +368,34 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--series-1); 
 .flash-ok { background: var(--good-bg); color: var(--good); }
 .flash-error { background: var(--critical-bg); color: var(--critical); }
 
+/* ---------- Login page ---------- */
+.login-shell {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.login-card {
+  width: 100%;
+  max-width: 340px;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 32px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.login-brand {
+  font-weight: 700;
+  font-size: 1.05rem;
+  text-align: center;
+  margin-bottom: 6px;
+  letter-spacing: -0.01em;
+}
+.login-submit { margin-top: 4px; }
+
 /* ---------- Curator note cards ---------- */
 .note-card {
   border: 1px solid var(--border);
@@ -339,9 +408,48 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--series-1); 
   justify-content: space-between;
   align-items: center;
   margin-bottom: 6px;
+  cursor: pointer;
+  list-style: none;
+  font-size: 0.95rem;
 }
+.note-head::-webkit-details-marker { display: none; }
+.note-head::before {
+  content: "▸";
+  color: var(--text-muted);
+  margin-right: 8px;
+  display: inline-block;
+}
+details[open] > .note-head::before { content: "▾"; }
 .note-list { padding-left: 20px; }
 .note-list li { margin-bottom: 6px; }
+
+.badge-error {
+  background: var(--critical-bg);
+  color: var(--critical);
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  margin-left: 6px;
+}
+.doc-text {
+  white-space: pre-wrap;
+  font-size: 0.88rem;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  background: var(--page);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  margin: 8px 0;
+  max-height: 400px;
+  overflow-y: auto;
+}
+.note-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
 
 /* ---------- Stat tiles ---------- */
 .stat-grid {
@@ -392,6 +500,66 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--series-1); 
 .bar-row .bar-value { font-size: 0.82rem; color: var(--text-secondary); font-variant-numeric: tabular-nums; text-align: right; }
 .chart-legend-note { font-size: 0.78rem; color: var(--text-muted); margin-top: 2px; }
 
+/* ---------- Куратор анализі (AI) ---------- */
+.analysis-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+  margin: 4px 0 8px;
+}
+.analysis-block {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  background: var(--surface-raised);
+}
+.analysis-block h4 { margin: 0 0 8px; font-size: 0.92rem; }
+.analysis-block .barchart .bar-row { grid-template-columns: 1fr 110px 40px; }
+.bar-row-stacked { margin-bottom: 4px; }
+.bar-row-stacked .bar-name {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  white-space: normal;
+  overflow-wrap: break-word;
+  margin-bottom: 4px;
+}
+.bar-row-stacked .bar-line { display: grid; grid-template-columns: 1fr 40px; align-items: center; gap: 10px; }
+.priority-list, .solution-list { margin: 4px 0 0; padding-left: 20px; }
+.priority-list li, .solution-list li { margin-bottom: 6px; font-size: 0.9rem; }
+.analysis-summary {
+  background: var(--page);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  font-size: 0.92rem;
+  line-height: 1.6;
+}
+.summary-display {
+  font-size: 0.95rem;
+  line-height: 1.7;
+  color: var(--text-primary);
+  background: var(--page);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 14px 16px;
+  margin: 8px 0;
+}
+
+/* ---------- Апталық жоспар ---------- */
+.plan-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+}
+.plan-cell-label {
+  margin: 0 0 10px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--critical);
+}
+
 details { margin: 8px 0 16px; }
 summary { cursor: pointer; color: var(--series-1); font-size: 0.9rem; }
 
@@ -400,5 +568,5 @@ summary { cursor: pointer; color: var(--series-1); font-size: 0.9rem; }
   .sidebar { display: none !important; }
   .main { padding: 0; max-width: 100%; }
   body { background: #fff; color: #000; }
-  .card { border: none; padding: 0; margin-bottom: 24px; }
+  .card { border: 1px solid #ccc; border-radius: 6px; padding: 12px; margin-bottom: 24px; }
 }
