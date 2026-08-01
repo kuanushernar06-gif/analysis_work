@@ -167,7 +167,7 @@ a { color: var(--accent); }
 /* Тұрақты жабық: тек шеті ғана көрінеді (домалақ бұрышты, беттен сәл
    бөлектеніп, "шығыңқы" қалқып тұрған карточка секілді), курсорды
    жақындатқанда толық ашылады. */
-.site-shell { display: flex; min-height: 100vh; align-items: stretch; padding-left: 30px; }
+.site-shell { display: flex; min-height: 100vh; align-items: stretch; padding-left: 46px; }
 .site-sidebar {
   width: 260px;
   flex-shrink: 0;
@@ -185,7 +185,7 @@ a { color: var(--accent); }
   z-index: 40;
   border-radius: 24px;
   box-shadow: var(--shadow-glass);
-  transform: translateX(calc(-100% + 16px));
+  transform: translateX(calc(-100% + 28px));
   transition: transform .2s ease, box-shadow .2s ease;
 }
 .site-sidebar:hover,
@@ -195,13 +195,14 @@ a { color: var(--accent); }
 }
 /* Жоғарғы оң жақтағы стрелка — қолмен ашық/жабық күйде бекітіп қою үшін;
    hover-тен тыс, әрдайым көрінеді (тіпті жабық шетте де), сондықтан
-   курсорды жақындатпай-ақ өзі басып ашуға/жабуға болады. */
+   курсорды жақындатпай-ақ өзі басып ашуға/жабуға болады. Домалақтың
+   ортасына дәл түсу үшін мәтін глиф орнына SVG chevron қолданылады. */
 .sidebar-pin-toggle {
   position: absolute;
-  top: 14px;
-  right: 3px;
-  width: 22px;
-  height: 22px;
+  top: 16px;
+  right: 4px;
+  width: 26px;
+  height: 26px;
   border-radius: 50%;
   border: 1px solid var(--sidebar-border);
   background: rgba(255, 255, 255, 0.16);
@@ -214,7 +215,7 @@ a { color: var(--accent); }
   z-index: 1;
 }
 .sidebar-pin-toggle:hover { background: rgba(255, 255, 255, 0.3); }
-.sidebar-pin-arrow { display: inline-block; font-size: 0.95rem; line-height: 1; transition: transform .2s ease; }
+.sidebar-pin-arrow { display: block; transition: transform .2s ease; }
 .site-sidebar.is-pinned .sidebar-pin-arrow { transform: rotate(180deg); }
 .site-sidebar.is-pinned {
   transform: translateX(0);

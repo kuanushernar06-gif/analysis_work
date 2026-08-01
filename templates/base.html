@@ -24,7 +24,9 @@
   <div class="site-shell">
     <aside class="site-sidebar no-print">
       <button type="button" class="sidebar-pin-toggle no-print" id="sidebar-pin-toggle" aria-pressed="false" aria-label="Бүйірлік мәзірді ашық қалдыру">
-        <span class="sidebar-pin-arrow">›</span>
+        <svg class="sidebar-pin-arrow" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="9 6 15 12 9 18"></polyline>
+        </svg>
       </button>
       <a class="site-sidebar-brand" href="{{ url_for('index') }}">
         <span>
@@ -79,6 +81,9 @@
           var on = !sidebar.classList.contains('is-pinned');
           setPinned(on);
           try { localStorage.setItem('juz40-sidebar-pinned', on ? 'true' : 'false'); } catch (e) {}
+          // Батырма фокусты өзінде ұстап қалмасын — әйтпесе :focus-within
+          // сайдбарды жабуға кедергі жасап, "жабу" әрекеті көрінбей қалады.
+          pinBtn.blur();
         });
       }
     })();
