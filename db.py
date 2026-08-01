@@ -14,19 +14,43 @@ DEFAULT_PROGRAMS = [
         "smart",
         "Smart",
         1,
-        ["Т-01", "Т-11", "Т-21", "Т-31", "Т-41", "Т-51", "Т-61", "Т-71", "Т-81", "Т-91", "Т-101"],
+        [
+            "ТАРИХ-01", "ТАРИХ-11", "ТАРИХ-21", "ТАРИХ-31", "ТАРИХ-41",
+            "ТАРИХ-51", "ТАРИХ-61", "ТАРИХ-71", "ТАРИХ-81", "ТАРИХ-91", "ТАРИХ-101",
+        ],
     ),
     (
         "junior",
         "Junior",
         2,
-        ["J-01", "J-11", "J-21", "J-31", "J-41", "J-51", "J-61", "J-71", "J-81", "J-91", "J-101"],
+        [
+            "JUNIOR-01", "JUNIOR-11", "JUNIOR-21", "JUNIOR-31", "JUNIOR-41",
+            "JUNIOR-51", "JUNIOR-61", "JUNIOR-71", "JUNIOR-81", "JUNIOR-91", "JUNIOR-101",
+        ],
     ),
 ]
 
 # Бағдарлама бойынша курс ұзақтығы (ай саны); әр ай 4 аптадан тұрады.
 PROGRAM_MONTHS = {"smart": 5, "junior": 5}
 WEEKS_PER_MONTH = 4
+
+# Талдау санаттары — әр бағдарламаның потоктары осы санаттың әрқайсысында
+# бөлек (тәуелсіз апталары/импорттары бар) жазба ретінде қайталанады.
+# (Ескерту: бұрын АЙЛЫҚ ТЕСТ/БАЙҚАУ ТЕСТ/LIVE САБАҚ санаттары да болған, бірақ
+# пайдаланушы сұрауы бойынша толық жойылды — бос болғандықтан деректі
+# жоғалтпады. Керек болса, осы тізімге қайта қосуға болады.)
+CATEGORIES = [
+    ("sabaq_tapsyru", "САБАҚ ТАПСЫРУ АНАЛИЗ", 1),
+]
+CATEGORY_LABELS = {slug: label for slug, label, _ in CATEGORIES}
+DEFAULT_CATEGORY = CATEGORIES[0][0]
+
+# Сайттың сол жақ мәзіріндегі (sidebar) санат сілтемелерінің мәтіні — баған
+# тақырыптарынан (CATEGORY_LABELS) сәл өзгеше, дәл пайдаланушы сұраған түрде.
+CATEGORY_NAV_LABELS = {
+    "sabaq_tapsyru": "САБАҚ ТАПСЫРУ АНАЛИЗІ",
+}
+SIDEBAR_CATEGORIES = [(slug, CATEGORY_NAV_LABELS[slug]) for slug, _label, _order in CATEGORIES]
 
 # Постгрес (Neon/Vercel) диалектісі
 SCHEMA_PG = """
@@ -43,9 +67,10 @@ CREATE TABLE IF NOT EXISTS streams (
     id SERIAL PRIMARY KEY,
     program_id INTEGER NOT NULL REFERENCES programs(id) ON DELETE CASCADE,
     code TEXT NOT NULL,
+    category TEXT NOT NULL DEFAULT 'sabaq_tapsyru',
     sort_order INTEGER DEFAULT 0,
     created_at TIMESTAMPTZ DEFAULT now(),
-    UNIQUE(program_id, code)
+    UNIQUE(program_id, category, code)
 );
 
 CREATE TABLE IF NOT EXISTS weeks (
@@ -130,9 +155,10 @@ CREATE TABLE IF NOT EXISTS streams (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     program_id INTEGER NOT NULL REFERENCES programs(id) ON DELETE CASCADE,
     code TEXT NOT NULL,
+    category TEXT NOT NULL DEFAULT 'sabaq_tapsyru',
     sort_order INTEGER DEFAULT 0,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(program_id, code)
+    UNIQUE(program_id, category, code)
 );
 
 CREATE TABLE IF NOT EXISTS weeks (
@@ -321,6 +347,86 @@ def _migrate(conn):
     if not _column_exists(conn, "programs", "plan_doc_fetch_error"):
         conn.execute("ALTER TABLE programs ADD COLUMN plan_doc_fetch_error TEXT")
         conn.commit()
+    if not _column_exists(conn, "streams", "category"):
+        _migrate_stream_categories(conn)
+    _migrate_stream_code_rename(conn)
+
+
+_STREAM_CODE_RENAMES = {
+    "Т-01": "ТАРИХ-01", "Т-11": "ТАРИХ-11", "Т-21": "ТАРИХ-21", "Т-31": "ТАРИХ-31",
+    "Т-41": "ТАРИХ-41", "Т-51": "ТАРИХ-51", "Т-61": "ТАРИХ-61", "Т-71": "ТАРИХ-71",
+    "Т-81": "ТАРИХ-81", "Т-91": "ТАРИХ-91", "Т-101": "ТАРИХ-101",
+    "J-01": "JUNIOR-01", "J-11": "JUNIOR-11", "J-21": "JUNIOR-21", "J-31": "JUNIOR-31",
+    "J-41": "JUNIOR-41", "J-51": "JUNIOR-51", "J-61": "JUNIOR-61", "J-71": "JUNIOR-71",
+    "J-81": "JUNIOR-81", "J-91": "JUNIOR-91", "J-101": "JUNIOR-101",
+}
+
+
+def _migrate_stream_code_rename(conn):
+    """Ертеректе 'Т-01'/'J-01' түріндегі қысқа кодтармен құрылған потоктарды
+    'ТАРИХ-01'/'JUNIOR-01' түріндегі толық атауларға қайта атайды — бір рет
+    қана, әр ескі кодқа жеке SELECT+UPDATE арқылы, деректің қалғанын
+    (аптасын, нәтижесін) мүлде қозғамай."""
+    for old_code, new_code in _STREAM_CODE_RENAMES.items():
+        conn.execute("UPDATE streams SET code = ? WHERE code = ?", (new_code, old_code))
+    conn.commit()
+
+
+def _migrate_stream_categories(conn):
+    """streams кестесіне 'category' бағанын қосады және бірегейлік шектеуін
+    UNIQUE(program_id, code)-тен UNIQUE(program_id, category, code)-ке
+    кеңейтеді — сол арқылы бір потоктың коды (мыс. 'Т-01') әр санатта
+    (сабақ тапсыру/айлық тест/байқау тест/live сабақ) бөлек, тәуелсіз жазба
+    ретінде қайталана алады. Бар барлық жолдар автоматты түрде
+    DEFAULT_CATEGORY-ға тіркеледі — ешбір нақты дерек жоғалмайды/көшірілмейді."""
+    if getattr(conn, "backend", None) == "postgres":
+        conn.execute(
+            f"ALTER TABLE streams ADD COLUMN category TEXT NOT NULL DEFAULT '{DEFAULT_CATEGORY}'"
+        )
+        constraint_row = conn.execute(
+            """
+            SELECT tc.constraint_name
+            FROM information_schema.table_constraints tc
+            JOIN information_schema.key_column_usage kcu
+              ON tc.constraint_name = kcu.constraint_name AND tc.table_name = kcu.table_name
+            WHERE tc.table_name = 'streams' AND tc.constraint_type = 'UNIQUE'
+            GROUP BY tc.constraint_name
+            HAVING array_agg(kcu.column_name ORDER BY kcu.ordinal_position) = ARRAY['program_id','code']
+            """
+        ).fetchone()
+        if constraint_row:
+            conn.execute(f'ALTER TABLE streams DROP CONSTRAINT "{constraint_row["constraint_name"]}"')
+        conn.execute(
+            "ALTER TABLE streams ADD CONSTRAINT streams_program_category_code_key "
+            "UNIQUE (program_id, category, code)"
+        )
+        conn.commit()
+    else:
+        conn.execute("PRAGMA foreign_keys = OFF")
+        conn.execute(
+            """
+            CREATE TABLE streams_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                program_id INTEGER NOT NULL REFERENCES programs(id) ON DELETE CASCADE,
+                code TEXT NOT NULL,
+                category TEXT NOT NULL DEFAULT 'sabaq_tapsyru',
+                sort_order INTEGER DEFAULT 0,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(program_id, category, code)
+            )
+            """
+        )
+        conn.execute(
+            f"""
+            INSERT INTO streams_new (id, program_id, code, category, sort_order, created_at)
+            SELECT id, program_id, code, '{DEFAULT_CATEGORY}', sort_order, created_at FROM streams
+            """
+        )
+        conn.execute("DROP TABLE streams")
+        conn.execute("ALTER TABLE streams_new RENAME TO streams")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_streams_program ON streams(program_id)")
+        conn.commit()
+        conn.execute("PRAGMA foreign_keys = ON")
 
 
 def _seed_defaults(conn):
@@ -334,15 +440,17 @@ def _seed_defaults(conn):
         else:
             program_id = row["id"]
 
-        for i, code in enumerate(stream_codes):
-            existing = conn.execute(
-                "SELECT id FROM streams WHERE program_id = ? AND code = ?", (program_id, code)
-            ).fetchone()
-            if existing is None:
-                conn.execute(
-                    "INSERT INTO streams (program_id, code, sort_order) VALUES (?, ?, ?)",
-                    (program_id, code, i),
-                )
+        for category_slug, _label, _corder in CATEGORIES:
+            for i, code in enumerate(stream_codes):
+                existing = conn.execute(
+                    "SELECT id FROM streams WHERE program_id = ? AND category = ? AND code = ?",
+                    (program_id, category_slug, code),
+                ).fetchone()
+                if existing is None:
+                    conn.execute(
+                        "INSERT INTO streams (program_id, category, code, sort_order) VALUES (?, ?, ?, ?)",
+                        (program_id, category_slug, code, i),
+                    )
     conn.commit()
 
 

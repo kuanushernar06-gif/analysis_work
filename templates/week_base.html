@@ -1,41 +1,40 @@
 {% extends "base.html" %}
-{% block header %}{% endblock %}
 
-{% block body %}
-<div class="app-shell">
-  <aside class="sidebar no-print">
-    {% if stream %}
-      <a class="sidebar-back" href="{{ url_for('stream_detail', stream_id=stream['id']) }}">← {{ stream['code'] }} апталарына</a>
-      <div class="sidebar-breadcrumb">{{ program['name'] }} / {{ stream['code'] }}</div>
-    {% else %}
-      <a class="sidebar-back" href="{{ url_for('index') }}">← Бағдарламаларға</a>
-    {% endif %}
-    <div class="sidebar-title">{{ week['title'] }}</div>
-    <div class="sidebar-meta">
+{% block content %}
+<div class="week-banner no-print">
+  <div class="week-banner-inner">
+    <div class="week-banner-crumb">
+      {% if stream %}
+        <a href="{{ url_for('stream_detail', stream_id=stream['id']) }}">← {{ stream['code'] }} апталарына</a>
+        <span class="week-banner-path">{{ program['name'] }} / {{ category_label(stream['category']) }} / {{ stream['code'] }}</span>
+      {% else %}
+        <a href="{{ url_for('index') }}">← Бағдарламаларға</a>
+      {% endif %}
+    </div>
+    <h1 class="week-banner-title">{{ week['title'] }}</h1>
+    <div class="week-banner-meta">
       {{ week['start_date'] or '—' }}{% if week['end_date'] %} – {{ week['end_date'] }}{% endif %}
     </div>
-    <nav class="sidebar-nav">
-      <a href="{{ url_for('week_plan', week_id=week['id']) }}" class="{{ 'active' if active_page == 'plan' else '' }}">
-        <span class="ic">🗓️</span> Жоспар
-      </a>
-      <a href="{{ url_for('week_import', week_id=week['id']) }}" class="{{ 'active' if active_page == 'import' else '' }}">
-        <span class="ic">📥</span> Кестені импорттау
-      </a>
-      <a href="{{ url_for('week_results', week_id=week['id']) }}" class="{{ 'active' if active_page == 'results' else '' }}">
-        <span class="ic">📋</span> Нәтижелер <span class="badge">{{ result_count }}</span>
-      </a>
-      <a href="{{ url_for('week_notes', week_id=week['id']) }}" class="{{ 'active' if active_page == 'notes' else '' }}">
-        <span class="ic">📝</span> Куратор анализі <span class="badge">{{ note_count }}</span>
-      </a>
-      <a href="{{ url_for('week_report', week_id=week['id']) }}" class="{{ 'active' if active_page == 'report' else '' }}">
-        <span class="ic">📊</span> Ортақ анализ
-      </a>
-    </nav>
-  </aside>
-
-  <main class="main">
-    {% include "_flashes.html" %}
-    {% block week_content %}{% endblock %}
-  </main>
+  </div>
 </div>
+
+<nav class="week-tabs no-print">
+  <a href="{{ url_for('week_plan', week_id=week['id']) }}" class="week-tab {{ 'active' if active_page == 'plan' else '' }}">
+    <span class="ic">🗓️</span> Жоспар
+  </a>
+  <a href="{{ url_for('week_import', week_id=week['id']) }}" class="week-tab {{ 'active' if active_page == 'import' else '' }}">
+    <span class="ic">📥</span> Кестені импорттау
+  </a>
+  <a href="{{ url_for('week_results', week_id=week['id']) }}" class="week-tab {{ 'active' if active_page == 'results' else '' }}">
+    <span class="ic">📋</span> Нәтижелер <span class="badge">{{ result_count }}</span>
+  </a>
+  <a href="{{ url_for('week_notes', week_id=week['id']) }}" class="week-tab {{ 'active' if active_page == 'notes' else '' }}">
+    <span class="ic">📝</span> Куратор анализі <span class="badge">{{ note_count }}</span>
+  </a>
+  <a href="{{ url_for('week_report', week_id=week['id']) }}" class="week-tab {{ 'active' if active_page == 'report' else '' }}">
+    <span class="ic">📊</span> Ортақ анализ
+  </a>
+</nav>
+
+{% block week_content %}{% endblock %}
 {% endblock %}

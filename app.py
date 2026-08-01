@@ -10,7 +10,7 @@ from markupsafe import Markup, escape
 load_dotenv()
 
 import db
-from analysis import compute_report
+from analysis import compute_report, compute_program_overview
 from sheets import fetch_workbook, rows_to_dicts, guess_columns, is_summary_row, is_template_sheet, SheetFetchError
 from gdocs import (
     fetch_doc_text,
@@ -47,6 +47,14 @@ def format_summary_html(text):
         else:
             lines.append(str(escape(line)))
     return Markup("<br>".join(lines))
+
+
+@app.context_processor
+def inject_category_label():
+    return {
+        "category_label": lambda slug: db.CATEGORY_LABELS.get(slug, slug),
+        "sidebar_categories": db.SIDEBAR_CATEGORIES,
+    }
 
 
 @app.before_request
@@ -147,17 +155,27 @@ def get_week_context(conn, week_id):
 def index():
     conn = get_db()
     programs = conn.execute("SELECT * FROM programs ORDER BY sort_order, id").fetchall()
-    programs_with_counts = []
-    for p in programs:
-        stream_count = conn.execute(
-            "SELECT COUNT(*) AS c FROM streams WHERE program_id = ?", (p["id"],)
-        ).fetchone()["c"]
-        week_count = conn.execute(
-            "SELECT COUNT(*) AS c FROM weeks w JOIN streams s ON s.id = w.stream_id WHERE s.program_id = ?",
-            (p["id"],),
-        ).fetchone()["c"]
-        programs_with_counts.append({"program": p, "stream_count": stream_count, "week_count": week_count})
-    return render_template("index.html", programs=programs_with_counts)
+    programs_with_overview = [
+        {"program": p, "overview": compute_program_overview(conn, p["id"])} for p in programs
+    ]
+    return render_template("index.html", programs=programs_with_overview)
+
+
+@app.route("/categories/<category_slug>")
+def category_picker(category_slug):
+    conn = get_db()
+    category_name = db.CATEGORY_LABELS.get(category_slug)
+    if category_name is None:
+        flash("Санат табылмады.", "error")
+        return redirect(url_for("index"))
+
+    programs = conn.execute("SELECT * FROM programs ORDER BY sort_order, id").fetchall()
+    return render_template(
+        "category_picker.html",
+        category_slug=category_slug,
+        category_name=category_name,
+        programs=programs,
+    )
 
 
 @app.route("/programs/<slug>")
@@ -171,14 +189,18 @@ def program_detail(slug):
     streams = conn.execute(
         "SELECT * FROM streams WHERE program_id = ? ORDER BY sort_order, id", (program["id"],)
     ).fetchall()
-    streams_with_counts = []
+    by_category = {}
     for s in streams:
         week_count = conn.execute(
             "SELECT COUNT(*) AS c FROM weeks WHERE stream_id = ?", (s["id"],)
         ).fetchone()["c"]
-        streams_with_counts.append({"stream": s, "week_count": week_count})
+        by_category.setdefault(s["category"], []).append({"stream": s, "week_count": week_count})
 
-    return render_template("program.html", program=program, streams=streams_with_counts)
+    columns = [
+        {"slug": cslug, "label": label, "streams": by_category.get(cslug, [])}
+        for cslug, label, _order in db.CATEGORIES
+    ]
+    return render_template("program.html", program=program, columns=columns)
 
 
 @app.route("/programs/<slug>/plan", methods=["POST"])
@@ -203,8 +225,8 @@ def save_program_plan(slug):
             conn.execute(
                 "UPDATE weeks SET plan_text = ? "
                 "WHERE month_number = ? AND week_number = ? AND stream_id IN "
-                "(SELECT id FROM streams WHERE program_id = ?)",
-                (content, month_num, week_num, program["id"]),
+                "(SELECT id FROM streams WHERE program_id = ? AND category = ?)",
+                (content, month_num, week_num, program["id"], db.DEFAULT_CATEGORY),
             )
     except (DocFetchError, PlanParseError) as e:
         fetch_error = str(e)
@@ -232,8 +254,8 @@ def remove_program_plan(slug):
 
     conn.execute(
         "UPDATE weeks SET plan_text = NULL WHERE stream_id IN "
-        "(SELECT id FROM streams WHERE program_id = ?)",
-        (program["id"],),
+        "(SELECT id FROM streams WHERE program_id = ? AND category = ?)",
+        (program["id"], db.DEFAULT_CATEGORY),
     )
     conn.execute(
         "UPDATE programs SET plan_doc_url = NULL, plan_doc_fetch_error = NULL WHERE id = ?",

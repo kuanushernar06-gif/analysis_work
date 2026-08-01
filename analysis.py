@@ -216,3 +216,104 @@ def compute_report(conn, week_id):
     report["worst_topics"] = topic_list[:WORST_TOPICS_LIMIT]
 
     return report
+
+
+def compute_program_overview(conn, program_id):
+    """Бағдарламаның (Smart/Junior) барлық потоктары мен апталарындағы осы
+    уақытқа дейінгі барлық нәтижелерін біріктіріп, басты беттегі шолу
+    карточкасы үшін жинақтайды. Лига бөлінісі әр аптаның жеке шегіне емес,
+    сайттың әдепкі пайыздық шектеріне (алтын 90%, күміс 70%, қола 50%)
+    негізделеді, себебі апталардың max_score/шектері әр түрлі болуы мүмкін."""
+    rows = conn.execute(
+        """
+        SELECT r.student, r.curator, r.score, r.max_score, w.target_score
+        FROM results r
+        JOIN weeks w ON w.id = r.week_id
+        JOIN streams s ON s.id = w.stream_id
+        WHERE s.program_id = ?
+        """,
+        (program_id,),
+    ).fetchall()
+
+    overview = {
+        "total_entries": len(rows),
+        "unique_students": 0,
+        "overall_avg_score": None,
+        "overall_avg_percent": None,
+        "target_achievement_percent": None,
+        "top_curator": None,
+        "bottom_curator": None,
+        "gold_count": 0,
+        "silver_count": 0,
+        "bronze_count": 0,
+        "gold_share": 0.0,
+        "silver_share": 0.0,
+        "bronze_share": 0.0,
+        "has_data": len(rows) > 0,
+    }
+    if not rows:
+        return overview
+
+    scores = []
+    percents = []
+    target_ratios = []
+    student_percents = {}
+    student_seen = set()
+    curator_scores = {}
+
+    for r in rows:
+        student = (r["student"] or "").strip()
+        curator = (r["curator"] or "").strip()
+        score = r["score"]
+        max_score = r["max_score"]
+        target = r["target_score"]
+        pct = _percent(score, max_score)
+
+        if student:
+            student_seen.add(student)
+        if score is not None:
+            scores.append(float(score))
+            if curator:
+                curator_scores.setdefault(curator, []).append(float(score))
+        if pct is not None:
+            percents.append(pct)
+            if student:
+                student_percents.setdefault(student, []).append(pct)
+        if score is not None and target:
+            try:
+                target_ratios.append(float(score) / float(target) * 100.0)
+            except (TypeError, ValueError, ZeroDivisionError):
+                pass
+
+    overview["unique_students"] = len(student_seen)
+    overview["overall_avg_score"] = round(sum(scores) / len(scores), 2) if scores else None
+    overview["overall_avg_percent"] = round(sum(percents) / len(percents), 1) if percents else None
+    if target_ratios:
+        overview["target_achievement_percent"] = round(sum(target_ratios) / len(target_ratios), 1)
+
+    curator_averages = [
+        {"curator": name, "avg_score": round(sum(vals) / len(vals), 2)}
+        for name, vals in curator_scores.items()
+    ]
+    if curator_averages:
+        overview["top_curator"] = max(curator_averages, key=lambda c: c["avg_score"])
+        overview["bottom_curator"] = min(curator_averages, key=lambda c: c["avg_score"])
+
+    gold = silver = bronze = 0
+    for pcts in student_percents.values():
+        avg_pct = sum(pcts) / len(pcts)
+        if avg_pct >= DEFAULT_GOLD_PERCENT:
+            gold += 1
+        elif avg_pct >= DEFAULT_SILVER_PERCENT:
+            silver += 1
+        elif avg_pct >= DEFAULT_PASSING_PERCENT:
+            bronze += 1
+
+    total_students = len(student_percents)
+    overview["gold_count"], overview["silver_count"], overview["bronze_count"] = gold, silver, bronze
+    if total_students:
+        overview["gold_share"] = round(gold / total_students * 100, 1)
+        overview["silver_share"] = round(silver / total_students * 100, 1)
+        overview["bronze_share"] = round(bronze / total_students * 100, 1)
+
+    return overview

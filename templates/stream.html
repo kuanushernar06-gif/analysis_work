@@ -5,7 +5,7 @@
 <div class="page-head">
   <div>
     <a class="back-link" href="{{ url_for('program_detail', slug=program['slug']) }}">← {{ program['name'] }}</a>
-    <h1>{{ program['name'] }} · {{ stream['code'] }}</h1>
+    <h1>{{ program['name'] }} · {{ category_label(stream['category']) }} · {{ stream['code'] }}</h1>
     <p class="muted">Айды, содан кейін аптаны таңдаңыз.</p>
   </div>
 </div>

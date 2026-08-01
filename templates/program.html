@@ -14,8 +14,8 @@
   <h2>Тарих жоспары</h2>
   <p class="section-intro">
     5 айлық Қазақстан тарихы жоспарының Google Docs сілтемесін осында қойыңыз — сайт оны
-    «N-АЙ», «N-АПТА» белгілеріне қарап бөліп, осы бағдарламаның <b>барлық потоктарындағы</b>
-    сәйкес апталарға автоматты түрде орналастырады («Жоспар» бөлімінде көрінеді).
+    «N-АЙ», «N-АПТА» белгілеріне қарап бөліп, осы бағдарламаның <b>САБАҚ ТАПСЫРУ АНАЛИЗ</b>
+    потоктарындағы сәйкес апталарға автоматты түрде орналастырады («Жоспар» бөлімінде көрінеді).
   </p>
   <form method="post" action="{{ url_for('save_program_plan', slug=program['slug']) }}" class="form-grid">
     <label class="col-span-2">
@@ -49,13 +49,19 @@
   {% endif %}
 </div>
 
-<div class="nav-cards">
-  {% for item in streams %}
-  <a class="nav-card" href="{{ url_for('stream_detail', stream_id=item.stream['id']) }}">
-    <span class="nav-card-ic">🗂️</span>
-    <div class="nav-card-title">{{ item.stream['code'] }}</div>
-    <div class="nav-card-sub">{{ item.week_count }} апта</div>
-  </a>
+<div class="board">
+  {% for col in columns %}
+  {% set col_index = loop.index0 %}
+  <div class="board-col" id="{{ col.slug }}">
+    <div class="board-col-cards">
+      {% for item in col.streams %}
+      <a class="nav-card nav-card-gradient nav-card-gradient-{{ col_index }}{% if program['slug'] == 'smart' %} nav-card-tarih{% endif %}"
+         href="{{ url_for('stream_detail', stream_id=item.stream['id']) }}">
+        <div class="nav-card-title">{{ item.stream['code'] }}</div>
+      </a>
+      {% endfor %}
+    </div>
+  </div>
   {% endfor %}
 </div>
 

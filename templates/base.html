@@ -3,25 +3,86 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script>
+    (function () {
+      try {
+        var stored = localStorage.getItem('juz40-theme');
+        var theme = (stored === 'dark' || stored === 'light')
+          ? stored
+          : (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        document.documentElement.setAttribute('data-theme', theme);
+      } catch (e) {}
+    })();
+  </script>
   <title>{% block title %}JUZ40 — Апталық анализ{% endblock %}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-  {% block header %}
-  <header class="topbar">
-    <a class="brand" href="{{ url_for('index') }}">JUZ40 · Апталық анализ</a>
-    <form method="post" action="{{ url_for('logout') }}" class="logout-form">
-      <button type="submit" class="btn btn-outline btn-small">Шығу</button>
-    </form>
-  </header>
-  {% endblock %}
+  {% block header %}{% endblock %}
 
   {% block body %}
-  <main class="container">
-    {% include "_flashes.html" %}
-    {% block content %}{% endblock %}
-  </main>
+  <div class="site-shell">
+    <aside class="site-sidebar no-print">
+      <button type="button" class="sidebar-pin-toggle no-print" id="sidebar-pin-toggle" aria-pressed="false" aria-label="Бүйірлік мәзірді ашық қалдыру">
+        <span class="sidebar-pin-arrow">›</span>
+      </button>
+      <a class="site-sidebar-brand" href="{{ url_for('index') }}">
+        <span>
+          <span class="site-sidebar-brand-title">JUZ40</span>
+          <span class="site-sidebar-brand-sub">Апталық анализ</span>
+        </span>
+      </a>
+      <nav class="site-sidebar-nav">
+        {% for cslug, clabel in sidebar_categories %}
+        <a href="{{ url_for('category_picker', category_slug=cslug) }}">{{ clabel }}</a>
+        {% endfor %}
+      </nav>
+      <div class="site-sidebar-footer">
+        <button type="button" class="theme-toggle no-print" id="theme-toggle" aria-pressed="false" aria-label="Жарық/қараңғы тақырыпты ауыстыру">
+          <span class="theme-toggle-track"><span class="theme-toggle-thumb"></span></span>
+          <span class="theme-toggle-label">Қараңғы тақырып</span>
+        </button>
+        <form method="post" action="{{ url_for('logout') }}" class="site-sidebar-logout">
+          <button type="submit">Шығу</button>
+        </form>
+      </div>
+    </aside>
+    <main class="site-main">
+      {% include "_flashes.html" %}
+      {% block content %}{% endblock %}
+    </main>
+  </div>
   {% endblock %}
+
+  <script>
+    (function () {
+      var themeBtn = document.getElementById('theme-toggle');
+      if (themeBtn) {
+        themeBtn.addEventListener('click', function () {
+          var next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+          document.documentElement.setAttribute('data-theme', next);
+          try { localStorage.setItem('juz40-theme', next); } catch (e) {}
+        });
+      }
+
+      var sidebar = document.querySelector('.site-sidebar');
+      var pinBtn = document.getElementById('sidebar-pin-toggle');
+      if (sidebar && pinBtn) {
+        var setPinned = function (on) {
+          sidebar.classList.toggle('is-pinned', on);
+          pinBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
+        };
+        var stored = null;
+        try { stored = localStorage.getItem('juz40-sidebar-pinned'); } catch (e) {}
+        setPinned(stored === 'true');
+        pinBtn.addEventListener('click', function () {
+          var on = !sidebar.classList.contains('is-pinned');
+          setPinned(on);
+          try { localStorage.setItem('juz40-sidebar-pinned', on ? 'true' : 'false'); } catch (e) {}
+        });
+      }
+    })();
+  </script>
 
   {% block scripts %}{% endblock %}
 </body>
