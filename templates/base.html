@@ -62,6 +62,10 @@
         </form>
       </div>
     </aside>
+    {% else %}
+    <form method="post" action="{{ url_for('logout') }}" class="no-sidebar-logout no-print">
+      <button type="submit">Шығу</button>
+    </form>
     {% endif %}
     <main class="site-main">
       {% include "_flashes.html" %}

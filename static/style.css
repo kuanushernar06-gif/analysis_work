@@ -169,7 +169,20 @@ a { color: var(--accent); }
    АШЫЛМАЙДЫ — тек жоғарғы стрелка батырмасын басқанда ғана ашылады/жабылады
    (.is-pinned класы, JS арқылы). */
 .site-shell { display: flex; min-height: 100vh; align-items: stretch; padding-left: 58px; transition: padding-left .2s ease; }
-.site-shell.no-sidebar { padding-left: 0; }
+.site-shell.no-sidebar { padding-left: 0; position: relative; }
+.no-sidebar-logout { position: absolute; top: 20px; right: 24px; margin: 0; z-index: 5; }
+.no-sidebar-logout button {
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  padding: 8px 14px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 600;
+  box-shadow: var(--shadow-glass);
+}
+.no-sidebar-logout button:hover { border-color: var(--accent); color: var(--accent); }
 /* Сайдбар қолмен ашық қалдырылғанда (.is-pinned), артындағы мазмұн жабылып
    қалмасын деп негізгі контентті де оң жаққа ысырамыз ("push" layout) —
    бұрынғыдай тек үстінен жауып тұратын overlay емес. Тек desktop енінде
