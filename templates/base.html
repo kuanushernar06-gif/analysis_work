@@ -70,7 +70,7 @@
         </form>
       </div>
     </aside>
-    {% else %}
+    {% elif request.endpoint == 'index' %}
     <form method="post" action="{{ url_for('logout') }}" class="no-sidebar-logout no-print">
       <button type="submit">Шығу</button>
     </form>

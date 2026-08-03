@@ -687,17 +687,6 @@ input[type="number"]::-webkit-outer-spin-button {
 }
 .login-submit { margin-top: 4px; }
 
-.login-visual {
-  display: none;
-  position: relative;
-  flex: 1;
-  overflow: hidden;
-  background: linear-gradient(160deg, var(--accent-soft) 0%, var(--accent) 45%, #200900 100%);
-}
-@media (min-width: 860px) {
-  .login-visual { display: block; }
-}
-
 /* ---------- Curator note cards ---------- */
 .note-card {
   border: 1px solid var(--border);
