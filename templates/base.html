@@ -130,6 +130,23 @@
         var main = document.querySelector('.site-main');
         if (main) main.classList.add('is-loading');
       });
+
+      // Сол эффект кәдімгі сілтемелерде де (сайдбар, санат/бөлім/поток/апта/ай
+      // карточкалары) — жаңа бетке өту сол сәтте бірден "жүктелуде" күйін
+      // көрсетеді. Жаңа терезеде ашу, сыртқы сілтемелер және лезде орындалатын
+      // батырмалар (тақырып/сайдбар ауыстыру) бұған кірмейді — олар серверге
+      // сұраныс жібермейді, сондықтан "ойлану" күйі керек емес.
+      document.addEventListener('click', function (e) {
+        if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+        var link = e.target.closest('a[href]');
+        if (!link || link.target && link.target !== '_self') return;
+        var href = link.getAttribute('href');
+        if (!href || href.charAt(0) === '#') return;
+        if (link.origin && link.origin !== window.location.origin) return;
+        link.classList.add('is-loading-link');
+        var main = document.querySelector('.site-main');
+        if (main) main.classList.add('is-loading');
+      });
     })();
   </script>
 

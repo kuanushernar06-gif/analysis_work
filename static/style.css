@@ -368,6 +368,10 @@ html[data-sidebar-pinned="true"] .site-sidebar-footer {
   0% { background-position: 160% 0; }
   100% { background-position: -60% 0; }
 }
+/* Кез келген ішкі сілтема (сайдбар нав, санат/бөлім/поток/апта/ай
+   карточкалары) басылған сәтте — жаңа бет жүктелгенше көмескіленіп,
+   қайта басуды болдырмайды. */
+a.is-loading-link { opacity: 0.5; pointer-events: none; transition: opacity 0.15s ease; }
 @media (max-width: 720px) {
   .site-shell { flex-direction: column; padding-left: 0; }
   .site-sidebar {
