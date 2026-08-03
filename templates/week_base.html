@@ -18,23 +18,5 @@
   </div>
 </div>
 
-<nav class="week-tabs no-print">
-  <a href="{{ url_for('week_plan', week_id=week['id']) }}" class="week-tab {{ 'active' if active_page == 'plan' else '' }}">
-    <span class="ic">🗓️</span> Жоспар
-  </a>
-  <a href="{{ url_for('week_import', week_id=week['id']) }}" class="week-tab {{ 'active' if active_page == 'import' else '' }}">
-    <span class="ic">📥</span> Кестені импорттау
-  </a>
-  <a href="{{ url_for('week_results', week_id=week['id']) }}" class="week-tab {{ 'active' if active_page == 'results' else '' }}">
-    <span class="ic">📋</span> Нәтижелер <span class="badge">{{ result_count }}</span>
-  </a>
-  <a href="{{ url_for('week_notes', week_id=week['id']) }}" class="week-tab {{ 'active' if active_page == 'notes' else '' }}">
-    <span class="ic">📝</span> Куратор анализі <span class="badge">{{ note_count }}</span>
-  </a>
-  <a href="{{ url_for('week_report', week_id=week['id']) }}" class="week-tab {{ 'active' if active_page == 'report' else '' }}">
-    <span class="ic">📊</span> Ортақ анализ
-  </a>
-</nav>
-
 {% block week_content %}{% endblock %}
 {% endblock %}

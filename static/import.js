@@ -19,10 +19,6 @@
       "    Рейтинг сілтемесі (Google Sheets)",
       '    <input type="text" name="sheet_url" required autocomplete="off" placeholder="https://docs.google.com/spreadsheets/d/...">',
       "  </label>",
-      "  <label>",
-      "    Әдепкі максимум балл (баған болмаса)",
-      '    <input type="number" step="0.01" name="default_max_score" autocomplete="off" placeholder="Мысалы: 20">',
-      "  </label>",
       '  <div><button type="button" class="btn btn-danger btn-small remove-row-btn">Жою</button></div>',
       "</div>",
     ].join("\n");

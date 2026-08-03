@@ -22,21 +22,13 @@
     шығару» батырмасын бір-ақ рет басыңыз — сайт барлық рейтингті бірден өңдеп, нәтижесін
     «Нәтижелер» бетінде біріктіреді.
   </p>
-</div>
-
-<div class="card">
-  <h2>Мақсат</h2>
+  {% if week['max_score'] is not none %}
   <p class="muted">
-    Осы аптаның барлық рейтинг нәтижелеріне бірдей қойылатын мақсат балл (міндетті емес — кейде
-    нақты мақсат болмайды). Қойылса, «Нәтижелер» бетінде мақсат орындалу пайызы автоматты
-    есептеледі.
+    {{ program['name'] }} бағдарламасының бекітілген максимум баллы —
+    <b>{{ week['max_score'] }}</b> балл{% if week['target_score'] is not none %}, СТ мақсаты — <b>{{ week['target_score'] }}</b> балл{% endif %}
+    (кестеде баған болмаса, осы максимум балл автоматты қолданылады).
   </p>
-  <form method="post" action="{{ url_for('update_week_target', week_id=week['id']) }}" class="inline-form no-print">
-    <label>Мақсат балл (міндетті емес)
-      <input type="number" step="0.01" name="target_score" autocomplete="off" value="{{ week['target_score'] if week['target_score'] is not none else '' }}" placeholder="Мысалы: 12">
-    </label>
-    <button type="submit" class="btn btn-outline btn-small">Сақтау</button>
-  </form>
+  {% endif %}
 </div>
 
 <div class="card">

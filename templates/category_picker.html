@@ -12,9 +12,8 @@
 
 <div class="nav-cards">
   {% for program in programs %}
-  <a class="nav-card" href="{{ url_for('program_detail', slug=program['slug']) }}#{{ category_slug }}">
-    <img class="nav-card-ic" src="{{ url_for('static', filename='img/juz40-logo.png') }}" alt="">
-    <div class="nav-card-title">{{ program['name'] }}</div>
+  <a class="nav-card nav-card-tarih-bg" href="{{ url_for('program_detail', slug=program['slug'], category=category_slug) }}">
+    <div class="nav-card-title nav-card-title-big">{{ program['name'] }}</div>
   </a>
   {% endfor %}
 </div>

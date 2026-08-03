@@ -40,7 +40,6 @@ SCHEMA_HINT = """{
   "low_result_reasons": [{"name": "...", "percent": 0-100}, ...] (көбіне 5-ке дейін),
   "curator_mistakes": [{"name": "...", "percent": 0-100}, ...] (көбіне 5-ке дейін),
   "top_solutions": [{"name": "...", "percent": 0-100}, ...] (көбіне 10-ға дейін),
-  "level_distribution": [{"label": "...", "percent": 0-100}, ...] (оқушылардың балл деңгейі бойынша үлесі),
   "priority_directions": ["...", ...] (келесі аптаға басымдық берілетін 5-ке дейін бағыт),
   "overall_summary": "(2-4 сөйлемдік қысқа жалпы қорытынды)",
   "prevention_measures_taken": "(кураторлар мәтінінде СТ алдында алдын алу шаралары
@@ -283,7 +282,7 @@ def _weighted_merge_list(chunk_items_with_weights, key_field, limit):
     return merged[:limit]
 
 
-def _merge_analyses(chunk_analyses):
+def merge_analyses(chunk_analyses):
     if len(chunk_analyses) == 1:
         return chunk_analyses[0]
 
@@ -308,7 +307,6 @@ def _merge_analyses(chunk_analyses):
         "low_result_reasons": merge_field("low_result_reasons", "name", 5),
         "curator_mistakes": merge_field("curator_mistakes", "name", 5),
         "top_solutions": merge_field("top_solutions", "name", 10),
-        "level_distribution": merge_field("level_distribution", "label", 10),
         "priority_directions": priorities[:5],
         "overall_summary": next((a.get("overall_summary") for a in chunk_analyses if a.get("overall_summary")), None),
         "prevention_measures_taken": next(
@@ -349,4 +347,4 @@ def generate_curator_analysis(doc_text: str, report=None) -> dict:
             time.sleep(2)
         chunk_analyses.append(_analyze_chunk(chunk, stats_section, api_key))
 
-    return _merge_analyses(chunk_analyses)
+    return merge_analyses(chunk_analyses)

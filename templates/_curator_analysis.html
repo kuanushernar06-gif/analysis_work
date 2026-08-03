@@ -66,22 +66,6 @@
     </div>
     {% endif %}
 
-    {% if a.level_distribution %}
-    <div class="analysis-block">
-      <h4>Оқушылар деңгейі бойынша үлес</h4>
-      <div class="barchart">
-        {% for lvl in a.level_distribution %}
-        <div class="bar-row-stacked">
-          <div class="bar-name">{{ lvl.label }}</div>
-          <div class="bar-line">
-            <div class="bar-track"><div class="bar-fill status-good" style="width: {{ lvl.percent }}%"></div></div>
-            <div class="bar-value">{{ lvl.percent }}%</div>
-          </div>
-        </div>
-        {% endfor %}
-      </div>
-    </div>
-    {% endif %}
   </div>
 
   {% if a.top_solutions %}
@@ -118,6 +102,8 @@
 
 {% elif week['curators_doc_text'] %}
   <p class="muted">Мәтін жүктелді, бірақ талдау әлі жасалмаған. «Қайта жүктеу» батырмасын басыңыз.</p>
+{% elif is_month_summary %}
+  <p class="muted">Осы айдың 1, 2, 3-аптасының ешқайсысында куратор анализі әлі жасалмаған.</p>
 {% else %}
   <p class="muted">Мәтін әлі жүктелмеген.</p>
 {% endif %}

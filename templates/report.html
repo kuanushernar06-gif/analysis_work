@@ -71,7 +71,10 @@
 
 <div class="card">
   <h2>Кураторлардың жиынтық анализі</h2>
-  {% if week['curators_doc_url'] %}
+  {% if is_month_summary %}
+    <p class="muted">Бұл — осы айдың 1, 2, 3-апта кураторлар анализдерінен автоматты біріктірілген қорытынды.</p>
+    {% include "_curator_analysis.html" %}
+  {% elif week['curators_doc_url'] %}
     {% if week['curators_doc_fetch_error'] %}
       <p class="flash flash-error">{{ week['curators_doc_fetch_error'] }}</p>
     {% else %}
@@ -84,6 +87,17 @@
 
 <div class="card" id="summary">
   <h2>Жалпы қорытынды</h2>
+  {% if is_month_summary %}
+  <p class="muted">
+    Бұл қорытынды осы айдың 1, 2, 3-апта деректері мен кураторлар анализдерінен автоматты
+    біріктіріледі — қолмен жасаудың қажеті жоқ.
+  </p>
+  {% if summary_text_override %}
+  <div class="summary-display">{{ summary_text_override | summary_html }}</div>
+  {% else %}
+  <p class="muted">Әзірге 1, 2, 3-аптаның ешқайсысында деректер/анализ жоқ.</p>
+  {% endif %}
+  {% else %}
   <p class="muted">
     Бұл қорытындыны жоғарыдағы деректер мен кураторлар анализі негізінде AI толық өзі жазады.
   </p>
@@ -114,9 +128,10 @@
     </div>
   </div>
   {% endif %}
+  {% endif %}
 </div>
 
-{% if week['summary'] %}
+{% if not is_month_summary and week['summary'] %}
 <script>
   (function () {
     const btn = document.getElementById("summary-delete-btn");

@@ -15,18 +15,21 @@
     })();
   </script>
   <title>{% block title %}JUZ40 — Апталық анализ{% endblock %}</title>
+  <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='img/favicon.ico') }}">
+  <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='img/favicon-16.png') }}">
+  <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='img/favicon-32.png') }}">
+  <link rel="apple-touch-icon" href="{{ url_for('static', filename='img/apple-touch-icon.png') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
   {% block header %}{% endblock %}
 
   {% block body %}
-  <div class="site-shell">
+  <div class="site-shell{% if request.endpoint in ('index', 'category_picker', 'program_detail', 'stream_detail') %} no-sidebar{% endif %}">
+    {% if request.endpoint not in ('index', 'category_picker', 'program_detail', 'stream_detail') %}
     <aside class="site-sidebar no-print">
       <button type="button" class="sidebar-pin-toggle no-print" id="sidebar-pin-toggle" aria-pressed="false" aria-label="Бүйірлік мәзірді ашық қалдыру">
-        <svg class="sidebar-pin-arrow" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="9 6 15 12 9 18"></polyline>
-        </svg>
+        <span class="sidebar-pin-arrow" aria-hidden="true"></span>
       </button>
       <a class="site-sidebar-brand" href="{{ url_for('index') }}">
         <span>
@@ -35,9 +38,19 @@
         </span>
       </a>
       <nav class="site-sidebar-nav">
-        {% for cslug, clabel in sidebar_categories %}
-        <a href="{{ url_for('category_picker', category_slug=cslug) }}">{{ clabel }}</a>
-        {% endfor %}
+        {% if week %}
+          {% if not stream or stream['category'] != 'aylyq_test' %}
+          <a href="{{ url_for('week_plan', week_id=week['id']) }}" class="{{ 'active' if active_page == 'plan' else '' }}"><span class="ic">🗓️</span> Жоспар</a>
+          {% endif %}
+          {% if not is_month_summary %}
+          <a href="{{ url_for('week_import', week_id=week['id']) }}" class="{{ 'active' if active_page == 'import' else '' }}"><span class="ic">📥</span> Кестені импорттау</a>
+          {% endif %}
+          <a href="{{ url_for('week_results', week_id=week['id']) }}" class="{{ 'active' if active_page == 'results' else '' }}"><span class="ic">📋</span> Нәтижелер <span class="badge">{{ result_count }}</span></a>
+          {% if not is_month_summary %}
+          <a href="{{ url_for('week_notes', week_id=week['id']) }}" class="{{ 'active' if active_page == 'notes' else '' }}"><span class="ic">📝</span> Куратор анализі <span class="badge">{{ note_count }}</span></a>
+          {% endif %}
+          <a href="{{ url_for('week_report', week_id=week['id']) }}" class="{{ 'active' if active_page == 'report' else '' }}"><span class="ic">📊</span> Ортақ анализ</a>
+        {% endif %}
       </nav>
       <div class="site-sidebar-footer">
         <button type="button" class="theme-toggle no-print" id="theme-toggle" aria-pressed="false" aria-label="Жарық/қараңғы тақырыпты ауыстыру">
@@ -49,6 +62,7 @@
         </form>
       </div>
     </aside>
+    {% endif %}
     <main class="site-main">
       {% include "_flashes.html" %}
       {% block content %}{% endblock %}

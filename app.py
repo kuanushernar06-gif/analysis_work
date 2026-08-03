@@ -10,7 +10,7 @@ from markupsafe import Markup, escape
 load_dotenv()
 
 import db
-from analysis import compute_report, compute_program_overview
+from analysis import compute_report
 from sheets import fetch_workbook, rows_to_dicts, guess_columns, is_summary_row, is_template_sheet, SheetFetchError
 from gdocs import (
     fetch_doc_text,
@@ -20,7 +20,7 @@ from gdocs import (
     classify_plan_sections,
     strip_template_entry,
 )
-from curator_analysis import generate_curator_analysis, build_summary_text, CuratorAnalysisError
+from curator_analysis import generate_curator_analysis, build_summary_text, merge_analyses, CuratorAnalysisError
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "juz40-local-dev-secret")
@@ -59,10 +59,15 @@ def inject_category_label():
 
 @app.before_request
 def require_login():
-    if request.endpoint in ("login", "static") or request.endpoint is None:
+    if request.endpoint in ("login", "static", "favicon") or request.endpoint is None:
         return
     if not session.get("logged_in"):
         return redirect(url_for("login", next=request.path))
+
+
+@app.route("/favicon.ico")
+def favicon():
+    return redirect(url_for("static", filename="img/favicon.ico"))
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -151,14 +156,30 @@ def get_week_context(conn, week_id):
     return week, stream, program
 
 
+def is_month_summary_week(week, stream):
+    """САБАҚ ТАПСЫРУ АНАЛИЗ санатындағы әр айдың соңғы (WEEKS_PER_MONTH-ші)
+    аптасы — бөлек СТ емес, сол айдың алдыңғы апталарының нәтижесі мен
+    анализін біріктіретін 'N-АЙ ОРТАҚ' торабы. Мұнда кесте импорттау/жеке
+    куратор құжаты жоқ — бәрі 1,2,3-аптадан автоматты жиналады."""
+    return (
+        stream is not None
+        and stream["category"] == db.DEFAULT_CATEGORY
+        and week["week_number"] == db.WEEKS_PER_MONTH
+    )
+
+
+def get_month_component_weeks(conn, week):
+    """Осы 'N-АЙ ОРТАҚ' аптасы біріктіретін, сол айдың 1,2,3-апталарын
+    (week_number < WEEKS_PER_MONTH) ретімен қайтарады."""
+    return conn.execute(
+        "SELECT * FROM weeks WHERE stream_id = ? AND month_number = ? AND week_number < ? ORDER BY week_number",
+        (week["stream_id"], week["month_number"], db.WEEKS_PER_MONTH),
+    ).fetchall()
+
+
 @app.route("/")
 def index():
-    conn = get_db()
-    programs = conn.execute("SELECT * FROM programs ORDER BY sort_order, id").fetchall()
-    programs_with_overview = [
-        {"program": p, "overview": compute_program_overview(conn, p["id"])} for p in programs
-    ]
-    return render_template("index.html", programs=programs_with_overview)
+    return render_template("index.html")
 
 
 @app.route("/categories/<category_slug>")
@@ -186,6 +207,13 @@ def program_detail(slug):
         flash("Бағдарлама табылмады.", "error")
         return redirect(url_for("index"))
 
+    # Санат бетінен (category_picker) келгенде тек сол санаттың ағындары
+    # көрсетіледі — СТ мен АТ бір-біріне мүлде араласпайды. Санатсыз тікелей
+    # кірсе (ескі сілтеме/бетбелгі), бұрынғыдай барлық санат қатар көрінеді.
+    category_slug = request.args.get("category")
+    if category_slug not in db.CATEGORY_LABELS:
+        category_slug = None
+
     streams = conn.execute(
         "SELECT * FROM streams WHERE program_id = ? ORDER BY sort_order, id", (program["id"],)
     ).fetchall()
@@ -196,11 +224,20 @@ def program_detail(slug):
         ).fetchone()["c"]
         by_category.setdefault(s["category"], []).append({"stream": s, "week_count": week_count})
 
+    categories_to_show = (
+        [(category_slug, db.CATEGORY_LABELS[category_slug], 0)] if category_slug else db.CATEGORIES
+    )
     columns = [
         {"slug": cslug, "label": label, "streams": by_category.get(cslug, [])}
-        for cslug, label, _order in db.CATEGORIES
+        for cslug, label, _order in categories_to_show
     ]
-    return render_template("program.html", program=program, columns=columns)
+    return render_template(
+        "program.html",
+        program=program,
+        columns=columns,
+        current_category=category_slug,
+        show_plan_card=category_slug is None or category_slug == db.DEFAULT_CATEGORY,
+    )
 
 
 @app.route("/programs/<slug>/plan", methods=["POST"])
@@ -289,6 +326,7 @@ def week_plan(week_id):
         result_count=result_count,
         note_count=note_count,
         plan_sections=plan_sections,
+        is_month_summary=is_month_summary_week(week, stream),
     )
 
 
@@ -306,10 +344,22 @@ def stream_detail(stream_id):
     ).fetchall()
     months = {}
     for w in weeks:
-        result_count = conn.execute(
-            "SELECT COUNT(*) AS c FROM results WHERE week_id = ?", (w["id"],)
-        ).fetchone()["c"]
-        note_count = 1 if w["curators_doc_url"] else 0
+        if is_month_summary_week(w, stream):
+            component_weeks = get_month_component_weeks(conn, w)
+            combine_ids = [cw["id"] for cw in component_weeks]
+            if combine_ids:
+                placeholders = ",".join("?" * len(combine_ids))
+                result_count = conn.execute(
+                    f"SELECT COUNT(*) AS c FROM results WHERE week_id IN ({placeholders})", combine_ids
+                ).fetchone()["c"]
+            else:
+                result_count = 0
+            note_count = 1 if any(cw["curators_doc_url"] for cw in component_weeks) else 0
+        else:
+            result_count = conn.execute(
+                "SELECT COUNT(*) AS c FROM results WHERE week_id = ?", (w["id"],)
+            ).fetchone()["c"]
+            note_count = 1 if w["curators_doc_url"] else 0
         months.setdefault(w["month_number"], []).append(
             {"week": w, "result_count": result_count, "note_count": note_count}
         )
@@ -349,6 +399,14 @@ def week_import(week_id):
         flash("Апта табылмады.", "error")
         return redirect(url_for("index"))
 
+    if is_month_summary_week(week, stream):
+        flash(
+            "Бұл — айлық ортақ апта, кестені осында импорттаудың қажеті жоқ. "
+            "Нәтижелер осы айдың 1, 2, 3-апта импорттарынан автоматты түрде біріктіріледі.",
+            "error",
+        )
+        return redirect(url_for("week_results", week_id=week_id))
+
     result_count = conn.execute(
         "SELECT COUNT(*) AS c FROM results WHERE week_id = ?", (week_id,)
     ).fetchone()["c"]
@@ -373,11 +431,24 @@ def week_results(week_id):
         flash("Апта табылмады.", "error")
         return redirect(url_for("index"))
 
-    result_count = conn.execute(
-        "SELECT COUNT(*) AS c FROM results WHERE week_id = ?", (week_id,)
-    ).fetchone()["c"]
+    is_summary = is_month_summary_week(week, stream)
+    if is_summary:
+        combine_ids = [w["id"] for w in get_month_component_weeks(conn, week)]
+        if combine_ids:
+            placeholders = ",".join("?" * len(combine_ids))
+            result_count = conn.execute(
+                f"SELECT COUNT(*) AS c FROM results WHERE week_id IN ({placeholders})", combine_ids
+            ).fetchone()["c"]
+            report = compute_report(conn, week_id, combine_week_ids=combine_ids)
+        else:
+            result_count = 0
+            report = compute_report(conn, week_id)
+    else:
+        result_count = conn.execute(
+            "SELECT COUNT(*) AS c FROM results WHERE week_id = ?", (week_id,)
+        ).fetchone()["c"]
+        report = compute_report(conn, week_id)
     note_count = 1 if week["curators_doc_url"] else 0
-    report = compute_report(conn, week_id)
 
     return render_template(
         "results.html",
@@ -388,6 +459,7 @@ def week_results(week_id):
         result_count=result_count,
         note_count=note_count,
         report=report,
+        is_month_summary=is_summary,
     )
 
 
@@ -398,6 +470,14 @@ def week_notes(week_id):
     if week is None:
         flash("Апта табылмады.", "error")
         return redirect(url_for("index"))
+
+    if is_month_summary_week(week, stream):
+        flash(
+            "Бұл — айлық ортақ апта, кураторлар анализі осы айдың 1, 2, 3-апта "
+            "анализдерінен автоматты түрде біріктіріледі. Толық көру үшін «Ортақ анализ» бетін ашыңыз.",
+            "error",
+        )
+        return redirect(url_for("week_report", week_id=week_id))
 
     result_count = conn.execute(
         "SELECT COUNT(*) AS c FROM results WHERE week_id = ?", (week_id,)
@@ -425,12 +505,37 @@ def week_report(week_id):
         flash("Апта табылмады.", "error")
         return redirect(url_for("index"))
 
-    result_count = conn.execute(
-        "SELECT COUNT(*) AS c FROM results WHERE week_id = ?", (week_id,)
-    ).fetchone()["c"]
-    note_count = 1 if week["curators_doc_url"] else 0
-    report = compute_report(conn, week_id)
-    curator_analysis = parse_curator_analysis(week)
+    is_summary = is_month_summary_week(week, stream)
+    summary_text_override = None
+
+    if is_summary:
+        component_weeks = get_month_component_weeks(conn, week)
+        combine_ids = [w["id"] for w in component_weeks]
+        report = (
+            compute_report(conn, week_id, combine_week_ids=combine_ids)
+            if combine_ids
+            else compute_report(conn, week_id)
+        )
+        result_count = report["total_entries"] if report else 0
+        note_count = sum(1 for cw in component_weeks if cw["curators_doc_url"])
+
+        analyses = []
+        for cw in component_weeks:
+            if cw["curators_analysis_json"]:
+                try:
+                    analyses.append(json.loads(cw["curators_analysis_json"]))
+                except (TypeError, ValueError):
+                    pass
+        curator_analysis = merge_analyses(analyses) if analyses else None
+        if report and (report.get("has_data") or curator_analysis):
+            summary_text_override = build_summary_text(report, curator_analysis)
+    else:
+        result_count = conn.execute(
+            "SELECT COUNT(*) AS c FROM results WHERE week_id = ?", (week_id,)
+        ).fetchone()["c"]
+        note_count = 1 if week["curators_doc_url"] else 0
+        report = compute_report(conn, week_id)
+        curator_analysis = parse_curator_analysis(week)
 
     return render_template(
         "report.html",
@@ -442,6 +547,8 @@ def week_report(week_id):
         result_count=result_count,
         note_count=note_count,
         curator_analysis=curator_analysis,
+        is_month_summary=is_summary,
+        summary_text_override=summary_text_override,
     )
 
 
@@ -481,29 +588,29 @@ def generate_summary(week_id):
 @app.route("/weeks/<int:week_id>/import", methods=["POST"])
 def import_sheet(week_id):
     conn = get_db()
-    week = get_week_or_404(conn, week_id)
+    week, stream, program = get_week_context(conn, week_id)
     if week is None:
         flash("Апта табылмады.", "error")
         return redirect(url_for("index"))
 
-    urls = [u.strip() for u in request.form.getlist("sheet_url")]
-    max_scores = request.form.getlist("default_max_score")
-    pairs = [
-        (u, (max_scores[i].strip() if i < len(max_scores) else ""))
-        for i, u in enumerate(urls)
-        if u
-    ]
+    if is_month_summary_week(week, stream):
+        flash("Бұл — айлық ортақ апта, кестені осында импорттаудың қажеті жоқ.", "error")
+        return redirect(url_for("week_results", week_id=week_id))
 
-    if not pairs:
+    urls = [u.strip() for u in request.form.getlist("sheet_url") if u.strip()]
+
+    if not urls:
         flash("Кемінде бір рейтинг сілтемесін қосыңыз.", "error")
         return redirect(url_for("week_import", week_id=week_id))
+
+    default_max_score = db.score_defaults_for(program["slug"], stream["category"])[0] if program and stream else None
 
     total_inserted = 0
     total_skipped = 0
     ok_count = 0
     failed = []
 
-    for sheet_url, default_max_score in pairs:
+    for sheet_url in urls:
         try:
             sheets = fetch_workbook(sheet_url)
         except SheetFetchError as e:
@@ -558,9 +665,9 @@ def import_sheet(week_id):
                     try:
                         max_score = float(max_score_raw.replace(",", "."))
                     except ValueError:
-                        max_score = float(default_max_score) if default_max_score else None
+                        max_score = default_max_score
                 else:
-                    max_score = float(default_max_score) if default_max_score else None
+                    max_score = default_max_score
 
                 subject = cell(idx_subject) or None
                 topic = cell(idx_topic) or None
@@ -615,6 +722,11 @@ def delete_result(week_id, result_id):
 @app.route("/weeks/<int:week_id>/notes", methods=["POST"])
 def save_curators_doc(week_id):
     conn = get_db()
+    week_row, stream_row, _program_row = get_week_context(conn, week_id)
+    if week_row is not None and is_month_summary_week(week_row, stream_row):
+        flash("Бұл — айлық ортақ апта, куратор құжатын осында қосудың қажеті жоқ.", "error")
+        return redirect(url_for("week_report", week_id=week_id))
+
     doc_url = request.form.get("doc_url", "").strip()
 
     if not doc_url:
@@ -699,18 +811,6 @@ def update_league_thresholds(week_id):
     )
     conn.commit()
     return redirect(url_for("week_results", week_id=week_id))
-
-
-@app.route("/weeks/<int:week_id>/target", methods=["POST"])
-def update_week_target(week_id):
-    conn = get_db()
-    target = request.form.get("target_score", "").strip()
-    conn.execute(
-        "UPDATE weeks SET target_score = ? WHERE id = ?",
-        (float(target) if target else None, week_id),
-    )
-    conn.commit()
-    return redirect(url_for("week_import", week_id=week_id))
 
 
 if __name__ == "__main__":

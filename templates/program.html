@@ -4,12 +4,13 @@
 
 <div class="page-head">
   <div>
-    <a class="back-link" href="{{ url_for('index') }}">← Бағдарламалар</a>
+    <a class="back-link" href="{{ url_for('category_picker', category_slug=current_category or columns[0].slug) }}">← Бөлімдер</a>
     <h1>{{ program['name'] }}</h1>
-    <p class="muted">Потокты таңдаңыз.</p>
+    <p class="muted">{% if current_category %}{{ category_label(current_category) }} · {% endif %}Потокты таңдаңыз.</p>
   </div>
 </div>
 
+{% if show_plan_card %}
 <div class="card">
   <h2>Тарих жоспары</h2>
   <p class="section-intro">
@@ -48,11 +49,13 @@
   </div>
   {% endif %}
 </div>
+{% endif %}
 
 <div class="board">
   {% for col in columns %}
   {% set col_index = loop.index0 %}
   <div class="board-col" id="{{ col.slug }}">
+    <h3 class="board-col-title">{{ col.label }}</h3>
     <div class="board-col-cards">
       {% for item in col.streams %}
       <a class="nav-card nav-card-gradient nav-card-gradient-{{ col_index }}{% if program['slug'] == 'smart' %} nav-card-tarih{% endif %}"

@@ -165,9 +165,18 @@ a { color: var(--accent); }
 
 /* ---------- Site-level sidebar (global nav, non-week pages) ---------- */
 /* Тұрақты жабық: тек шеті ғана көрінеді (домалақ бұрышты, беттен сәл
-   бөлектеніп, "шығыңқы" қалқып тұрған карточка секілді), курсорды
-   жақындатқанда толық ашылады. */
-.site-shell { display: flex; min-height: 100vh; align-items: stretch; padding-left: 46px; }
+   бөлектеніп, "шығыңқы" қалқып тұрған карточка секілді). Курсорды апарғанда
+   АШЫЛМАЙДЫ — тек жоғарғы стрелка батырмасын басқанда ғана ашылады/жабылады
+   (.is-pinned класы, JS арқылы). */
+.site-shell { display: flex; min-height: 100vh; align-items: stretch; padding-left: 58px; transition: padding-left .2s ease; }
+.site-shell.no-sidebar { padding-left: 0; }
+/* Сайдбар қолмен ашық қалдырылғанда (.is-pinned), артындағы мазмұн жабылып
+   қалмасын деп негізгі контентті де оң жаққа ысырамыз ("push" layout) —
+   бұрынғыдай тек үстінен жауып тұратын overlay емес. Тек desktop енінде
+   (мобильді енде сайдбар бәрібір толық ашық, ысыру қажет емес). */
+@media (min-width: 721px) {
+  .site-shell:has(.site-sidebar.is-pinned) { padding-left: 296px; }
+}
 .site-sidebar {
   width: 260px;
   flex-shrink: 0;
@@ -185,25 +194,19 @@ a { color: var(--accent); }
   z-index: 40;
   border-radius: 24px;
   box-shadow: var(--shadow-glass);
-  transform: translateX(calc(-100% + 28px));
+  transform: translateX(calc(-100% + 42px));
   transition: transform .2s ease, box-shadow .2s ease;
 }
-.site-sidebar:hover,
-.site-sidebar:focus-within {
-  transform: translateX(0);
-  box-shadow: var(--shadow-hover);
-}
-/* Жоғарғы оң жақтағы стрелка — қолмен ашық/жабық күйде бекітіп қою үшін;
-   hover-тен тыс, әрдайым көрінеді (тіпті жабық шетте де), сондықтан
-   курсорды жақындатпай-ақ өзі басып ашуға/жабуға болады. Домалақтың
-   ортасына дәл түсу үшін мәтін глиф орнына SVG chevron қолданылады. */
+/* Жоғарғы оң жақтағы стрелка — сайдбарды ашық/жабық күйде бекітетін жалғыз
+   тетік; әрдайым көрінеді (тіпті жабық шетте де), Домалақтың ортасына дәл
+   түсу үшін мәтін глиф орнына SVG chevron қолданылады. */
 .sidebar-pin-toggle {
   position: absolute;
-  top: 16px;
+  top: 12px;
   right: 4px;
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
   border: 1px solid var(--sidebar-border);
   background: rgba(255, 255, 255, 0.16);
   color: var(--sidebar-text);
@@ -215,8 +218,23 @@ a { color: var(--accent); }
   z-index: 1;
 }
 .sidebar-pin-toggle:hover { background: rgba(255, 255, 255, 0.3); }
-.sidebar-pin-arrow { display: block; transition: transform .2s ease; }
-.site-sidebar.is-pinned .sidebar-pin-arrow { transform: rotate(180deg); }
+.sidebar-pin-arrow {
+  display: block;
+  width: 22px;
+  height: 22px;
+  background-color: var(--sidebar-text);
+  -webkit-mask-image: url('img/sidebar-arrow.png');
+  mask-image: url('img/sidebar-arrow.png');
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  transform: rotate(180deg);
+  transition: transform .2s ease;
+}
+.site-sidebar.is-pinned .sidebar-pin-arrow { transform: rotate(0deg); }
 .site-sidebar.is-pinned {
   transform: translateX(0);
   box-shadow: var(--shadow-hover);
@@ -228,12 +246,6 @@ a { color: var(--accent); }
   pointer-events: none;
   transition: opacity .15s ease;
 }
-.site-sidebar:hover .site-sidebar-brand,
-.site-sidebar:hover .site-sidebar-nav,
-.site-sidebar:hover .site-sidebar-footer,
-.site-sidebar:focus-within .site-sidebar-brand,
-.site-sidebar:focus-within .site-sidebar-nav,
-.site-sidebar:focus-within .site-sidebar-footer,
 .site-sidebar.is-pinned .site-sidebar-brand,
 .site-sidebar.is-pinned .site-sidebar-nav,
 .site-sidebar.is-pinned .site-sidebar-footer {
@@ -245,7 +257,9 @@ a { color: var(--accent); }
 .site-sidebar-brand-sub { display: block; font-size: 0.95rem; color: var(--sidebar-text-muted); }
 .site-sidebar-nav { display: flex; flex-direction: column; gap: 4px; flex: 1; }
 .site-sidebar-nav a {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   padding: 12px 14px;
   border-radius: var(--radius-sm);
   color: var(--sidebar-link);
@@ -256,6 +270,17 @@ a { color: var(--accent); }
   transition: background-color .12s ease;
 }
 .site-sidebar-nav a:hover { background: var(--sidebar-link-hover-bg); }
+.site-sidebar-nav a.active { background: var(--sidebar-link-hover-bg); color: var(--sidebar-text); }
+.site-sidebar-nav a .badge {
+  margin-left: auto;
+  background: rgba(255, 255, 255, 0.3);
+  color: var(--sidebar-text);
+  border-radius: 999px;
+  padding: 1px 7px;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+.site-sidebar-nav a.active .badge { background: var(--sidebar-text); color: var(--sidebar-bg); }
 
 .site-sidebar-footer { display: flex; flex-direction: column; gap: 8px; }
 .theme-toggle {
@@ -328,7 +353,7 @@ a { color: var(--accent); }
   position: relative;
   overflow: hidden;
   border-radius: var(--radius);
-  background: linear-gradient(120deg, var(--accent-soft) 0%, var(--accent) 55%, #200900 130%);
+  background: linear-gradient(300deg, var(--accent-soft) 0%, var(--accent) 55%, #200900 130%);
   box-shadow: var(--shadow-glass);
   margin-bottom: 16px;
 }
@@ -347,42 +372,6 @@ a { color: var(--accent); }
 .week-banner-path { color: rgba(255, 255, 255, 0.65); text-transform: uppercase; letter-spacing: 0.04em; }
 .week-banner-title { margin: 0 0 4px; font-size: 1.55rem; font-weight: 700; letter-spacing: -0.02em; color: #fff; }
 .week-banner-meta { font-size: 0.85rem; color: rgba(255, 255, 255, 0.8); }
-
-/* ---------- Апта tab-bar (көлденең pill) ---------- */
-.week-tabs {
-  display: flex;
-  gap: 4px;
-  flex-wrap: wrap;
-  margin-bottom: 20px;
-  padding: 4px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-}
-.week-tab {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 9px 14px;
-  border-radius: 8px;
-  color: var(--text-secondary);
-  text-decoration: none;
-  font-size: 0.87rem;
-  font-weight: 600;
-  transition: background-color .12s ease, color .12s ease;
-}
-.week-tab .ic { font-size: 1rem; }
-.week-tab:hover { background: var(--border-strong); color: var(--text-primary); }
-.week-tab.active { background: var(--accent-soft); color: var(--accent); }
-.week-tab .badge {
-  background: var(--border);
-  color: var(--text-secondary);
-  border-radius: 999px;
-  padding: 1px 7px;
-  font-size: 0.72rem;
-  font-weight: 600;
-}
-.week-tab.active .badge { background: var(--accent); color: #fff; }
 
 .page-head {
   display: flex;
@@ -459,6 +448,14 @@ img.nav-card-ic { height: 32px; width: auto; border-radius: 8px; }
   box-shadow: var(--shadow-glass);
   padding: 16px;
 }
+.board-col-title {
+  margin: 0 0 12px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
 .board-col-cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
@@ -479,6 +476,30 @@ img.nav-card-ic { height: 32px; width: auto; border-radius: 8px; }
   background-repeat: no-repeat, no-repeat;
   background-position: top 12px right 12px, center;
   background-size: 34px auto, cover;
+}
+
+/* Бөлім/бағдарлама таңдау карточкалары (category_picker) — градиент фон,
+   ірі ақ жазу, лого жоқ */
+.nav-card-tarih-bg {
+  background-image: url('img/tarih-fon.png');
+  background-repeat: no-repeat;
+  background-size: cover;
+  background-position: center;
+  border-color: transparent;
+  min-height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+.nav-card-tarih-bg:hover { border-color: transparent; }
+.nav-card-title-big {
+  font-size: 1.7rem;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: -0.02em;
+  margin-bottom: 0;
+  text-transform: uppercase;
 }
 
 /* ---------- Forms ---------- */
