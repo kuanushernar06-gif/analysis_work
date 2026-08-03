@@ -217,12 +217,19 @@ def program_detail(slug):
     streams = conn.execute(
         "SELECT * FROM streams WHERE program_id = ? ORDER BY sort_order, id", (program["id"],)
     ).fetchall()
+    week_counts = {
+        row["stream_id"]: row["c"]
+        for row in conn.execute(
+            "SELECT stream_id, COUNT(*) AS c FROM weeks WHERE stream_id IN "
+            "(SELECT id FROM streams WHERE program_id = ?) GROUP BY stream_id",
+            (program["id"],),
+        ).fetchall()
+    }
     by_category = {}
     for s in streams:
-        week_count = conn.execute(
-            "SELECT COUNT(*) AS c FROM weeks WHERE stream_id = ?", (s["id"],)
-        ).fetchone()["c"]
-        by_category.setdefault(s["category"], []).append({"stream": s, "week_count": week_count})
+        by_category.setdefault(s["category"], []).append(
+            {"stream": s, "week_count": week_counts.get(s["id"], 0)}
+        )
 
     categories_to_show = (
         [(category_slug, db.CATEGORY_LABELS[category_slug], 0)] if category_slug else db.CATEGORIES
@@ -342,23 +349,29 @@ def stream_detail(stream_id):
     weeks = conn.execute(
         "SELECT * FROM weeks WHERE stream_id = ? ORDER BY month_number, week_number, id", (stream_id,)
     ).fetchall()
+    result_counts = {
+        row["week_id"]: row["c"]
+        for row in conn.execute(
+            "SELECT week_id, COUNT(*) AS c FROM results WHERE week_id IN "
+            "(SELECT id FROM weeks WHERE stream_id = ?) GROUP BY week_id",
+            (stream_id,),
+        ).fetchall()
+    }
+    weeks_by_month = {}
+    for w in weeks:
+        weeks_by_month.setdefault(w["month_number"], []).append(w)
+
     months = {}
     for w in weeks:
         if is_month_summary_week(w, stream):
-            component_weeks = get_month_component_weeks(conn, w)
-            combine_ids = [cw["id"] for cw in component_weeks]
-            if combine_ids:
-                placeholders = ",".join("?" * len(combine_ids))
-                result_count = conn.execute(
-                    f"SELECT COUNT(*) AS c FROM results WHERE week_id IN ({placeholders})", combine_ids
-                ).fetchone()["c"]
-            else:
-                result_count = 0
+            component_weeks = [
+                cw for cw in weeks_by_month.get(w["month_number"], [])
+                if cw["week_number"] < db.WEEKS_PER_MONTH
+            ]
+            result_count = sum(result_counts.get(cw["id"], 0) for cw in component_weeks)
             note_count = 1 if any(cw["curators_doc_url"] for cw in component_weeks) else 0
         else:
-            result_count = conn.execute(
-                "SELECT COUNT(*) AS c FROM results WHERE week_id = ?", (w["id"],)
-            ).fetchone()["c"]
+            result_count = result_counts.get(w["id"], 0)
             note_count = 1 if w["curators_doc_url"] else 0
         months.setdefault(w["month_number"], []).append(
             {"week": w, "result_count": result_count, "note_count": note_count}

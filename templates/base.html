@@ -100,6 +100,21 @@
           pinBtn.blur();
         });
       }
+
+      // Сервер жауап беруге уақыт кететін формалар (Google Sheets импорт,
+      // AI анализ/қорытынды жасау) кезінде батырма "қатып қалғандай"
+      // көрінбесін — жіберілген сәтте айналмалы белгішемен "Өңделуде..."
+      // күйіне ауысады.
+      document.addEventListener('submit', function (e) {
+        var form = e.target;
+        if (!(form instanceof HTMLFormElement) || form.dataset.noLoadingState) return;
+        var btn = form.querySelector('button[type="submit"]');
+        if (!btn || btn.disabled) return;
+        btn.dataset.originalHtml = btn.innerHTML;
+        btn.disabled = true;
+        btn.classList.add('is-loading');
+        btn.innerHTML = '<span class="btn-spinner" aria-hidden="true"></span> Өңделуде...';
+      });
     })();
   </script>
 
