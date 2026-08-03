@@ -12,6 +12,14 @@
           : (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
         document.documentElement.setAttribute('data-theme', theme);
       } catch (e) {}
+      try {
+        // Сайдбар "бекітілген" (pinned) күйін бет боялмай тұрып-ақ осында
+        // қоямыз — әйтпесе әр бетке өткен сайын алдымен жабық сайдбар
+        // көрініп, сосын JS іске қосылғанда ғана ашылып "секіріп" кетеді.
+        if (localStorage.getItem('juz40-sidebar-pinned') === 'true') {
+          document.documentElement.setAttribute('data-sidebar-pinned', 'true');
+        }
+      } catch (e) {}
     })();
   </script>
   <title>{% block title %}JUZ40 — Апталық анализ{% endblock %}</title>
@@ -89,14 +97,14 @@
       var pinBtn = document.getElementById('sidebar-pin-toggle');
       if (sidebar && pinBtn) {
         var setPinned = function (on) {
-          sidebar.classList.toggle('is-pinned', on);
+          document.documentElement.setAttribute('data-sidebar-pinned', on ? 'true' : 'false');
           pinBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
         };
-        var stored = null;
-        try { stored = localStorage.getItem('juz40-sidebar-pinned'); } catch (e) {}
-        setPinned(stored === 'true');
+        // Бастапқы күй <head>-тегі синхронды скриптте қойылған (секіруді
+        // болдырмау үшін) — мұнда тек aria-pressed-ті соған сәйкестендіреміз.
+        setPinned(document.documentElement.getAttribute('data-sidebar-pinned') === 'true');
         pinBtn.addEventListener('click', function () {
-          var on = !sidebar.classList.contains('is-pinned');
+          var on = document.documentElement.getAttribute('data-sidebar-pinned') !== 'true';
           setPinned(on);
           try { localStorage.setItem('juz40-sidebar-pinned', on ? 'true' : 'false'); } catch (e) {}
           // Батырма фокусты өзінде ұстап қалмасын — әйтпесе :focus-within
@@ -118,6 +126,9 @@
         btn.disabled = true;
         btn.classList.add('is-loading');
         btn.innerHTML = '<span class="btn-spinner" aria-hidden="true"></span> Өңделуде...';
+
+        var main = document.querySelector('.site-main');
+        if (main) main.classList.add('is-loading');
       });
     })();
   </script>

@@ -167,7 +167,9 @@ a { color: var(--accent); }
 /* Тұрақты жабық: тек шеті ғана көрінеді (домалақ бұрышты, беттен сәл
    бөлектеніп, "шығыңқы" қалқып тұрған карточка секілді). Курсорды апарғанда
    АШЫЛМАЙДЫ — тек жоғарғы стрелка батырмасын басқанда ғана ашылады/жабылады
-   (.is-pinned класы, JS арқылы). */
+   (html[data-sidebar-pinned] атрибуты, <head> ішінде синхронды қойылады —
+   бет ауысқанда сайдбардың алдымен жабық көрініп, сосын "секіріп" ашылып
+   кетуін болдырмау үшін). */
 .site-shell { display: flex; min-height: 100vh; align-items: stretch; padding-left: 58px; transition: padding-left .2s ease; }
 .site-shell.no-sidebar { padding-left: 0; position: relative; }
 .no-sidebar-logout { position: absolute; top: 20px; right: 24px; margin: 0; z-index: 5; }
@@ -188,7 +190,7 @@ a { color: var(--accent); }
    бұрынғыдай тек үстінен жауып тұратын overlay емес. Тек desktop енінде
    (мобильді енде сайдбар бәрібір толық ашық, ысыру қажет емес). */
 @media (min-width: 721px) {
-  .site-shell:has(.site-sidebar.is-pinned) { padding-left: 296px; }
+  html[data-sidebar-pinned="true"] .site-shell { padding-left: 296px; }
 }
 .site-sidebar {
   width: 260px;
@@ -247,8 +249,8 @@ a { color: var(--accent); }
   transform: rotate(180deg);
   transition: transform .2s ease;
 }
-.site-sidebar.is-pinned .sidebar-pin-arrow { transform: rotate(0deg); }
-.site-sidebar.is-pinned {
+html[data-sidebar-pinned="true"] .sidebar-pin-arrow { transform: rotate(0deg); }
+html[data-sidebar-pinned="true"] .site-sidebar {
   transform: translateX(0);
   box-shadow: var(--shadow-hover);
 }
@@ -259,9 +261,9 @@ a { color: var(--accent); }
   pointer-events: none;
   transition: opacity .15s ease;
 }
-.site-sidebar.is-pinned .site-sidebar-brand,
-.site-sidebar.is-pinned .site-sidebar-nav,
-.site-sidebar.is-pinned .site-sidebar-footer {
+html[data-sidebar-pinned="true"] .site-sidebar-brand,
+html[data-sidebar-pinned="true"] .site-sidebar-nav,
+html[data-sidebar-pinned="true"] .site-sidebar-footer {
   opacity: 1;
   pointer-events: auto;
 }
@@ -348,6 +350,23 @@ a { color: var(--accent); }
   max-width: 1000px;
   margin: 0 auto;
   padding: 28px 20px 80px;
+}
+/* Сервер жауап беруге уақыт кететін формалар (импорт, AI анализ) жіберілген
+   кезде бет "қатып қалғандай" көрінбесін — көрініп тұрған мазмұн сәл
+   көмескіленіп, үстінен жарық жолақ сырғанап тұрады. */
+.site-main.is-loading { position: relative; pointer-events: none; }
+.site-main.is-loading > * { opacity: 0.45; filter: saturate(0.6); transition: opacity 0.25s ease; }
+.site-main.is-loading::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 25%, rgba(255, 255, 255, 0.55) 50%, transparent 75%);
+  background-size: 200% 100%;
+  animation: site-main-shimmer 1.2s ease-in-out infinite;
+}
+@keyframes site-main-shimmer {
+  0% { background-position: 160% 0; }
+  100% { background-position: -60% 0; }
 }
 @media (max-width: 720px) {
   .site-shell { flex-direction: column; padding-left: 0; }
