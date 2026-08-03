@@ -10,7 +10,7 @@ from markupsafe import Markup, escape
 load_dotenv()
 
 import db
-from analysis import compute_report
+from analysis import compute_report, compute_stream_stats
 from sheets import fetch_workbook, rows_to_dicts, guess_columns, is_summary_row, is_template_sheet, SheetFetchError
 from gdocs import (
     fetch_doc_text,
@@ -182,6 +182,11 @@ def index():
     return render_template("index.html")
 
 
+@app.route("/statistics")
+def statistics_categories():
+    return render_template("statistics_categories.html")
+
+
 @app.route("/categories/<category_slug>")
 def category_picker(category_slug):
     conn = get_db()
@@ -190,12 +195,14 @@ def category_picker(category_slug):
         flash("Санат табылмады.", "error")
         return redirect(url_for("index"))
 
+    mode = request.args.get("mode")
     programs = conn.execute("SELECT * FROM programs ORDER BY sort_order, id").fetchall()
     return render_template(
         "category_picker.html",
         category_slug=category_slug,
         category_name=category_name,
         programs=programs,
+        mode=mode,
     )
 
 
@@ -238,12 +245,14 @@ def program_detail(slug):
         {"slug": cslug, "label": label, "streams": by_category.get(cslug, [])}
         for cslug, label, _order in categories_to_show
     ]
+    mode = request.args.get("mode")
     return render_template(
         "program.html",
         program=program,
         columns=columns,
         current_category=category_slug,
-        show_plan_card=category_slug is None or category_slug == db.DEFAULT_CATEGORY,
+        show_plan_card=mode != "stats" and (category_slug is None or category_slug == db.DEFAULT_CATEGORY),
+        mode=mode,
     )
 
 
@@ -379,6 +388,21 @@ def stream_detail(stream_id):
     months_sorted = sorted(months.items(), key=lambda item: (item[0] is None, item[0]))
 
     return render_template("stream.html", stream=stream, program=program, months=months_sorted)
+
+
+@app.route("/streams/<int:stream_id>/stats")
+def stream_stats(stream_id):
+    conn = get_db()
+    stream = conn.execute("SELECT * FROM streams WHERE id = ?", (stream_id,)).fetchone()
+    if stream is None:
+        flash("Поток табылмады.", "error")
+        return redirect(url_for("index"))
+    program = conn.execute("SELECT * FROM programs WHERE id = ?", (stream["program_id"],)).fetchone()
+
+    max_score, target_score = db.score_defaults_for(program["slug"], stream["category"])
+    stats = compute_stream_stats(conn, stream_id, max_score=max_score, target_score=target_score)
+
+    return render_template("stream_stats.html", stream=stream, program=program, stats=stats)
 
 
 @app.route("/weeks/<int:week_id>/delete", methods=["POST"])

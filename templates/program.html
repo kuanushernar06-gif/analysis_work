@@ -4,8 +4,8 @@
 
 <div class="page-head">
   <div>
-    <a class="back-link" href="{{ url_for('category_picker', category_slug=current_category or columns[0].slug) }}">← Бөлімдер</a>
-    <h1>{{ program['name'] }}</h1>
+    <a class="back-link" href="{{ url_for('category_picker', category_slug=current_category or columns[0].slug, mode=mode) }}">← Бөлімдер</a>
+    <h1>{{ program['name'] }}{% if mode == 'stats' %} · Статистика{% endif %}</h1>
     <p class="muted">{% if current_category %}{{ category_label(current_category) }} · {% endif %}Потокты таңдаңыз.</p>
   </div>
 </div>
@@ -59,7 +59,7 @@
     <div class="board-col-cards">
       {% for item in col.streams %}
       <a class="nav-card nav-card-gradient nav-card-gradient-{{ col_index }}{% if program['slug'] == 'smart' %} nav-card-tarih{% endif %}"
-         href="{{ url_for('stream_detail', stream_id=item.stream['id']) }}">
+         href="{{ url_for('stream_stats', stream_id=item.stream['id']) if mode == 'stats' else url_for('stream_detail', stream_id=item.stream['id']) }}">
         <div class="nav-card-title">{{ item.stream['code'] }}</div>
       </a>
       {% endfor %}

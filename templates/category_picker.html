@@ -4,7 +4,7 @@
 
 <div class="page-head">
   <div>
-    <a class="back-link" href="{{ url_for('index') }}">← Басты бет</a>
+    <a class="back-link" href="{{ url_for('statistics_categories') if mode == 'stats' else url_for('index') }}">← {{ 'Статистика' if mode == 'stats' else 'Басты бет' }}</a>
     <h1>{{ category_name }}</h1>
     <p class="muted">Бағдарламаны таңдаңыз.</p>
   </div>
@@ -12,7 +12,7 @@
 
 <div class="nav-cards">
   {% for program in programs %}
-  <a class="nav-card nav-card-tarih-bg" href="{{ url_for('program_detail', slug=program['slug'], category=category_slug) }}">
+  <a class="nav-card nav-card-tarih-bg" href="{{ url_for('program_detail', slug=program['slug'], category=category_slug, mode=mode) }}">
     <div class="nav-card-title nav-card-title-big">{{ program['name'] }}</div>
   </a>
   {% endfor %}

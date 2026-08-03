@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}{{ stream['code'] }} — Статистика{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <a class="back-link" href="{{ url_for('program_detail', slug=program['slug'], category=stream['category'], mode='stats') }}">← {{ program['name'] }}</a>
+    <h1>{{ program['name'] }} · {{ category_label(stream['category']) }} · {{ stream['code'] }}</h1>
+    <p class="muted">Осы ағынның барлық аптадағы СТ нәтижелерінің жиынтығы.</p>
+  </div>
+</div>
+
+{% if not stats.has_data %}
+<div class="card">
+  <p class="muted">Бұл ағында әзірге ешбір нәтиже импортталмаған.</p>
+</div>
+{% else %}
+<div class="card">
+  <h2>Жалпы жиынтық</h2>
+  <div class="stat-grid">
+    <div class="stat-tile">
+      <div class="stat-value">{{ stats.overall_avg_score }}</div>
+      <div class="stat-label">СТ ортақ балл</div>
+    </div>
+    {% if stats.target_achievement_percent is not none %}
+    <div class="stat-tile {{ 'stat-good' if stats.target_achievement_percent >= 100 else 'stat-warn' }}">
+      <div class="stat-value">{{ stats.target_achievement_percent }}%</div>
+      <div class="stat-label">СТ мақсат орындалу пайызы</div>
+    </div>
+    {% endif %}
+    {% if stats.top_student %}
+    <div class="stat-tile stat-good">
+      <div class="stat-value">{{ stats.top_student.avg_score }}</div>
+      <div class="stat-label">Ең жоғарғы ортақ балл — {{ stats.top_student.student }}</div>
+    </div>
+    {% endif %}
+    {% if stats.bottom_student %}
+    <div class="stat-tile stat-warn">
+      <div class="stat-value">{{ stats.bottom_student.avg_score }}</div>
+      <div class="stat-label">Ең төменгі ортақ балл — {{ stats.bottom_student.student }}</div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card">
+  <h2>Оқушылар нәтижелері</h2>
+  <p class="muted">
+    Кемінде {{ 2 }} апта нәтижесі бар оқушылардың осыған дейінгі СТ нәтижелерінің ортақ балы бойынша
+    тұрақты үздік және тұрақты нашар тізімі.
+  </p>
+
+  <h3 class="plan-cell-label">Тұрақты үздік оқушылар</h3>
+  {% if stats.top_students %}
+  <div class="table-scroll">
+    <table class="table">
+      <thead><tr><th>Оқушы</th><th>Ортақ балл</th><th>Ортақ пайыз</th><th>Апта саны</th></tr></thead>
+      <tbody>
+        {% for s in stats.top_students %}
+        <tr><td>{{ s.student }}</td><td>{{ s.avg_score }}</td><td>{{ s.avg_percent }}%</td><td>{{ s.weeks }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="muted">Әзірге бұл шартқа сай оқушы жоқ.</p>
+  {% endif %}
+
+  <h3 class="plan-cell-label" style="margin-top:20px;">Тұрақты нашар нәтижелі оқушылар</h3>
+  {% if stats.bottom_students %}
+  <div class="table-scroll">
+    <table class="table">
+      <thead><tr><th>Оқушы</th><th>Ортақ балл</th><th>Ортақ пайыз</th><th>Апта саны</th></tr></thead>
+      <tbody>
+        {% for s in stats.bottom_students %}
+        <tr><td>{{ s.student }}</td><td>{{ s.avg_score }}</td><td>{{ s.avg_percent }}%</td><td>{{ s.weeks }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="muted">Әзірге бұл шартқа сай оқушы жоқ.</p>
+  {% endif %}
+</div>
+{% endif %}
+
+{% endblock %}

@@ -1,21 +1,19 @@
 {% extends "base.html" %}
-{% block title %}Бөлімдер — JUZ40{% endblock %}
+{% block title %}Статистика — JUZ40{% endblock %}
 {% block content %}
 
 <div class="centered-head">
-  <h1>Бөлім</h1>
+  <a class="back-link" href="{{ url_for('index') }}">← Басты бет</a>
+  <h1>Статистика</h1>
   <p class="muted">Бөлімді таңдаңыз</p>
 </div>
 
 <div class="nav-cards">
   {% for cslug, clabel in sidebar_categories %}
-  <a class="nav-card" href="{{ url_for('category_picker', category_slug=cslug) }}">
+  <a class="nav-card" href="{{ url_for('category_picker', category_slug=cslug, mode='stats') }}">
     <div class="nav-card-title">{{ clabel }}</div>
   </a>
   {% endfor %}
-  <a class="nav-card" href="{{ url_for('statistics_categories') }}">
-    <div class="nav-card-title">СТАТИСТИКА</div>
-  </a>
 </div>
 
 {% endblock %}

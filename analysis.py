@@ -7,6 +7,14 @@ DEFAULT_GOLD_PERCENT = 90.0
 DEFAULT_SILVER_PERCENT = 70.0
 WORST_TOPICS_LIMIT = 10
 
+# Ағын статистикасында "тұрақты үздік/тұрақты нашар" оқушылар тізіміне
+# оқушының барлық апталар бойынша ОРТАША пайызы осы шектерге сәйкес келсе
+# ғана түседі (Smart-тың 15 балдық шкаласында 12-15 балл ≈ ≥80%, 0-5 балл
+# ≈ ≤33% болатындай таңдалған — бағдарламаға қарамастан пайызбен есептеледі).
+STREAM_STATS_TOP_PERCENT = 80.0
+STREAM_STATS_BOTTOM_PERCENT = 33.0
+STREAM_STATS_MIN_WEEKS = 2
+
 
 def _percent(score, max_score):
     if score is None or max_score in (None, 0):
@@ -224,6 +232,75 @@ def compute_report(conn, week_id, combine_week_ids=None):
     report["worst_topics"] = topic_list[:WORST_TOPICS_LIMIT]
 
     return report
+
+
+def compute_stream_stats(conn, stream_id, max_score, target_score):
+    """Бір ағынның (поток) БАРЛЫҚ апталарындағы СТ нәтижелерін біріктіріп,
+    жалпы жиынтық көрсеткіштерді және оқушылардың осыған дейінгі СТ
+    нәтижелерінің ортақ балы бойынша тұрақты үздік/тұрақты нашар тізімдерін
+    есептейді (STREAM_STATS_MIN_WEEKS-тен кем апта нәтижесі бар оқушы
+    тізімге түспейді — бір ғана сәтті/сәтсіз апта "тұрақты" болмайды)."""
+    rows = conn.execute(
+        "SELECT r.student, r.score, r.week_id FROM results r "
+        "JOIN weeks w ON w.id = r.week_id WHERE w.stream_id = ? AND r.score IS NOT NULL",
+        (stream_id,),
+    ).fetchall()
+
+    stats = {
+        "has_data": False,
+        "overall_avg_score": None,
+        "target_achievement_percent": None,
+        "top_student": None,
+        "bottom_student": None,
+        "top_students": [],
+        "bottom_students": [],
+    }
+    if not rows:
+        return stats
+
+    stats["has_data"] = True
+    scores = [float(r["score"]) for r in rows]
+    stats["overall_avg_score"] = round(sum(scores) / len(scores), 2)
+    if target_score:
+        stats["target_achievement_percent"] = round(stats["overall_avg_score"] / target_score * 100, 1)
+
+    student_scores = {}
+    student_weeks = {}
+    for r in rows:
+        student = (r["student"] or "").strip()
+        if not student:
+            continue
+        student_scores.setdefault(student, []).append(float(r["score"]))
+        student_weeks.setdefault(student, set()).add(r["week_id"])
+
+    student_avgs = []
+    for student, vals in student_scores.items():
+        avg_score = sum(vals) / len(vals)
+        avg_percent = (avg_score / max_score * 100) if max_score else None
+        student_avgs.append(
+            {
+                "student": student,
+                "avg_score": round(avg_score, 2),
+                "avg_percent": round(avg_percent, 1) if avg_percent is not None else None,
+                "weeks": len(student_weeks[student]),
+            }
+        )
+
+    if student_avgs:
+        stats["top_student"] = max(student_avgs, key=lambda s: s["avg_score"])
+        stats["bottom_student"] = min(student_avgs, key=lambda s: s["avg_score"])
+
+    qualifying = [s for s in student_avgs if s["weeks"] >= STREAM_STATS_MIN_WEEKS and s["avg_percent"] is not None]
+    stats["top_students"] = sorted(
+        (s for s in qualifying if s["avg_percent"] >= STREAM_STATS_TOP_PERCENT),
+        key=lambda s: s["avg_score"],
+        reverse=True,
+    )
+    stats["bottom_students"] = sorted(
+        (s for s in qualifying if s["avg_percent"] <= STREAM_STATS_BOTTOM_PERCENT),
+        key=lambda s: s["avg_score"],
+    )
+    return stats
 
 
 def compute_program_overview(conn, program_id):
