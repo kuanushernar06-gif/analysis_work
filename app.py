@@ -1,10 +1,10 @@
 import json
 import os
 import re
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from dotenv import load_dotenv
-from flask import Flask, render_template, request, redirect, url_for, g, flash, session
+from flask import Flask, render_template, request, redirect, url_for, g, flash, session, Response
 from markupsafe import Markup, escape
 
 load_dotenv()
@@ -185,6 +185,28 @@ def index():
 @app.route("/statistics")
 def statistics_categories():
     return render_template("statistics_categories.html")
+
+
+BACKUP_TABLES = ["programs", "streams", "weeks", "imports", "results"]
+
+
+@app.route("/backup")
+def download_backup():
+    """Барлық негізгі кестені (нәтижелер, апталар, ағындар, бағдарламалар,
+    импорттар) бір JSON файл ретінде жүктеп береді — пайдаланушы өз қолымен
+    кез келген сәтте сақтық көшірме алып қоя алатындай."""
+    conn = get_db()
+    data = {"generated_at": datetime.utcnow().isoformat() + "Z"}
+    for table in BACKUP_TABLES:
+        data[table] = [dict(row) for row in conn.execute(f"SELECT * FROM {table}").fetchall()]
+
+    body = json.dumps(data, ensure_ascii=False, default=str, indent=2)
+    filename = f"juz40-backup-{datetime.utcnow().strftime('%Y-%m-%d')}.json"
+    return Response(
+        body,
+        mimetype="application/json",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
 
 
 @app.route("/categories/<category_slug>")

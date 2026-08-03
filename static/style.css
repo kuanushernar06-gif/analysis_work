@@ -425,6 +425,9 @@ a.is-loading-link { opacity: 0.5; pointer-events: none; transition: opacity 0.15
 .centered-head { text-align: center; margin: 32px 0 36px; }
 .centered-head h1 { font-size: 1.75rem; font-weight: 700; margin: 0 0 6px; letter-spacing: -0.03em; }
 .centered-head .muted { margin: 0; }
+.index-backup-link { text-align: center; margin-top: 28px; }
+.index-backup-link a { color: var(--text-muted); font-size: 0.82rem; text-decoration: none; }
+.index-backup-link a:hover { color: var(--accent); text-decoration: underline; }
 
 /* ---------- Cards ---------- */
 .card {
