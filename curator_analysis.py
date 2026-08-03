@@ -13,6 +13,7 @@ import time
 import urllib.error
 import urllib.request
 
+from gdocs import count_curator_entries
 from netfetch import SSL_CONTEXT, USER_AGENT
 
 MODEL = "gemini-flash-latest"
@@ -347,4 +348,9 @@ def generate_curator_analysis(doc_text: str, report=None) -> dict:
             time.sleep(2)
         chunk_analyses.append(_analyze_chunk(chunk, stats_section, api_key))
 
-    return merge_analyses(chunk_analyses)
+    merged = merge_analyses(chunk_analyses)
+    # AI-дің curator_count-ты еркін мәтіннен болжамдап санауы (әсіресе үлкен
+    # құжатта) дәл болмайды — соның орнына құжат құрылымынан (аты + '\t-'
+    # жазба басы) тікелей, дәл санап, үстінен жазамыз.
+    merged["curator_count"] = count_curator_entries(doc_text)
+    return merged

@@ -7,12 +7,26 @@ DOC_ID_RE = re.compile(r"/document/d/([a-zA-Z0-9-_]+)")
 
 MAX_DOC_CHARS = 50_000  # бір құжаттан алынатын мәтіннің шегі (қорытынды бетінің шектен тыс ұзармауы үшін)
 
+# Google Docs-тан .txt экспорттағанда кейде көзге көрінбейтін "zero-width"
+# таңбалар ілесіп қалады (мыс. көшіріп-жапсырғанда) — олар \s регексіне
+# сәйкес келмейді, сондықтан "6.1.1.1 ..." секілді жолдардың басындағы осындай
+# таңба оқу мақсаты кодын тани алмай қалуға (тақырыпқа қате жіктелуге) немесе
+# ҮЛГІ жазбасының шекарасын тани алмауға әкеледі. Сол себепті құжат
+# жүктелген сәтте бірден тазартамыз — төмендегі логиканың барлығы содан кейін
+# осы таза мәтінмен жұмыс істейді.
+_INVISIBLE_CHARS_RE = re.compile("[​‌‍⁠﻿]")
+
+
+def _strip_invisible_chars(text: str) -> str:
+    return _INVISIBLE_CHARS_RE.sub("", text)
+
 
 class DocFetchError(Exception):
     pass
 
 
 _TEMPLATE_NEXT_ENTRY_RE = re.compile(r"\n\t([А-ЯӘҒҚҢӨҰҮҺІ][^\n\t]{1,40})\n\t-", re.UNICODE)
+_CURATOR_ENTRY_RE = re.compile(r"(?:^|\n)\t([А-ЯӘҒҚҢӨҰҮҺІ][^\n\t]{1,40})\n\t-", re.UNICODE)
 
 
 def strip_template_entry(text: str) -> str:
@@ -20,14 +34,30 @@ def strip_template_entry(text: str) -> str:
     қалдырылған 'ҮЛГІ' деп белгіленген мысал жазбаны толық алып тастайды —
     ол нақты куратордың деректері емес, талдауға (AI-ге де, көрсетуге де)
     қосылмауы керек."""
-    normalized = text.replace("\r\n", "\n").replace("\r", "\n")
+    normalized = _strip_invisible_chars(text.replace("\r\n", "\n").replace("\r", "\n"))
     marker = re.search(r"ҮЛГІ", normalized)
     if not marker:
-        return text
+        return normalized
     next_entry = _TEMPLATE_NEXT_ENTRY_RE.search(normalized, marker.end())
     if not next_entry:
-        return text
-    return normalized[: marker.start()] + normalized[next_entry.start() + 1 :]
+        return normalized
+    # ҮЛГІ жолының алдындағы табуляцияны (prefix) және келесі жазбаның өз
+    # табуляциясын (suffix, next_entry.start() — сол жазбаның '\n'-інен
+    # басталады) қосарлап қалдырмау керек — әйтпесе одан кейінгі куратордың
+    # аты '\n\t\tАты' болып, "\n\t<Аты>" үлгісіне сәйкес келмей, есептен
+    # (санаудан да, AI-ден де) түсіп қалады.
+    return normalized[: marker.start()].rstrip("\t") + normalized[next_entry.start() :]
+
+
+def count_curator_entries(text: str) -> int:
+    """Құжаттағы нақты (қайталанбайтын) куратор жазбаларының санын мәтін
+    құрылымынан (аты + '\\t-' басталатын жазба) тікелей санайды — AI-дің
+    еркін мәтіннен болжамдап санауына (үлкен құжатта дәл болмауы мүмкін)
+    сенбей, дәл сан алу үшін. ҮЛГІ жазбасы бұл функцияға жеткенше
+    strip_template_entry-мен алынып тасталған болуы керек."""
+    normalized = _strip_invisible_chars(text.replace("\r\n", "\n").replace("\r", "\n"))
+    names = {m.group(1).strip() for m in _CURATOR_ENTRY_RE.finditer(normalized)}
+    return len(names)
 
 
 def normalize_doc_url(raw_url: str) -> str:
@@ -69,7 +99,7 @@ def fetch_doc_text(raw_url: str, max_chars: int = MAX_DOC_CHARS) -> str:
     except urllib.error.URLError as e:
         raise DocFetchError(f"Құжатты жүктеу сәтсіз аяқталды: {e.reason}") from e
 
-    text = raw_bytes.decode("utf-8-sig", errors="replace").strip()
+    text = _strip_invisible_chars(raw_bytes.decode("utf-8-sig", errors="replace")).strip()
     if not text:
         raise DocFetchError("Құжат бос болып тұр.")
     if max_chars and len(text) > max_chars:
@@ -143,7 +173,7 @@ def classify_plan_sections(plan_text: str) -> dict:
     тақырыптар, 'N.N.N...' стандарт коды бар жолдар — оқу мақсаты, ал
     видео/бет/чанк санын көрсететін жолдар — тақырып ауқымы (көлемі)."""
     topics, objectives, scope = [], [], []
-    for line in (plan_text or "").split("\n"):
+    for line in _strip_invisible_chars(plan_text or "").split("\n"):
         if not line.strip():
             continue
         if _PLAN_OBJECTIVE_RE.match(line):
