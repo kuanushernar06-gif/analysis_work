@@ -391,7 +391,7 @@ def _migrate_stream_categories(conn):
               ON tc.constraint_name = kcu.constraint_name AND tc.table_name = kcu.table_name
             WHERE tc.table_name = 'streams' AND tc.constraint_type = 'UNIQUE'
             GROUP BY tc.constraint_name
-            HAVING array_agg(kcu.column_name ORDER BY kcu.ordinal_position) = ARRAY['program_id','code']
+            HAVING array_agg(kcu.column_name::text ORDER BY kcu.ordinal_position) = ARRAY['program_id','code']
             """
         ).fetchone()
         if constraint_row:
