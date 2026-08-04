@@ -80,9 +80,7 @@
     </aside>
     {% else %}
       {% if request.endpoint != 'index' %}
-      <a class="home-edge-link no-print" href="{{ url_for('index') }}" aria-label="Басты бетке өту">
-        <span aria-hidden="true">←</span>
-      </a>
+      <a class="home-edge-link no-print" href="{{ url_for('index') }}">БАСТЫ БЕТКЕ ӨТУ</a>
       {% endif %}
       {% if request.endpoint == 'index' %}
       <form method="post" action="{{ url_for('logout') }}" class="no-sidebar-logout no-print">
