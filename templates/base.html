@@ -33,8 +33,8 @@
   {% block header %}{% endblock %}
 
   {% block body %}
-  <div class="site-shell{% if request.endpoint in ('index', 'category_picker', 'program_detail', 'stream_detail', 'statistics_categories', 'stream_stats') %} no-sidebar{% endif %}">
-    {% if request.endpoint not in ('index', 'category_picker', 'program_detail', 'stream_detail', 'statistics_categories', 'stream_stats') %}
+  <div class="site-shell{% if request.endpoint in ('index', 'category_picker', 'program_detail', 'stream_detail', 'statistics_categories') %} no-sidebar{% endif %}">
+    {% if request.endpoint not in ('index', 'category_picker', 'program_detail', 'stream_detail', 'statistics_categories') %}
     <aside class="site-sidebar no-print">
       <button type="button" class="sidebar-pin-toggle no-print" id="sidebar-pin-toggle" aria-pressed="false" aria-label="Бүйірлік мәзірді ашық қалдыру">
         <span class="sidebar-pin-arrow" aria-hidden="true"></span>
@@ -58,6 +58,12 @@
           <a href="{{ url_for('week_notes', week_id=week['id']) }}" class="{{ 'active' if active_page == 'notes' else '' }}"><span class="ic">📝</span> Куратор анализі <span class="badge">{{ note_count }}</span></a>
           {% endif %}
           <a href="{{ url_for('week_report', week_id=week['id']) }}" class="{{ 'active' if active_page == 'report' else '' }}"><span class="ic">📊</span> Ортақ анализ</a>
+        {% elif stream_stats_categories %}
+          {% for cslug, _clabel in sidebar_categories %}
+            {% if cslug in stream_stats_categories %}
+            <a href="{{ url_for('stream_stats', stream_id=stream_stats_categories[cslug]) }}" class="{{ 'active' if stream and stream['category'] == cslug else '' }}">{{ category_stats_label(cslug) }}</a>
+            {% endif %}
+          {% endfor %}
         {% endif %}
       </nav>
       <div class="site-sidebar-footer">

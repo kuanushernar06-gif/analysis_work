@@ -76,6 +76,13 @@ CATEGORY_NAV_LABELS = {
 }
 SIDEBAR_CATEGORIES = [(slug, CATEGORY_NAV_LABELS[slug]) for slug, _label, _order in CATEGORIES]
 
+# Статистика режимінде санат атаулары "АНАЛИЗ" емес "СТАТИСТИКА" деп аталады
+# (бағдарлама/ағын таңдау экрандарында және статистика беті сайдбарында).
+CATEGORY_STATS_LABELS = {
+    "sabaq_tapsyru": "САБАҚ ТАПСЫРУ СТАТИСТИКА",
+    "aylyq_test": "АЙЛЫҚ ТЕСТ СТАТИСТИКА",
+}
+
 # Постгрес (Neon/Vercel) диалектісі
 SCHEMA_PG = """
 CREATE TABLE IF NOT EXISTS programs (

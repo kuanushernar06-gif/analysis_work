@@ -53,6 +53,7 @@ def format_summary_html(text):
 def inject_category_label():
     return {
         "category_label": lambda slug: db.CATEGORY_LABELS.get(slug, slug),
+        "category_stats_label": lambda slug: db.CATEGORY_STATS_LABELS.get(slug, slug),
         "sidebar_categories": db.SIDEBAR_CATEGORIES,
     }
 
@@ -424,7 +425,24 @@ def stream_stats(stream_id):
     max_score, target_score = db.score_defaults_for(program["slug"], stream["category"])
     stats = compute_stream_stats(conn, stream_id, max_score=max_score, target_score=target_score)
 
-    return render_template("stream_stats.html", stream=stream, program=program, stats=stats)
+    # Осы поток кодының (мыс. ТАРИХ-01) басқа санаттардағы (СТ/АТ) сыңар
+    # жазбалары — сайдбардан санат ауыстырғанда сол потоктың статистикасына
+    # тікелей өту үшін.
+    stream_stats_categories = {
+        row["category"]: row["id"]
+        for row in conn.execute(
+            "SELECT id, category FROM streams WHERE program_id = ? AND code = ?",
+            (stream["program_id"], stream["code"]),
+        ).fetchall()
+    }
+
+    return render_template(
+        "stream_stats.html",
+        stream=stream,
+        program=program,
+        stats=stats,
+        stream_stats_categories=stream_stats_categories,
+    )
 
 
 @app.route("/weeks/<int:week_id>/delete", methods=["POST"])
