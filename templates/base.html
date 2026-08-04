@@ -16,7 +16,9 @@
         // Сайдбар "бекітілген" (pinned) күйін бет боялмай тұрып-ақ осында
         // қоямыз — әйтпесе әр бетке өткен сайын алдымен жабық сайдбар
         // көрініп, сосын JS іске қосылғанда ғана ашылып "секіріп" кетеді.
-        if (localStorage.getItem('juz40-sidebar-pinned') === 'true') {
+        // Әдепкі күй — АШЫҚ (пайдаланушы өзі бір рет жауып, сол таңдауы
+        // сақталған болса ғана жабық болады).
+        if (localStorage.getItem('juz40-sidebar-pinned') !== 'false') {
           document.documentElement.setAttribute('data-sidebar-pinned', 'true');
         }
       } catch (e) {}
@@ -67,6 +69,7 @@
         {% endif %}
       </nav>
       <div class="site-sidebar-footer">
+        <a href="{{ url_for('download_backup') }}" class="site-sidebar-backup-link">⬇ Деректердің сақтық көшірмесі</a>
         <button type="button" class="theme-toggle no-print" id="theme-toggle" aria-pressed="false" aria-label="Жарық/қараңғы тақырыпты ауыстыру">
           <span class="theme-toggle-track"><span class="theme-toggle-thumb"></span></span>
           <span class="theme-toggle-label">Қараңғы тақырып</span>
