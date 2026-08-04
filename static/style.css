@@ -212,7 +212,7 @@ a { color: var(--accent); }
    бұрынғыдай тек үстінен жауып тұратын overlay емес. Тек desktop енінде
    (мобильді енде сайдбар бәрібір толық ашық, ысыру қажет емес). */
 @media (min-width: 721px) {
-  html[data-sidebar-pinned="true"] .site-shell { padding-left: 296px; }
+  html[data-sidebar-pinned="true"] .site-shell:not(.no-sidebar) { padding-left: 296px; }
 }
 .site-sidebar {
   width: 260px;
