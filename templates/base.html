@@ -69,7 +69,6 @@
         {% endif %}
       </nav>
       <div class="site-sidebar-footer">
-        <a href="{{ url_for('download_backup') }}" class="site-sidebar-backup-link">⬇ Деректердің сақтық көшірмесі</a>
         <button type="button" class="theme-toggle no-print" id="theme-toggle" aria-pressed="false" aria-label="Жарық/қараңғы тақырыпты ауыстыру">
           <span class="theme-toggle-track"><span class="theme-toggle-thumb"></span></span>
           <span class="theme-toggle-label">Қараңғы тақырып</span>
@@ -79,10 +78,17 @@
         </form>
       </div>
     </aside>
-    {% elif request.endpoint == 'index' %}
-    <form method="post" action="{{ url_for('logout') }}" class="no-sidebar-logout no-print">
-      <button type="submit">Шығу</button>
-    </form>
+    {% else %}
+      {% if request.endpoint != 'index' %}
+      <a class="home-edge-link no-print" href="{{ url_for('index') }}" aria-label="Басты бетке өту">
+        <span aria-hidden="true">←</span>
+      </a>
+      {% endif %}
+      {% if request.endpoint == 'index' %}
+      <form method="post" action="{{ url_for('logout') }}" class="no-sidebar-logout no-print">
+        <button type="submit">Шығу</button>
+      </form>
+      {% endif %}
     {% endif %}
     <main class="site-main">
       {% include "_flashes.html" %}
