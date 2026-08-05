@@ -183,11 +183,6 @@ def index():
     return render_template("index.html")
 
 
-@app.route("/statistics")
-def statistics_categories():
-    return render_template("statistics_categories.html")
-
-
 BACKUP_TABLES = ["programs", "streams", "weeks", "imports", "results"]
 
 
@@ -213,12 +208,12 @@ def download_backup():
 @app.route("/categories/<category_slug>")
 def category_picker(category_slug):
     conn = get_db()
-    category_name = db.CATEGORY_LABELS.get(category_slug)
-    if category_name is None:
+    if category_slug not in db.CATEGORY_LABELS:
         flash("Санат табылмады.", "error")
         return redirect(url_for("index"))
 
     mode = request.args.get("mode")
+    category_name = db.CATEGORY_STATS_LABELS[category_slug] if mode == "stats" else db.CATEGORY_LABELS[category_slug]
     programs = conn.execute("SELECT * FROM programs ORDER BY sort_order, id").fetchall()
     return render_template(
         "category_picker.html",

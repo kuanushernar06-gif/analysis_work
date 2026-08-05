@@ -12,7 +12,7 @@
     <div class="nav-card-title">{{ clabel }}</div>
   </a>
   {% endfor %}
-  <a class="nav-card" href="{{ url_for('statistics_categories') }}">
+  <a class="nav-card" href="{{ url_for('category_picker', category_slug=sidebar_categories[0][0], mode='stats') }}">
     <div class="nav-card-title">СТАТИСТИКА</div>
   </a>
 </div>

@@ -96,8 +96,6 @@ def compute_report(conn, week_id, combine_week_ids=None):
         "has_data": len(results) > 0,
         "has_targets": False,
         "target_achievement_percent": None,
-        "best_curator": None,
-        "worst_curator": None,
     }
 
     if not results:
@@ -113,7 +111,6 @@ def compute_report(conn, week_id, combine_week_ids=None):
     student_percents = {}
     subject_map = {}
     topic_map = {}
-    curator_scores = {}
 
     for r in results:
         student = (r["student"] or "").strip()
@@ -123,8 +120,6 @@ def compute_report(conn, week_id, combine_week_ids=None):
         max_score = r["max_score"]
         pct = _percent(score, max_score)
 
-        curator = (r["curator"] or "").strip()
-
         if student:
             students.add(student)
             if pct is not None:
@@ -133,8 +128,6 @@ def compute_report(conn, week_id, combine_week_ids=None):
             scores.append(float(score))
         if pct is not None:
             percents.append(pct)
-        if curator and score is not None:
-            curator_scores.setdefault(curator, []).append(float(score))
 
         subj = subject_map.setdefault(
             subject, {"name": subject, "count": 0, "scores": [], "percents": [], "fail": 0}
@@ -175,15 +168,6 @@ def compute_report(conn, week_id, combine_week_ids=None):
     report["fail_unique_students"] = len(fail_students)
     report["max_achiever_count"] = len(report["max_achievers"])
     report["max_achiever_students"] = len(max_achiever_students)
-
-    curator_averages = [
-        {"curator": name, "avg_score": round(sum(vals) / len(vals), 2)}
-        for name, vals in curator_scores.items()
-        if vals
-    ]
-    if curator_averages:
-        report["best_curator"] = max(curator_averages, key=lambda c: c["avg_score"])
-        report["worst_curator"] = min(curator_averages, key=lambda c: c["avg_score"])
 
     zero_students = 0
     gold_count = silver_count = bronze_count = 0

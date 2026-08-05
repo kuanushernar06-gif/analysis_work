@@ -33,18 +33,6 @@
       <div class="stat-value">{{ report.zero_students }}</div>
       <div class="stat-label">0 балл жинаған оқушы</div>
     </div>
-    {% if report.best_curator %}
-    <div class="stat-tile stat-good">
-      <div class="stat-value">{{ report.best_curator.avg_score }}</div>
-      <div class="stat-label">Ең жоғары ортақ балл куратор — {{ report.best_curator.curator }}</div>
-    </div>
-    {% endif %}
-    {% if report.worst_curator %}
-    <div class="stat-tile stat-warn">
-      <div class="stat-value">{{ report.worst_curator.avg_score }}</div>
-      <div class="stat-label">Ең төмен ортақ балл куратор — {{ report.worst_curator.curator }}</div>
-    </div>
-    {% endif %}
   </div>
 
   <h3>Лига бойынша үлес</h3>
