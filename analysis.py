@@ -219,12 +219,13 @@ def compute_report(conn, week_id, combine_week_ids=None):
     return report
 
 
-def compute_stream_stats(conn, stream_id, max_score, target_score):
+def compute_stream_stats(conn, stream_id, max_score, target_score, min_periods=STREAM_STATS_MIN_WEEKS):
     """Бір ағынның (поток) БАРЛЫҚ апталарындағы СТ нәтижелерін біріктіріп,
     жалпы жиынтық көрсеткіштерді және оқушылардың осыған дейінгі СТ
     нәтижелерінің ортақ балы бойынша тұрақты үздік/тұрақты нашар тізімдерін
-    есептейді (STREAM_STATS_MIN_WEEKS-тен кем апта нәтижесі бар оқушы
-    тізімге түспейді — бір ғана сәтті/сәтсіз апта "тұрақты" болмайды)."""
+    есептейді (min_periods-тен кем апта/ай нәтижесі бар оқушы тізімге
+    түспейді — бір ғана сәтті/сәтсіз апта "тұрақты" болмайды; АЙЛЫҚ ТЕСТ
+    санатында айына бір рет қана алынатындықтан min_periods=1 беріледі)."""
     rows = conn.execute(
         "SELECT r.student, r.score, r.week_id FROM results r "
         "JOIN weeks w ON w.id = r.week_id WHERE w.stream_id = ? AND r.score IS NOT NULL",
@@ -275,7 +276,7 @@ def compute_stream_stats(conn, stream_id, max_score, target_score):
         stats["top_student"] = max(student_avgs, key=lambda s: s["avg_score"])
         stats["bottom_student"] = min(student_avgs, key=lambda s: s["avg_score"])
 
-    qualifying = [s for s in student_avgs if s["weeks"] >= STREAM_STATS_MIN_WEEKS and s["avg_percent"] is not None]
+    qualifying = [s for s in student_avgs if s["weeks"] >= min_periods and s["avg_percent"] is not None]
     stats["top_students"] = sorted(
         (s for s in qualifying if s["avg_percent"] >= STREAM_STATS_TOP_PERCENT),
         key=lambda s: s["avg_score"],
@@ -550,8 +551,9 @@ def compute_teacher_stream_detail(conn, teacher_id, category_streams):
                     "weeks": len(student_weeks[student]),
                 }
             )
+        min_periods = 1 if category_slug == "aylyq_test" else STREAM_STATS_MIN_WEEKS
         qualifying = [
-            s for s in student_avgs if s["weeks"] >= STREAM_STATS_MIN_WEEKS and s["avg_percent"] is not None
+            s for s in student_avgs if s["weeks"] >= min_periods and s["avg_percent"] is not None
         ]
         top_students = sorted(
             (s for s in qualifying if s["avg_percent"] >= STREAM_STATS_TOP_PERCENT),

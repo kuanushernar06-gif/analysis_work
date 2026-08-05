@@ -10,7 +10,13 @@ from markupsafe import Markup, escape
 load_dotenv()
 
 import db
-from analysis import compute_report, compute_stream_stats, compute_teacher_stats, compute_teacher_stream_detail
+from analysis import (
+    compute_report,
+    compute_stream_stats,
+    compute_teacher_stats,
+    compute_teacher_stream_detail,
+    STREAM_STATS_MIN_WEEKS,
+)
 from sheets import fetch_workbook, rows_to_dicts, guess_columns, is_summary_row, is_template_sheet, SheetFetchError
 from gdocs import (
     fetch_doc_text,
@@ -418,7 +424,10 @@ def stream_stats(stream_id):
     program = conn.execute("SELECT * FROM programs WHERE id = ?", (stream["program_id"],)).fetchone()
 
     max_score, target_score = db.score_defaults_for(program["slug"], stream["category"])
-    stats = compute_stream_stats(conn, stream_id, max_score=max_score, target_score=target_score)
+    min_periods = 1 if stream["category"] == "aylyq_test" else STREAM_STATS_MIN_WEEKS
+    stats = compute_stream_stats(
+        conn, stream_id, max_score=max_score, target_score=target_score, min_periods=min_periods
+    )
 
     # Осы поток кодының (мыс. ТАРИХ-01) басқа санаттардағы (СТ/АТ) сыңар
     # жазбалары — сайдбардан санат ауыстырғанда сол потоктың статистикасына
