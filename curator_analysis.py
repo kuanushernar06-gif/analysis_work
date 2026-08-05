@@ -130,19 +130,18 @@ def _join_names(items, limit=5):
     return "; ".join(joined)
 
 
-def build_summary_text(report, analysis: dict) -> str:
+def build_summary_text(report, analysis: dict, label: str = "СТ") -> str:
     """Апта қорытындысын қолданушы белгілеген нақты үлгі бойынша құрастырады:
-    сандық бөлігі есептелген report-тан (сенімді), сапалы бөлігі AI талдауынан алынады."""
+    сандық бөлігі есептелген report-тан (сенімді), сапалы бөлігі AI талдауынан алынады.
+    label — 'СТ' (сабақ тапсыру) немесе 'АТ' (айлық тест); АТ санатында мақсат балл
+    жоқ болғандықтан, ол жол мүлде көрсетілмейді (has_targets жоқ болса)."""
     report = report or {}
     analysis = analysis or {}
 
-    target_line = "—"
+    lines = [f"{label} ортақ балл: {report.get('overall_avg_score')}"]
     if report.get("has_targets") and report.get("target_achievement_percent") is not None:
-        target_line = f"{report['target_achievement_percent']}%"
-
-    lines = [
-        f"СТ ортақ балл: {report.get('overall_avg_score')}",
-        f"СТ мақсат орындалу пайызы: {target_line}",
+        lines.append(f"{label} мақсат орындалу пайызы: {report['target_achievement_percent']}%")
+    lines += [
         f"Макс балл алған оқушы саны: {report.get('max_achiever_students')}",
         f"0 алған оқушы саны: {report.get('zero_students')}",
         "",

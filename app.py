@@ -636,7 +636,7 @@ def week_report(week_id):
 @app.route("/weeks/<int:week_id>/summary/generate", methods=["POST"])
 def generate_summary(week_id):
     conn = get_db()
-    week = get_week_or_404(conn, week_id)
+    week, stream, _program = get_week_context(conn, week_id)
     if week is None:
         flash("Апта табылмады.", "error")
         return redirect(url_for("index"))
@@ -652,7 +652,8 @@ def generate_summary(week_id):
         flash(f"Қорытынды анализ жасау сәтсіз аяқталды: {e}", "error")
         return redirect(url_for("week_report", week_id=week_id))
 
-    summary_text = build_summary_text(report, analysis)
+    label = "АТ" if stream and stream["category"] == "aylyq_test" else "СТ"
+    summary_text = build_summary_text(report, analysis, label=label)
     conn.execute(
         "UPDATE weeks SET curators_analysis_json = ?, curators_analysis_error = NULL, summary = ? WHERE id = ?",
         (json.dumps(analysis, ensure_ascii=False), summary_text, week_id),
@@ -825,7 +826,8 @@ def save_curators_doc(week_id):
             report = compute_report(conn, week_id)
             analysis = generate_curator_analysis(doc_text, report=report)
             analysis_json = json.dumps(analysis, ensure_ascii=False)
-            summary_text = build_summary_text(report, analysis)
+            label = "АТ" if stream_row and stream_row["category"] == "aylyq_test" else "СТ"
+            summary_text = build_summary_text(report, analysis, label=label)
         except CuratorAnalysisError as e:
             analysis_error = str(e)
 
