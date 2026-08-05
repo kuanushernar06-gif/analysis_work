@@ -49,14 +49,41 @@ def strip_template_entry(text: str) -> str:
     return normalized[: marker.start()].rstrip("\t") + normalized[next_entry.start() :]
 
 
+def _entry_is_filled(content: str) -> bool:
+    """Куратордың жазбасында тек бос үлгі өрістері ('Тақырыбы:' деп жазылып,
+    артынан ешнәрсе жоқ) қалдырылған ба, әлде нақты мәтін жазылған ба,
+    соны анықтайды — әр жолдың ':' немесе '-' белгісінен кейінгі бөлігін
+    алып, бәрі бос болса, куратор анализді толтырмаған болып саналады."""
+    remainder = []
+    for line in content.split("\n"):
+        line = line.strip()
+        if line.startswith("-"):
+            line = line[1:].strip()
+        if ":" in line:
+            _, _, after = line.partition(":")
+            remainder.append(after.strip())
+        elif line:
+            remainder.append(line)
+    return len("".join(remainder)) > 3
+
+
 def count_curator_entries(text: str) -> int:
-    """Құжаттағы нақты (қайталанбайтын) куратор жазбаларының санын мәтін
-    құрылымынан (аты + '\\t-' басталатын жазба) тікелей санайды — AI-дің
-    еркін мәтіннен болжамдап санауына (үлкен құжатта дәл болмауы мүмкін)
-    сенбей, дәл сан алу үшін. ҮЛГІ жазбасы бұл функцияға жеткенше
-    strip_template_entry-мен алынып тасталған болуы керек."""
+    """Құжаттағы нақты (қайталанбайтын әрі толтырылған) куратор
+    жазбаларының санын мәтін құрылымынан (аты + '\\t-' басталатын жазба)
+    тікелей санайды — AI-дің еркін мәтіннен болжамдап санауына (үлкен
+    құжатта дәл болмауы мүмкін) сенбей, дәл сан алу үшін. ҮЛГІ жазбасы бұл
+    функцияға жеткенше strip_template_entry-мен алынып тасталған болуы
+    керек. Тек атауы жазылып, мазмұны бос қалдырылған (ешбір өріске жауап
+    жазылмаған) кураторлар санамай, олай толтырған кураторлар ғана
+    есептеледі."""
     normalized = _strip_invisible_chars(text.replace("\r\n", "\n").replace("\r", "\n"))
-    names = {m.group(1).strip() for m in _CURATOR_ENTRY_RE.finditer(normalized)}
+    matches = list(_CURATOR_ENTRY_RE.finditer(normalized))
+    names = set()
+    for i, m in enumerate(matches):
+        start = m.end()
+        end = matches[i + 1].start() if i + 1 < len(matches) else len(normalized)
+        if _entry_is_filled(normalized[start:end]):
+            names.add(m.group(1).strip())
     return len(names)
 
 
