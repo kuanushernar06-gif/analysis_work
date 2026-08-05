@@ -1,5 +1,6 @@
 """Апта нәтижелері бойынша ортақ анализ есептеу."""
 
+import re
 from collections import Counter
 
 DEFAULT_PASSING_PERCENT = 50.0
@@ -388,11 +389,26 @@ def compute_program_overview(conn, program_id):
     return overview
 
 
+_NAME_SPLIT_RE = re.compile(r"[.\s]+")
+
+
+def _curator_name_tokens(name):
+    """Атты бас әріпке келтіріп, бос орын мен нүкте бойынша сөздерге бөледі
+    (мыс. 'І.Нұрайым' -> {'І', 'НҰРАЙЫМ'}, 'Ілияс Нұрайым Қайратқызы' ->
+    {'ІЛИЯС', 'НҰРАЙЫМ', 'ҚАЙРАТҚЫЗЫ'}) — рейтинг кестесіндегі куратор аты
+    (әдетте бір ғана есім) мен мұғалім тіркеген толық аты-жөнді салыстыру
+    үшін, дәл сәйкестікті емес, ортақ сөз бар-жоғын тексереміз."""
+    return {t for t in _NAME_SPLIT_RE.split((name or "").upper()) if len(t) > 1}
+
+
 def compute_teacher_stats(conn, stream_id):
     """Осы ағынның (поток) нәтижелері бойынша, әр мұғалімнің өз
     кураторларының (teacher_curators-та тіркелген) ортақ балдарының
-    орташасын мұғалімнің ортақ балы ретінде қайтарады. Осы ағында бірде-бір
-    куратор нәтижесі жоқ мұғалімдер тізімге кірмейді."""
+    орташасын мұғалімнің ортақ балы ретінде қайтарады. Куратор аты рейтинг
+    кестесінде қысқа (мыс. бір есім) жазылатындықтан, мұғалімге тіркелген
+    толық аты-жөнмен ДӘЛ сәйкес келуін емес, ортақ сөз (аты/тегі) бар-жоғын
+    тексереміз. Осы ағында бірде-бір куратор нәтижесі жоқ мұғалімдер тізімге
+    кірмейді."""
     rows = conn.execute(
         "SELECT r.curator, r.score FROM results r JOIN weeks w ON w.id = r.week_id "
         "WHERE w.stream_id = ? AND r.score IS NOT NULL AND r.curator IS NOT NULL AND r.curator != ''",
@@ -403,6 +419,7 @@ def compute_teacher_stats(conn, stream_id):
     for r in rows:
         curator_scores.setdefault(r["curator"].strip(), []).append(float(r["score"]))
     curator_avg = {name: sum(vals) / len(vals) for name, vals in curator_scores.items() if vals}
+    curator_avg_tokens = {name: _curator_name_tokens(name) for name in curator_avg}
 
     teacher_rows = conn.execute(
         "SELECT t.id, t.name, tc.curator_name FROM teacher_curators tc "
@@ -415,7 +432,17 @@ def compute_teacher_stats(conn, stream_id):
 
     teachers = []
     for (teacher_id, name), curator_names in by_teacher.items():
-        matched_scores = [curator_avg[c] for c in curator_names if c in curator_avg]
+        matched_scores = []
+        used_curators = set()
+        for cname in curator_names:
+            cname_tokens = _curator_name_tokens(cname)
+            for actual_name, actual_tokens in curator_avg_tokens.items():
+                if actual_name in used_curators:
+                    continue
+                if cname_tokens & actual_tokens:
+                    matched_scores.append(curator_avg[actual_name])
+                    used_curators.add(actual_name)
+                    break
         if not matched_scores:
             continue
         teachers.append(
