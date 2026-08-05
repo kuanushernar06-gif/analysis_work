@@ -386,3 +386,46 @@ def compute_program_overview(conn, program_id):
         overview["bronze_share"] = round(bronze / total_students * 100, 1)
 
     return overview
+
+
+def compute_teacher_stats(conn, stream_id):
+    """Осы ағынның (поток) нәтижелері бойынша, әр мұғалімнің өз
+    кураторларының (teacher_curators-та тіркелген) ортақ балдарының
+    орташасын мұғалімнің ортақ балы ретінде қайтарады. Осы ағында бірде-бір
+    куратор нәтижесі жоқ мұғалімдер тізімге кірмейді."""
+    rows = conn.execute(
+        "SELECT r.curator, r.score FROM results r JOIN weeks w ON w.id = r.week_id "
+        "WHERE w.stream_id = ? AND r.score IS NOT NULL AND r.curator IS NOT NULL AND r.curator != ''",
+        (stream_id,),
+    ).fetchall()
+
+    curator_scores = {}
+    for r in rows:
+        curator_scores.setdefault(r["curator"].strip(), []).append(float(r["score"]))
+    curator_avg = {name: sum(vals) / len(vals) for name, vals in curator_scores.items() if vals}
+
+    teacher_rows = conn.execute(
+        "SELECT t.id, t.name, tc.curator_name FROM teacher_curators tc "
+        "JOIN teachers t ON t.id = tc.teacher_id"
+    ).fetchall()
+
+    by_teacher = {}
+    for r in teacher_rows:
+        by_teacher.setdefault((r["id"], r["name"]), []).append(r["curator_name"])
+
+    teachers = []
+    for (teacher_id, name), curator_names in by_teacher.items():
+        matched_scores = [curator_avg[c] for c in curator_names if c in curator_avg]
+        if not matched_scores:
+            continue
+        teachers.append(
+            {
+                "id": teacher_id,
+                "name": name,
+                "avg_score": round(sum(matched_scores) / len(matched_scores), 2),
+                "curator_count": len(matched_scores),
+                "total_curators": len(curator_names),
+            }
+        )
+    teachers.sort(key=lambda t: t["avg_score"], reverse=True)
+    return teachers

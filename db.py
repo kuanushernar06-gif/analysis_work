@@ -163,10 +163,24 @@ CREATE TABLE IF NOT EXISTS curator_notes (
     updated_at TIMESTAMPTZ DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS teachers (
+    id SERIAL PRIMARY KEY,
+    name TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS teacher_curators (
+    id SERIAL PRIMARY KEY,
+    teacher_id INTEGER NOT NULL REFERENCES teachers(id) ON DELETE CASCADE,
+    curator_name TEXT NOT NULL,
+    UNIQUE(curator_name)
+);
+
 CREATE INDEX IF NOT EXISTS idx_streams_program ON streams(program_id);
 CREATE INDEX IF NOT EXISTS idx_results_week ON results(week_id);
 CREATE INDEX IF NOT EXISTS idx_notes_week ON curator_notes(week_id);
 CREATE INDEX IF NOT EXISTS idx_imports_week ON imports(week_id);
+CREATE INDEX IF NOT EXISTS idx_teacher_curators_teacher ON teacher_curators(teacher_id);
 """
 
 # SQLite диалектісі — DATABASE_URL қойылмаған кезде локальді дамыту үшін
@@ -251,10 +265,24 @@ CREATE TABLE IF NOT EXISTS curator_notes (
     updated_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS teachers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS teacher_curators (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    teacher_id INTEGER NOT NULL REFERENCES teachers(id) ON DELETE CASCADE,
+    curator_name TEXT NOT NULL,
+    UNIQUE(curator_name)
+);
+
 CREATE INDEX IF NOT EXISTS idx_streams_program ON streams(program_id);
 CREATE INDEX IF NOT EXISTS idx_results_week ON results(week_id);
 CREATE INDEX IF NOT EXISTS idx_notes_week ON curator_notes(week_id);
 CREATE INDEX IF NOT EXISTS idx_imports_week ON imports(week_id);
+CREATE INDEX IF NOT EXISTS idx_teacher_curators_teacher ON teacher_curators(teacher_id);
 """
 
 

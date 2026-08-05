@@ -35,8 +35,8 @@
   {% block header %}{% endblock %}
 
   {% block body %}
-  <div class="site-shell{% if request.endpoint in ('index', 'category_picker', 'program_detail', 'stream_detail') %} no-sidebar{% endif %}">
-    {% if request.endpoint not in ('index', 'category_picker', 'program_detail', 'stream_detail') %}
+  <div class="site-shell{% if request.endpoint in ('index', 'category_picker', 'program_detail', 'stream_detail', 'teachers_list') %} no-sidebar{% endif %}">
+    {% if request.endpoint not in ('index', 'category_picker', 'program_detail', 'stream_detail', 'teachers_list') %}
     <aside class="site-sidebar no-print">
       <button type="button" class="sidebar-pin-toggle no-print" id="sidebar-pin-toggle" aria-pressed="false" aria-label="Бүйірлік мәзірді ашық қалдыру">
         <span class="sidebar-pin-arrow" aria-hidden="true"></span>
@@ -63,9 +63,10 @@
         {% elif stream_stats_categories %}
           {% for cslug, _clabel in sidebar_categories %}
             {% if cslug in stream_stats_categories %}
-            <a href="{{ url_for('stream_stats', stream_id=stream_stats_categories[cslug]) }}" class="{{ 'active' if stream and stream['category'] == cslug else '' }}">{{ category_stats_label(cslug) }}</a>
+            <a href="{{ url_for('stream_stats', stream_id=stream_stats_categories[cslug]) }}" class="{{ 'active' if stream and stream['category'] == cslug and request.endpoint == 'stream_stats' else '' }}">{{ category_stats_label(cslug) }}</a>
             {% endif %}
           {% endfor %}
+          <a href="{{ url_for('stream_teachers', stream_id=stream['id']) }}" class="{{ 'active' if request.endpoint == 'stream_teachers' else '' }}"><span class="ic">🧑‍🏫</span> Мұғалімдер</a>
         {% endif %}
       </nav>
       <div class="site-sidebar-footer">

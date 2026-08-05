@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}{{ stream['code'] }} — Мұғалімдер{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <a class="back-link" href="{{ url_for('stream_stats', stream_id=stream['id']) }}">← {{ stream['code'] }} статистикасы</a>
+    <h1>{{ program['name'] }} · {{ category_label(stream['category']) }} · {{ stream['code'] }} · Мұғалімдер</h1>
+    <p class="muted">
+      Әр мұғалімнің ортақ балы — осы ағында нәтижесі бар өз кураторларының ортақ балдарының орташасы.
+    </p>
+  </div>
+</div>
+
+{% if teachers %}
+<div class="card">
+  <div class="table-scroll">
+    <table class="table">
+      <thead><tr><th>Мұғалім</th><th>Ортақ балл</th><th>Осы ағында бар куратор саны</th></tr></thead>
+      <tbody>
+        {% for t in teachers %}
+        <tr><td>{{ t.name }}</td><td>{{ t.avg_score }}</td><td>{{ t.curator_count }} / {{ t.total_curators }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="card">
+  <p class="muted">
+    Бұл ағында әзірге ешбір мұғалім-куратор тіркелмеген немесе тіркелген кураторлардың нәтижесі жоқ.
+    Мұғалімдерді <a href="{{ url_for('teachers_list') }}">осы жерде</a> қосуға болады.
+  </p>
+</div>
+{% endif %}
+
+{% endblock %}

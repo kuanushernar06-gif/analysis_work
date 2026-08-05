@@ -10,7 +10,7 @@ from markupsafe import Markup, escape
 load_dotenv()
 
 import db
-from analysis import compute_report, compute_stream_stats
+from analysis import compute_report, compute_stream_stats, compute_teacher_stats
 from sheets import fetch_workbook, rows_to_dicts, guess_columns, is_summary_row, is_template_sheet, SheetFetchError
 from gdocs import (
     fetch_doc_text,
@@ -438,6 +438,122 @@ def stream_stats(stream_id):
         stats=stats,
         stream_stats_categories=stream_stats_categories,
     )
+
+
+@app.route("/streams/<int:stream_id>/teachers")
+def stream_teachers(stream_id):
+    conn = get_db()
+    stream = conn.execute("SELECT * FROM streams WHERE id = ?", (stream_id,)).fetchone()
+    if stream is None:
+        flash("Поток табылмады.", "error")
+        return redirect(url_for("index"))
+    program = conn.execute("SELECT * FROM programs WHERE id = ?", (stream["program_id"],)).fetchone()
+
+    teachers = compute_teacher_stats(conn, stream_id)
+    stream_stats_categories = {
+        row["category"]: row["id"]
+        for row in conn.execute(
+            "SELECT id, category FROM streams WHERE program_id = ? AND code = ?",
+            (stream["program_id"], stream["code"]),
+        ).fetchall()
+    }
+
+    return render_template(
+        "stream_teachers.html",
+        stream=stream,
+        program=program,
+        teachers=teachers,
+        stream_stats_categories=stream_stats_categories,
+    )
+
+
+@app.route("/teachers")
+def teachers_list():
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT t.id, t.name, "
+        "array_agg(tc.curator_name) AS curator_names "
+        "FROM teachers t LEFT JOIN teacher_curators tc ON tc.teacher_id = t.id "
+        "GROUP BY t.id, t.name ORDER BY t.name"
+        if getattr(conn, "backend", None) == "postgres"
+        else "SELECT id, name FROM teachers ORDER BY name"
+    ).fetchall()
+
+    if getattr(conn, "backend", None) == "postgres":
+        teachers = [
+            {"id": r["id"], "name": r["name"], "curator_names": [c for c in (r["curator_names"] or []) if c]}
+            for r in rows
+        ]
+    else:
+        teachers = []
+        for r in rows:
+            curator_rows = conn.execute(
+                "SELECT curator_name FROM teacher_curators WHERE teacher_id = ? ORDER BY curator_name",
+                (r["id"],),
+            ).fetchall()
+            teachers.append(
+                {"id": r["id"], "name": r["name"], "curator_names": [c["curator_name"] for c in curator_rows]}
+            )
+
+    return render_template("teachers.html", teachers=teachers)
+
+
+@app.route("/teachers/add", methods=["POST"])
+def add_teacher():
+    conn = get_db()
+    name = request.form.get("name", "").strip()
+    curator_names_raw = request.form.get("curator_names", "")
+    curator_names = [c.strip() for c in curator_names_raw.split("\n") if c.strip()]
+
+    if not name:
+        flash("Мұғалімнің атын енгізіңіз.", "error")
+        return redirect(url_for("teachers_list"))
+
+    # Кураторлар атауы UNIQUE болғандықтан, INSERT-ті орындамас бұрын бар-жоғын
+    # тексереміз — Postgres-те бір INSERT қатесі бүкіл транзакцияны "бұзып",
+    # содан кейінгі барлық сұранысты іске асырмай қалдырар еді.
+    curator_names = list(dict.fromkeys(curator_names))
+    existing = set()
+    if curator_names:
+        placeholders = ",".join("?" * len(curator_names))
+        existing = {
+            row["curator_name"]
+            for row in conn.execute(
+                f"SELECT curator_name FROM teacher_curators WHERE curator_name IN ({placeholders})",
+                curator_names,
+            ).fetchall()
+        }
+    to_insert = [c for c in curator_names if c not in existing]
+    skipped = [c for c in curator_names if c in existing]
+
+    teacher_id = conn.execute(
+        "INSERT INTO teachers (name) VALUES (?) RETURNING id", (name,)
+    ).fetchone()["id"]
+    for curator_name in to_insert:
+        conn.execute(
+            "INSERT INTO teacher_curators (teacher_id, curator_name) VALUES (?, ?)",
+            (teacher_id, curator_name),
+        )
+    conn.commit()
+
+    if skipped:
+        flash(
+            "Мұғалім қосылды, бірақ мына кураторлар басқа мұғалімге тіркелген болғандықтан қосылмады: "
+            + ", ".join(skipped),
+            "error",
+        )
+    else:
+        flash("Мұғалім қосылды.", "ok")
+    return redirect(url_for("teachers_list"))
+
+
+@app.route("/teachers/<int:teacher_id>/delete", methods=["POST"])
+def delete_teacher(teacher_id):
+    conn = get_db()
+    conn.execute("DELETE FROM teachers WHERE id = ?", (teacher_id,))
+    conn.commit()
+    flash("Мұғалім жойылды.", "ok")
+    return redirect(url_for("teachers_list"))
 
 
 @app.route("/weeks/<int:week_id>/delete", methods=["POST"])

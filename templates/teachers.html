@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Мұғалімдер — JUZ40{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <h1>Мұғалімдер</h1>
+    <p class="muted">
+      Әр мұғалімнің атын және оған тіркелген кураторлардың дәл сол рейтингтегі
+      атымен бірдей жазылған тізімін қосыңыз (әр куратор — жаңа жолда).
+    </p>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Жаңа мұғалім қосу</h2>
+  <form method="post" action="{{ url_for('add_teacher') }}" class="form-grid">
+    <label>
+      Мұғалімнің аты-жөні
+      <input type="text" name="name" required autocomplete="off" placeholder="Мысалы: Асанова Гүлнара">
+    </label>
+    <label class="col-span-2">
+      Кураторлар (әр жолда біреу)
+      <textarea name="curator_names" rows="5" placeholder="НҰРАЙ&#10;АЙГЕРІМ&#10;БЕКЗАТ"></textarea>
+    </label>
+    <div class="col-span-2">
+      <button type="submit" class="btn btn-primary">Қосу</button>
+    </div>
+  </form>
+</div>
+
+<div class="card">
+  <h2>Тіркелген мұғалімдер</h2>
+  {% if teachers %}
+  <div class="table-scroll">
+    <table class="table">
+      <thead><tr><th>Мұғалім</th><th>Кураторлары</th><th></th></tr></thead>
+      <tbody>
+        {% for t in teachers %}
+        <tr>
+          <td>{{ t.name }}</td>
+          <td>{{ t.curator_names | join(', ') if t.curator_names else '—' }}</td>
+          <td>
+            <form method="post" action="{{ url_for('delete_teacher', teacher_id=t.id) }}" class="no-print" style="display:inline">
+              <button type="submit" class="btn btn-danger btn-small">Жою</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="muted">Әзірге мұғалім қосылмаған.</p>
+  {% endif %}
+</div>
+
+{% endblock %}
