@@ -4,7 +4,7 @@
 
 <div class="page-head">
   <div>
-    <a class="back-link" href="{{ url_for('stream_stats', stream_id=stream['id']) }}">← {{ stream['code'] }} статистикасы</a>
+    <a class="back-link" href="{{ url_for('program_detail', slug=program['slug'], category=stream['category'], mode='stats') }}">← {{ program['name'] }}</a>
     <h1>{{ program['name'] }} · {{ category_label(stream['category']) }} · {{ stream['code'] }} · Мұғалімдер</h1>
     <p class="muted">
       Әр мұғалімнің ортақ балы — осы ағында нәтижесі бар өз кураторларының ортақ балдарының орташасы.
