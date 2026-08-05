@@ -13,17 +13,13 @@
 </div>
 
 {% if teachers %}
-<div class="card">
-  <div class="table-scroll">
-    <table class="table">
-      <thead><tr><th>Мұғалім</th><th>Ортақ балл</th><th>Осы ағында бар куратор саны</th></tr></thead>
-      <tbody>
-        {% for t in teachers %}
-        <tr><td>{{ t.name }}</td><td>{{ t.avg_score }}</td><td>{{ t.curator_count }} / {{ t.total_curators }}</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
+<div class="nav-cards">
+  {% for t in teachers %}
+  <a class="teacher-card" href="{{ url_for('teacher_detail', stream_id=stream['id'], teacher_id=t.id) }}">
+    <div class="teacher-card-name">{{ t.name }}</div>
+    <div class="teacher-card-sub">{{ t.avg_score }} ортақ балл · {{ t.curator_count }}/{{ t.total_curators }} куратор</div>
+  </a>
+  {% endfor %}
 </div>
 {% else %}
 <div class="card">

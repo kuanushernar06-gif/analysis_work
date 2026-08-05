@@ -10,7 +10,7 @@ from markupsafe import Markup, escape
 load_dotenv()
 
 import db
-from analysis import compute_report, compute_stream_stats, compute_teacher_stats
+from analysis import compute_report, compute_stream_stats, compute_teacher_stats, compute_teacher_stream_detail
 from sheets import fetch_workbook, rows_to_dicts, guess_columns, is_summary_row, is_template_sheet, SheetFetchError
 from gdocs import (
     fetch_doc_text,
@@ -463,6 +463,41 @@ def stream_teachers(stream_id):
         stream=stream,
         program=program,
         teachers=teachers,
+        stream_stats_categories=stream_stats_categories,
+    )
+
+
+@app.route("/streams/<int:stream_id>/teachers/<int:teacher_id>")
+def teacher_detail(stream_id, teacher_id):
+    conn = get_db()
+    stream = conn.execute("SELECT * FROM streams WHERE id = ?", (stream_id,)).fetchone()
+    if stream is None:
+        flash("Поток табылмады.", "error")
+        return redirect(url_for("index"))
+    program = conn.execute("SELECT * FROM programs WHERE id = ?", (stream["program_id"],)).fetchone()
+
+    sibling_streams = conn.execute(
+        "SELECT id, category FROM streams WHERE program_id = ? AND code = ?",
+        (stream["program_id"], stream["code"]),
+    ).fetchall()
+
+    category_streams = {}
+    for row in sibling_streams:
+        max_score, _target_score = db.score_defaults_for(program["slug"], row["category"])
+        category_streams[row["category"]] = {"stream_id": row["id"], "max_score": max_score}
+
+    detail = compute_teacher_stream_detail(conn, teacher_id, category_streams)
+    if detail["teacher"] is None:
+        flash("Мұғалім табылмады.", "error")
+        return redirect(url_for("stream_teachers", stream_id=stream_id))
+
+    stream_stats_categories = {row["category"]: row["id"] for row in sibling_streams}
+
+    return render_template(
+        "teacher_detail.html",
+        stream=stream,
+        program=program,
+        detail=detail,
         stream_stats_categories=stream_stats_categories,
     )
 

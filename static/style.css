@@ -560,6 +560,23 @@ img.nav-card-ic { height: 32px; width: auto; border-radius: 8px; }
   text-transform: uppercase;
 }
 
+/* Мұғалім карточкасы (stream_teachers) — атын басқанда сол мұғалімнің
+   жеке статистика бетіне өтеді, сол себепті басқа nav-card-тардан
+   ерекшеленетін, "басуға тұрарлық" градиентті карточка стилі. */
+.teacher-card {
+  display: block;
+  padding: 20px 22px;
+  border-radius: var(--radius);
+  background: linear-gradient(135deg, var(--accent) 0%, #7a1d00 100%);
+  color: #fff;
+  text-decoration: none;
+  box-shadow: var(--shadow-glass);
+  transition: box-shadow .15s ease, transform .15s ease;
+}
+.teacher-card:hover { box-shadow: var(--shadow-hover); transform: translateY(-2px); }
+.teacher-card-name { font-size: 1.2rem; font-weight: 800; letter-spacing: -0.01em; }
+.teacher-card-sub { margin-top: 6px; font-size: 0.85rem; color: rgba(255, 255, 255, 0.85); }
+
 /* ---------- Forms ---------- */
 .form-grid {
   display: grid;

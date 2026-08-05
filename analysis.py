@@ -456,3 +456,122 @@ def compute_teacher_stats(conn, stream_id):
         )
     teachers.sort(key=lambda t: t["avg_score"], reverse=True)
     return teachers
+
+
+def compute_teacher_stream_detail(conn, teacher_id, category_streams):
+    """Мұғалімнің осы ағын кодындағы (СТ/АТ екеуінде де болуы мүмкін) өз
+    кураторларының нәтижелерін санат бойынша бөлек қайтарады: жалпы ортақ
+    балл, апта/ай бойынша бөлініс, кураторлар арасындағы ең үздік/ең нашар,
+    және осы кураторлардың оқушылары арасындағы тұрақты үздік/нашар тізімі.
+
+    category_streams: {category_slug: {"stream_id":.., "max_score":..}}."""
+    teacher = conn.execute("SELECT * FROM teachers WHERE id = ?", (teacher_id,)).fetchone()
+    result = {"teacher": teacher, "categories": {}}
+    if teacher is None:
+        return result
+
+    curator_name_list = [
+        row["curator_name"]
+        for row in conn.execute(
+            "SELECT curator_name FROM teacher_curators WHERE teacher_id = ?", (teacher_id,)
+        ).fetchall()
+    ]
+    curator_token_list = [(name, _curator_name_tokens(name)) for name in curator_name_list]
+
+    def matches_teacher(curator_raw):
+        raw_tokens = _curator_name_tokens(curator_raw)
+        return any(raw_tokens & tokens for _, tokens in curator_token_list)
+
+    for category_slug, info in category_streams.items():
+        stream_id = info["stream_id"]
+        max_score = info.get("max_score")
+        rows = conn.execute(
+            "SELECT r.score, r.curator, r.student, w.id AS week_id, w.title, "
+            "w.month_number, w.week_number "
+            "FROM results r JOIN weeks w ON w.id = r.week_id "
+            "WHERE w.stream_id = ? AND r.score IS NOT NULL AND r.curator IS NOT NULL AND r.curator != ''",
+            (stream_id,),
+        ).fetchall()
+
+        matched = [r for r in rows if matches_teacher(r["curator"])]
+        if not matched:
+            result["categories"][category_slug] = None
+            continue
+
+        scores = [float(r["score"]) for r in matched]
+        overall_avg = round(sum(scores) / len(scores), 2)
+
+        by_week = {}
+        for r in matched:
+            key = (r["month_number"], r["week_number"], r["week_id"])
+            by_week.setdefault(key, {"title": r["title"], "scores": []})["scores"].append(float(r["score"]))
+        week_breakdown = [
+            {"title": v["title"], "avg_score": round(sum(v["scores"]) / len(v["scores"]), 2), "count": len(v["scores"])}
+            for k, v in sorted(by_week.items(), key=lambda kv: (kv[0][0] is None, kv[0][0], kv[0][1] is None, kv[0][1]))
+        ]
+
+        by_month = {}
+        for r in matched:
+            by_month.setdefault(r["month_number"], []).append(float(r["score"]))
+        month_breakdown = [
+            {"month_number": m, "avg_score": round(sum(v) / len(v), 2), "count": len(v)}
+            for m, v in sorted(by_month.items(), key=lambda kv: (kv[0] is None, kv[0]))
+        ]
+
+        curator_scores = {}
+        for r in matched:
+            curator_scores.setdefault(r["curator"].strip(), []).append(float(r["score"]))
+        curator_avgs = [
+            {"curator": name, "avg_score": round(sum(v) / len(v), 2)}
+            for name, v in curator_scores.items()
+            if v
+        ]
+        best_curator = max(curator_avgs, key=lambda c: c["avg_score"]) if curator_avgs else None
+        worst_curator = min(curator_avgs, key=lambda c: c["avg_score"]) if curator_avgs else None
+
+        student_scores = {}
+        student_weeks = {}
+        for r in matched:
+            student = (r["student"] or "").strip()
+            if not student:
+                continue
+            student_scores.setdefault(student, []).append(float(r["score"]))
+            student_weeks.setdefault(student, set()).add(r["week_id"])
+
+        student_avgs = []
+        for student, vals in student_scores.items():
+            avg_score = sum(vals) / len(vals)
+            avg_percent = (avg_score / max_score * 100) if max_score else None
+            student_avgs.append(
+                {
+                    "student": student,
+                    "avg_score": round(avg_score, 2),
+                    "avg_percent": round(avg_percent, 1) if avg_percent is not None else None,
+                    "weeks": len(student_weeks[student]),
+                }
+            )
+        qualifying = [
+            s for s in student_avgs if s["weeks"] >= STREAM_STATS_MIN_WEEKS and s["avg_percent"] is not None
+        ]
+        top_students = sorted(
+            (s for s in qualifying if s["avg_percent"] >= STREAM_STATS_TOP_PERCENT),
+            key=lambda s: s["avg_score"],
+            reverse=True,
+        )
+        bottom_students = sorted(
+            (s for s in qualifying if s["avg_percent"] <= STREAM_STATS_BOTTOM_PERCENT),
+            key=lambda s: s["avg_score"],
+        )
+
+        result["categories"][category_slug] = {
+            "overall_avg_score": overall_avg,
+            "week_breakdown": week_breakdown,
+            "month_breakdown": month_breakdown,
+            "best_curator": best_curator,
+            "worst_curator": worst_curator,
+            "top_students": top_students,
+            "bottom_students": bottom_students,
+            "matched_curator_count": len(curator_avgs),
+        }
+
+    return result
