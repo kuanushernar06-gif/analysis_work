@@ -62,23 +62,6 @@
   </div>
 </div>
 
-<div class="card">
-  <h3>Максималды балл алған оқушылар</h3>
-  {% if report.max_achievers %}
-    <details>
-      <summary>{{ report.max_achiever_count }} максималды нәтиженің тізімі</summary>
-      <ul>
-        {% for a in report.max_achievers %}
-          <li>{{ a.student }} — {{ a.subject }}{% if a.topic %} ({{ a.topic }}){% endif %}</li>
-        {% endfor %}
-      </ul>
-    </details>
-  {% endif %}
-
-  <h3>0 балл жинаған оқушылар</h3>
-  <p>Барлығы <b>{{ report.zero_students }}</b> оқушы 0 балл жинады.</p>
-</div>
-
 {% endif %}
 
 <div class="card">
