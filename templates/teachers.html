@@ -18,12 +18,12 @@
 <div class="card" id="add-teacher-form">
   <h2>Жаңа мұғалім қосу</h2>
   <form method="post" action="{{ url_for('add_teacher') }}" class="form-grid">
-    <label>
+    <label class="col-span-2">
       Мұғалімнің аты-жөні
       <input type="text" name="name" required autocomplete="off" placeholder="Мысалы: Асанова Гүлнара">
     </label>
     <label>
-      Бағдарлама
+      Бөлім
       <select id="add-teacher-program" required>
         <option value="">— таңдаңыз —</option>
         {% for p in programs %}
@@ -34,7 +34,7 @@
     <label>
       Поток
       <select name="stream_id" id="add-teacher-stream" required disabled>
-        <option value="">— алдымен бағдарламаны таңдаңыз —</option>
+        <option value="">— алдымен бөлімді таңдаңыз —</option>
       </select>
     </label>
     <label class="col-span-2">
@@ -89,7 +89,7 @@
       streamSelect.innerHTML = "";
       if (!streams.length) {
         streamSelect.disabled = true;
-        streamSelect.appendChild(new Option("— алдымен бағдарламаны таңдаңыз —", ""));
+        streamSelect.appendChild(new Option("— алдымен бөлімді таңдаңыз —", ""));
         return;
       }
       streamSelect.disabled = false;
