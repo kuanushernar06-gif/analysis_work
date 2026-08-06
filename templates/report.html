@@ -32,7 +32,10 @@
 <div class="card">
   <h2>Талдау</h2>
   {% if comparison %}
-  <p class="muted">Өткен апта («{{ comparison.prev_title }}») нәтижесімен салыстырғанда прогресс/регресс төменде көрсетілген.</p>
+  <p class="muted">
+    {% if comparison.is_aylyq_test %}Алдыңғы айлық тест{% else %}Өткен апта{% endif %}
+    («{{ comparison.prev_title }}») нәтижесімен салыстырғанда прогресс/регресс төменде көрсетілген.
+  </p>
   {% endif %}
   <div class="stat-grid">
     {% if report.has_targets %}

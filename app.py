@@ -185,27 +185,40 @@ def get_month_component_weeks(conn, week):
     ).fetchall()
 
 
-def get_previous_regular_week(conn, week, stream):
-    """Кезекті (1,2,3-апта, айлық ортақ емес) СТ аптасы үшін content-тей
-    алдыңғы аптаны табады — 1-аптада алдыңғы айдың соңғы кезекті аптасы,
-    әйтпесе сол айдың week_number-1. Нәтижелер бетінде 'өткен аптамен
-    салыстырғанда' прогресс/регресс көрсету үшін керек."""
-    if stream is None or stream["category"] != db.DEFAULT_CATEGORY:
+def find_previous_week_with_data(conn, week, stream):
+    """Ағымдағы кезекті (айлық ортақ емес) аптаның алдында, дәл осы ағында
+    нақты нәтижесі бар ЕҢ СОҢҚЫ аптаны табады. Тікелей алдыңғы апта бос
+    болса (мыс. жаңа ай/жаңа айлық тест жаңа басталғанда), деректі
+    тапқанша одан да бұрынғы апталарды қарастыра береді — сол арқылы
+    'соңғы болған СТ/АТ нәтижесімен салыстыру' ережесі орындалады."""
+    if stream is None:
         return None
-    if week["week_number"] is None or week["week_number"] >= db.WEEKS_PER_MONTH:
-        return None
-    if week["week_number"] > 1:
-        return conn.execute(
-            "SELECT * FROM weeks WHERE stream_id = ? AND month_number = ? AND week_number = ?",
-            (week["stream_id"], week["month_number"], week["week_number"] - 1),
-        ).fetchone()
-    prev_month = (week["month_number"] or 1) - 1
-    if prev_month < 1:
-        return None
-    return conn.execute(
-        "SELECT * FROM weeks WHERE stream_id = ? AND month_number = ? AND week_number = ?",
-        (week["stream_id"], prev_month, db.WEEKS_PER_MONTH - 1),
-    ).fetchone()
+
+    if stream["category"] == db.DEFAULT_CATEGORY:
+        if week["week_number"] is None or week["week_number"] >= db.WEEKS_PER_MONTH:
+            return None
+        rows = conn.execute(
+            "SELECT * FROM weeks WHERE stream_id = ? AND week_number < ? "
+            "ORDER BY month_number DESC, week_number DESC",
+            (week["stream_id"], db.WEEKS_PER_MONTH),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT * FROM weeks WHERE stream_id = ? ORDER BY month_number DESC, week_number DESC",
+            (week["stream_id"],),
+        ).fetchall()
+
+    current_key = (week["month_number"] or 0, week["week_number"] or 0)
+    for w in rows:
+        key = (w["month_number"] or 0, w["week_number"] or 0)
+        if key >= current_key:
+            continue
+        count = conn.execute(
+            "SELECT COUNT(*) AS c FROM results WHERE week_id = ? AND score IS NOT NULL", (w["id"],)
+        ).fetchone()["c"]
+        if count > 0:
+            return w
+    return None
 
 
 @app.route("/")
@@ -873,11 +886,12 @@ def week_report(week_id):
 
     comparison = None
     if not is_summary and report and report.get("has_data"):
-        prev_week = get_previous_regular_week(conn, week, stream)
+        prev_week = find_previous_week_with_data(conn, week, stream)
         if prev_week is not None:
             prev_report = compute_report(conn, prev_week["id"])
             if prev_report and prev_report.get("has_data"):
                 comparison = compare_reports(report, prev_report)
+                comparison["is_aylyq_test"] = bool(stream and stream["category"] == "aylyq_test")
 
     return render_template(
         "report.html",
