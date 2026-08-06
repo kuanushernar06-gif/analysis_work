@@ -28,18 +28,6 @@
       <div class="stat-label">СТ мақсат орындалу пайызы</div>
     </div>
     {% endif %}
-    {% if stats.top_student %}
-    <div class="stat-tile stat-good">
-      <div class="stat-value">{{ '%.2f'|format(stats.top_student.avg_score) }}</div>
-      <div class="stat-label">Ең жоғарғы ортақ балл — {{ stats.top_student.student }}</div>
-    </div>
-    {% endif %}
-    {% if stats.bottom_student %}
-    <div class="stat-tile stat-warn">
-      <div class="stat-value">{{ '%.2f'|format(stats.bottom_student.avg_score) }}</div>
-      <div class="stat-label">Ең төменгі ортақ балл — {{ stats.bottom_student.student }}</div>
-    </div>
-    {% endif %}
     {% if stats.best_curator %}
     <div class="stat-tile stat-good">
       <div class="stat-value">{{ '%.2f'|format(stats.best_curator.avg_score) }}</div>

@@ -66,7 +66,7 @@
             <a href="{{ url_for('stream_stats', stream_id=stream_stats_categories[cslug]) }}" class="{{ 'active' if stream and stream['category'] == cslug and request.endpoint == 'stream_stats' else '' }}">{{ category_stats_label(cslug) }}</a>
             {% endif %}
           {% endfor %}
-          <a href="{{ url_for('stream_teachers', stream_id=stream['id']) }}" class="{{ 'active' if request.endpoint == 'stream_teachers' else '' }}"><span class="ic">🧑‍🏫</span> Мұғалімдер</a>
+          <a href="{{ url_for('stream_teachers', stream_id=stream['id']) }}" class="{{ 'active' if request.endpoint == 'stream_teachers' else '' }}">МҰҒАЛІМДЕР</a>
         {% endif %}
       </nav>
       <div class="site-sidebar-footer">
