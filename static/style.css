@@ -28,6 +28,10 @@
   --card-1: #2a5fb0;
   --card-2: #1f8f5c;
   --card-3: #7a2fae;
+  --card-0-deep: #6e1a00;
+  --card-1-deep: #163c7a;
+  --card-2-deep: #0f5c3a;
+  --card-3-deep: #4a1c6e;
 
   --sidebar-bg: #ffa080;
   --sidebar-text: #ffffff;
@@ -76,6 +80,10 @@
     --card-1: #3672cc;
     --card-2: #239966;
     --card-3: #8f3fc2;
+    --card-0-deep: #b83e12;
+    --card-1-deep: #1f4a8f;
+    --card-2-deep: #146b46;
+    --card-3-deep: #5f1f8a;
 
     --sidebar-bg: #ffa080;
     --sidebar-text: #2b0f04;
@@ -119,6 +127,10 @@
   --card-1: #3672cc;
   --card-2: #239966;
   --card-3: #8f3fc2;
+  --card-0-deep: #b83e12;
+  --card-1-deep: #1f4a8f;
+  --card-2-deep: #146b46;
+  --card-3-deep: #5f1f8a;
 
   --sidebar-bg: #ffa080;
   --sidebar-text: #ffffff;
@@ -483,6 +495,78 @@ a.is-loading-link { opacity: 0.5; pointer-events: none; transition: opacity 0.15
 .centered-head { text-align: center; margin: 32px 0 36px; }
 .centered-head h1 { font-size: 1.75rem; font-weight: 700; margin: 0 0 6px; letter-spacing: -0.03em; }
 .centered-head .muted { margin: 0; }
+
+/* ---------- Hero (басты бет) ---------- */
+.hero-head { text-align: center; margin: 36px 0 32px; }
+.hero-eyebrow {
+  display: inline-block;
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--accent);
+  background: var(--accent-soft);
+  padding: 5px 14px;
+  border-radius: 999px;
+  margin-bottom: 14px;
+}
+.hero-head h1 { font-size: 2rem; margin: 0 0 8px; letter-spacing: -0.03em; }
+.hero-head .muted { font-size: 1rem; margin: 0; }
+
+.hero-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 18px;
+  margin-top: 8px;
+}
+.hero-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 26px 24px;
+  min-height: 172px;
+  border-radius: var(--radius-lg);
+  color: #fff;
+  text-decoration: none;
+  overflow: hidden;
+  box-shadow: var(--shadow-glass);
+  transition: transform .18s ease, box-shadow .18s ease;
+}
+.hero-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(120% 100% at 100% 0%, rgba(255, 255, 255, 0.18) 0%, transparent 55%);
+  pointer-events: none;
+}
+.hero-card:hover { transform: translateY(-4px); box-shadow: var(--shadow-hover); }
+.hero-card-icon { font-size: 1.8rem; line-height: 1; position: relative; z-index: 1; }
+.hero-card-title { font-weight: 800; font-size: 1.05rem; letter-spacing: -0.01em; position: relative; z-index: 1; }
+.hero-card-sub { font-size: 0.85rem; color: rgba(255, 255, 255, 0.85); line-height: 1.4; margin-top: auto; position: relative; z-index: 1; }
+.hero-card-0 { background: linear-gradient(150deg, var(--card-0) 0%, var(--card-0-deep) 100%); }
+.hero-card-1 { background: linear-gradient(150deg, var(--card-1) 0%, var(--card-1-deep) 100%); }
+.hero-card-2 { background: linear-gradient(150deg, var(--card-2) 0%, var(--card-2-deep) 100%); }
+.hero-card-3 { background: linear-gradient(150deg, var(--card-3) 0%, var(--card-3-deep) 100%); }
+
+/* ---------- Pills (status badges) ---------- */
+.pill-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.pill {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  padding: 3px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.pill-neutral { background: var(--border-strong); color: var(--text-secondary); }
+.pill-good { background: var(--good-bg); color: var(--good); }
+.pill-muted { background: var(--border-strong); color: var(--text-muted); }
+
+/* Апта таңдау карточкаларындағы "N-АЙ ОРТАҚ" карточкасын ерекшелеу */
+.nav-card.week-card-summary { border-left: 3px solid var(--accent); }
 
 /* ---------- Cards ---------- */
 .card {

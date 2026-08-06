@@ -2,18 +2,30 @@
 {% block title %}Бөлімдер — JUZ40{% endblock %}
 {% block content %}
 
-<div class="centered-head">
+{% set hero_meta = {
+  'sabaq_tapsyru': {'icon': '📋', 'sub': 'Апта сайынғы СТ нәтижелері мен куратор анализі', 'variant': 'hero-card-0'},
+  'aylyq_test': {'icon': '🧪', 'sub': 'Ай сайынғы АТ нәтижелерін қадағалау', 'variant': 'hero-card-1'},
+} %}
+
+<div class="hero-head">
+  <span class="hero-eyebrow">JUZ40 · Апталық анализ</span>
   <h1>БАСТЫ БЕТ</h1>
+  <p class="muted">Бөлімді таңдап, талдауды бастаңыз.</p>
 </div>
 
-<div class="nav-cards">
+<div class="hero-cards">
   {% for cslug, clabel in sidebar_categories %}
-  <a class="nav-card" href="{{ url_for('category_picker', category_slug=cslug) }}">
-    <div class="nav-card-title">{{ clabel }}</div>
+  {% set meta = hero_meta.get(cslug, {'icon': '📊', 'sub': '', 'variant': 'hero-card-2'}) %}
+  <a class="hero-card {{ meta.variant }}" href="{{ url_for('category_picker', category_slug=cslug) }}">
+    <span class="hero-card-icon">{{ meta.icon }}</span>
+    <div class="hero-card-title">{{ clabel }}</div>
+    {% if meta.sub %}<div class="hero-card-sub">{{ meta.sub }}</div>{% endif %}
   </a>
   {% endfor %}
-  <a class="nav-card" href="{{ url_for('teachers_list') }}">
-    <div class="nav-card-title">МҰҒАЛІМДЕР</div>
+  <a class="hero-card hero-card-3" href="{{ url_for('teachers_list') }}">
+    <span class="hero-card-icon">🎓</span>
+    <div class="hero-card-title">МҰҒАЛІМДЕР</div>
+    <div class="hero-card-sub">Мұғалімдер мен олардың кураторларының нәтижесі</div>
   </a>
 </div>
 

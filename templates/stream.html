@@ -15,9 +15,12 @@
   <h2>{% if month_number %}{{ month_number }}-АЙ{% else %}Басқа апталар{% endif %}</h2>
   <div class="nav-cards">
     {% for item in weeks %}
-    <a class="nav-card" href="{{ url_for('week_import', week_id=item.week['id']) }}">
+    <a class="nav-card{% if 'ОРТАҚ' in item.week['title'] %} week-card-summary{% endif %}" href="{{ url_for('week_import', week_id=item.week['id']) }}">
       <div class="nav-card-title">{{ item.week['title'] }}</div>
-      <div class="nav-card-sub">{{ item.result_count }} нәтиже · {% if item.note_count %}куратор анализі қосылған{% else %}куратор анализі жоқ{% endif %}</div>
+      <div class="pill-row">
+        <span class="pill {{ 'pill-good' if item.result_count else 'pill-muted' }}">{{ item.result_count }} нәтиже</span>
+        <span class="pill {{ 'pill-good' if item.note_count else 'pill-muted' }}">{{ '✓ Куратор анализі' if item.note_count else 'Анализ жоқ' }}</span>
+      </div>
     </a>
     {% endfor %}
   </div>
