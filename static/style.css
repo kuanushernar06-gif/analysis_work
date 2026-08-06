@@ -52,13 +52,13 @@
 @media (prefers-color-scheme: dark) {
   :root:where(:not([data-theme="light"])) {
     color-scheme: dark;
-    --page: #0d0c0a;
-    --surface: #171512;
-    --surface-raised: #1f1c18;
-    --text-primary: #f7f4ef;
-    --text-secondary: #d6cfc4;
-    --text-muted: #948c81;
-    --border: #322d26;
+    --page: #0e0f16;
+    --surface: #14151f;
+    --surface-raised: #1a1b28;
+    --text-primary: #f5f5f7;
+    --text-secondary: #c9c9d4;
+    --text-muted: #8c8b9a;
+    --border: #2a2b3a;
     --border-strong: rgba(255, 255, 255, 0.08);
     --baseline: #423b33;
 
@@ -99,13 +99,13 @@
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --page: #0d0c0a;
-  --surface: #171512;
-  --surface-raised: #1f1c18;
-  --text-primary: #f7f4ef;
-  --text-secondary: #d6cfc4;
-  --text-muted: #948c81;
-  --border: #322d26;
+  --page: #0e0f16;
+  --surface: #14151f;
+  --surface-raised: #1a1b28;
+  --text-primary: #f5f5f7;
+  --text-secondary: #c9c9d4;
+  --text-muted: #8c8b9a;
+  --border: #2a2b3a;
   --border-strong: rgba(255, 255, 255, 0.08);
   --baseline: #423b33;
 
@@ -510,7 +510,7 @@ a.is-loading-link { opacity: 0.5; pointer-events: none; transition: opacity 0.15
   border-radius: 999px;
   margin-bottom: 14px;
 }
-.hero-head h1 { font-size: 2rem; margin: 0 0 8px; letter-spacing: -0.03em; }
+.hero-head h1 { font-size: 2.3rem; font-weight: 800; margin: 0 0 8px; letter-spacing: -0.035em; }
 .hero-head .muted { font-size: 1rem; margin: 0; }
 
 .hero-cards {
@@ -564,6 +564,10 @@ a.is-loading-link { opacity: 0.5; pointer-events: none; transition: opacity 0.15
 .pill-neutral { background: var(--border-strong); color: var(--text-secondary); }
 .pill-good { background: var(--good-bg); color: var(--good); }
 .pill-muted { background: var(--border-strong); color: var(--text-muted); }
+.pill-blue { background: color-mix(in srgb, var(--card-1) 16%, transparent); color: var(--card-1); }
+.pill-purple { background: color-mix(in srgb, var(--card-3) 16%, transparent); color: var(--card-3); }
+.pill-gold { background: var(--warning-bg); color: var(--warning); }
+.pill-on-dark { background: rgba(255, 255, 255, 0.18); color: #fff; }
 
 /* Апта таңдау карточкаларындағы "N-АЙ ОРТАҚ" карточкасын ерекшелеу */
 .nav-card.week-card-summary { border-left: 3px solid var(--accent); }
@@ -667,8 +671,10 @@ img.nav-card-ic { height: 32px; width: auto; border-radius: 8px; }
   border-color: transparent;
   min-height: 120px;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 10px;
   text-align: center;
 }
 .nav-card-tarih-bg:hover { border-color: transparent; }

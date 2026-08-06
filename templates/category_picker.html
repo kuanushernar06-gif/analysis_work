@@ -14,6 +14,7 @@
   {% for program in programs %}
   <a class="nav-card nav-card-tarih-bg" href="{{ url_for('program_detail', slug=program['slug'], category=category_slug, mode=mode) }}">
     <div class="nav-card-title nav-card-title-big">{{ program['name'] }}</div>
+    <span class="pill pill-on-dark">{{ stream_counts.get(program['id'], 0) }} поток</span>
   </a>
   {% endfor %}
 </div>

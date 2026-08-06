@@ -258,12 +258,20 @@ def category_picker(category_slug):
     mode = request.args.get("mode")
     category_name = db.CATEGORY_STATS_LABELS[category_slug] if mode == "stats" else db.CATEGORY_LABELS[category_slug]
     programs = conn.execute("SELECT * FROM programs ORDER BY sort_order, id").fetchall()
+    stream_counts = {
+        row["program_id"]: row["c"]
+        for row in conn.execute(
+            "SELECT program_id, COUNT(*) AS c FROM streams WHERE category = ? GROUP BY program_id",
+            (category_slug,),
+        ).fetchall()
+    }
     return render_template(
         "category_picker.html",
         category_slug=category_slug,
         category_name=category_name,
         programs=programs,
         mode=mode,
+        stream_counts=stream_counts,
     )
 
 
