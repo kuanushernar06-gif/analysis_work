@@ -12,10 +12,8 @@ load_dotenv()
 import db
 from analysis import (
     compute_report,
-    compute_stream_stats,
     compute_teacher_stats,
     compute_teacher_stream_detail,
-    STREAM_STATS_MIN_WEEKS,
 )
 from sheets import fetch_workbook, rows_to_dicts, guess_columns, is_summary_row, is_template_sheet, SheetFetchError
 from gdocs import (
@@ -412,41 +410,6 @@ def stream_detail(stream_id):
     months_sorted = sorted(months.items(), key=lambda item: (item[0] is None, item[0]))
 
     return render_template("stream.html", stream=stream, program=program, months=months_sorted)
-
-
-@app.route("/streams/<int:stream_id>/stats")
-def stream_stats(stream_id):
-    conn = get_db()
-    stream = conn.execute("SELECT * FROM streams WHERE id = ?", (stream_id,)).fetchone()
-    if stream is None:
-        flash("Поток табылмады.", "error")
-        return redirect(url_for("index"))
-    program = conn.execute("SELECT * FROM programs WHERE id = ?", (stream["program_id"],)).fetchone()
-
-    max_score, target_score = db.score_defaults_for(program["slug"], stream["category"])
-    min_periods = 1 if stream["category"] == "aylyq_test" else STREAM_STATS_MIN_WEEKS
-    stats = compute_stream_stats(
-        conn, stream_id, max_score=max_score, target_score=target_score, min_periods=min_periods
-    )
-
-    # Осы поток кодының (мыс. ТАРИХ-01) басқа санаттардағы (СТ/АТ) сыңар
-    # жазбалары — сайдбардан санат ауыстырғанда сол потоктың статистикасына
-    # тікелей өту үшін.
-    stream_stats_categories = {
-        row["category"]: row["id"]
-        for row in conn.execute(
-            "SELECT id, category FROM streams WHERE program_id = ? AND code = ?",
-            (stream["program_id"], stream["code"]),
-        ).fetchall()
-    }
-
-    return render_template(
-        "stream_stats.html",
-        stream=stream,
-        program=program,
-        stats=stats,
-        stream_stats_categories=stream_stats_categories,
-    )
 
 
 @app.route("/streams/<int:stream_id>/teachers")
