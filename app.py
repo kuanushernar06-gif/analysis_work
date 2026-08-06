@@ -12,6 +12,8 @@ load_dotenv()
 import db
 from analysis import (
     compute_report,
+    compute_curator_extremes,
+    compare_reports,
     compute_teacher_stats,
     compute_teacher_stream_detail,
     find_teacher_home_stream,
@@ -181,6 +183,29 @@ def get_month_component_weeks(conn, week):
         "SELECT * FROM weeks WHERE stream_id = ? AND month_number = ? AND week_number < ? ORDER BY week_number",
         (week["stream_id"], week["month_number"], db.WEEKS_PER_MONTH),
     ).fetchall()
+
+
+def get_previous_regular_week(conn, week, stream):
+    """Кезекті (1,2,3-апта, айлық ортақ емес) СТ аптасы үшін content-тей
+    алдыңғы аптаны табады — 1-аптада алдыңғы айдың соңғы кезекті аптасы,
+    әйтпесе сол айдың week_number-1. Нәтижелер бетінде 'өткен аптамен
+    салыстырғанда' прогресс/регресс көрсету үшін керек."""
+    if stream is None or stream["category"] != db.DEFAULT_CATEGORY:
+        return None
+    if week["week_number"] is None or week["week_number"] >= db.WEEKS_PER_MONTH:
+        return None
+    if week["week_number"] > 1:
+        return conn.execute(
+            "SELECT * FROM weeks WHERE stream_id = ? AND month_number = ? AND week_number = ?",
+            (week["stream_id"], week["month_number"], week["week_number"] - 1),
+        ).fetchone()
+    prev_month = (week["month_number"] or 1) - 1
+    if prev_month < 1:
+        return None
+    return conn.execute(
+        "SELECT * FROM weeks WHERE stream_id = ? AND month_number = ? AND week_number = ?",
+        (week["stream_id"], prev_month, db.WEEKS_PER_MONTH - 1),
+    ).fetchone()
 
 
 @app.route("/")
@@ -505,7 +530,7 @@ def teachers_list():
     ).fetchall()
 
     stream_labels = {
-        r["id"]: f"{r['program_name']} · {r['code']}"
+        r["id"]: f"{r['program_name']} | {r['code']}"
         for r in conn.execute(
             "SELECT s.id, s.code, p.name AS program_name FROM streams s JOIN programs p ON p.id = s.program_id"
         ).fetchall()
@@ -825,6 +850,14 @@ def week_results(week_id):
         report = compute_report(conn, week_id)
     note_count = 1 if week["curators_doc_url"] else 0
 
+    comparison = None
+    if not is_summary and report and report.get("has_data"):
+        prev_week = get_previous_regular_week(conn, week, stream)
+        if prev_week is not None:
+            prev_report = compute_report(conn, prev_week["id"])
+            if prev_report and prev_report.get("has_data"):
+                comparison = compare_reports(report, prev_report)
+
     return render_template(
         "results.html",
         week=week,
@@ -835,6 +868,7 @@ def week_results(week_id):
         note_count=note_count,
         report=report,
         is_month_summary=is_summary,
+        comparison=comparison,
     )
 
 
@@ -893,6 +927,7 @@ def week_report(week_id):
         )
         result_count = report["total_entries"] if report else 0
         note_count = sum(1 for cw in component_weeks if cw["curators_doc_url"])
+        curator_week_ids = combine_ids
 
         analyses = []
         for cw in component_weeks:
@@ -911,6 +946,13 @@ def week_report(week_id):
         note_count = 1 if week["curators_doc_url"] else 0
         report = compute_report(conn, week_id)
         curator_analysis = parse_curator_analysis(week)
+        curator_week_ids = [week_id]
+
+    # Ең жоғарғы/ең төменгі ортақ балл куратор — тек 2-айдан бастап: 1-айда
+    # рейтинг кестелерінде куратор аты-жөндері бірізді жазылмаған болатын.
+    best_curator = worst_curator = None
+    if report and report.get("has_data") and week["month_number"] is not None and week["month_number"] >= 2:
+        best_curator, worst_curator = compute_curator_extremes(conn, curator_week_ids)
 
     return render_template(
         "report.html",
@@ -924,6 +966,8 @@ def week_report(week_id):
         curator_analysis=curator_analysis,
         is_month_summary=is_summary,
         summary_text_override=summary_text_override,
+        best_curator=best_curator,
+        worst_curator=worst_curator,
     )
 
 

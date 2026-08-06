@@ -836,6 +836,11 @@ details[open] > .note-head::before { content: "▾"; }
 .stat-good { border-left-color: var(--good); }
 .stat-good .stat-value { color: var(--good); }
 
+.stat-delta { font-size: 0.78rem; font-weight: 600; margin-top: 3px; }
+.stat-delta-up { color: var(--good); }
+.stat-delta-down { color: var(--critical); }
+.stat-delta-same { color: var(--text-muted); }
+
 /* ---------- Bar chart (server-rendered, no JS) ---------- */
 .barchart { display: flex; flex-direction: column; gap: 10px; margin: 6px 0 4px; }
 .bar-row { display: grid; grid-template-columns: 150px 1fr 56px; align-items: center; gap: 10px; }

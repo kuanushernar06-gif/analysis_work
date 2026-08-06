@@ -219,6 +219,69 @@ def compute_report(conn, week_id, combine_week_ids=None):
     return report
 
 
+def compute_curator_extremes(conn, week_ids):
+    """Осы апта(лар)дың өз нәтижелерін куратор бойынша топтап, ең жоғарғы
+    және ең төменгі ортақ балл жинаған кураторды қайтарады. Шақырушы тарап
+    мұны тек 2-айдан бастап көрсетуі керек — 1-айда куратор аты-жөндері
+    рейтинг кестелерінде бірізді жазылмаған болатын."""
+    if not week_ids:
+        return None, None
+    placeholders = ",".join("?" * len(week_ids))
+    rows = conn.execute(
+        f"SELECT curator, score FROM results WHERE week_id IN ({placeholders}) "
+        "AND score IS NOT NULL AND curator IS NOT NULL AND curator != ''",
+        week_ids,
+    ).fetchall()
+
+    curator_scores = {}
+    for r in rows:
+        curator_scores.setdefault(r["curator"].strip(), []).append(float(r["score"]))
+    curator_avgs = [
+        {"curator": name, "avg_score": round(sum(vals) / len(vals), 2)}
+        for name, vals in curator_scores.items()
+        if vals
+    ]
+    if not curator_avgs:
+        return None, None
+    best = max(curator_avgs, key=lambda c: c["avg_score"])
+    worst = min(curator_avgs, key=lambda c: c["avg_score"])
+    return best, worst
+
+
+def compare_reports(report, prev_report):
+    """Осы апта есебін (report) алдыңғы аптаның есебімен (prev_report)
+    салыстырып, әр көрсеткіш бойынша прогресс/регресс дельтасын қайтарады.
+    higher_is_better=False көрсеткіштерде (мыс. 0 балл жинаған оқушы саны)
+    төмендеу — прогресс болып есептеледі."""
+
+    def _cmp(cur, prev, higher_is_better=True):
+        if cur is None or prev is None:
+            return None
+        delta = round(cur - prev, 2)
+        if delta == 0:
+            state = "same"
+        elif (delta > 0) == higher_is_better:
+            state = "up"
+        else:
+            state = "down"
+        return {"delta": delta, "state": state}
+
+    comparison = {
+        "prev_title": prev_report["week"]["title"],
+        "avg_score": _cmp(report["overall_avg_score"], prev_report["overall_avg_score"]),
+        "zero_students": _cmp(report["zero_students"], prev_report["zero_students"], higher_is_better=False),
+        "max_achiever_students": _cmp(report["max_achiever_students"], prev_report["max_achiever_students"]),
+        "gold_share": _cmp(report["gold_share"], prev_report["gold_share"]),
+        "silver_share": _cmp(report["silver_share"], prev_report["silver_share"]),
+        "bronze_share": _cmp(report["bronze_share"], prev_report["bronze_share"]),
+    }
+    if report.get("has_targets") and prev_report.get("has_targets"):
+        comparison["target_achievement"] = _cmp(
+            report["target_achievement_percent"], prev_report["target_achievement_percent"]
+        )
+    return comparison
+
+
 def compute_program_overview(conn, program_id):
     """Бағдарламаның (Smart/Junior) барлық потоктары мен апталарындағы осы
     уақытқа дейінгі барлық нәтижелерін біріктіріп, басты беттегі шолу

@@ -49,7 +49,7 @@
       </a>
       <nav class="site-sidebar-nav">
         {% if week %}
-          {% if not stream or stream['category'] != 'aylyq_test' %}
+          {% if (not stream or stream['category'] != 'aylyq_test') and not is_month_summary %}
           <a href="{{ url_for('week_plan', week_id=week['id']) }}" class="{{ 'active' if active_page == 'plan' else '' }}"><span class="ic">🗓️</span> Жоспар</a>
           {% endif %}
           {% if not is_month_summary %}

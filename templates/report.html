@@ -47,6 +47,18 @@
       <div class="stat-value">{{ report.max_achiever_count }}</div>
       <div class="stat-label">Максималды балл алған нәтиже</div>
     </div>
+    {% if best_curator %}
+    <div class="stat-tile stat-good">
+      <div class="stat-value">{{ '%.2f'|format(best_curator.avg_score) }}</div>
+      <div class="stat-label">Ең жоғарғы ортақ балл — {{ best_curator.curator }}</div>
+    </div>
+    {% endif %}
+    {% if worst_curator %}
+    <div class="stat-tile stat-warn">
+      <div class="stat-value">{{ '%.2f'|format(worst_curator.avg_score) }}</div>
+      <div class="stat-label">Ең төменгі ортақ балл — {{ worst_curator.curator }}</div>
+    </div>
+    {% endif %}
   </div>
 </div>
 

@@ -10,27 +10,43 @@
 </div>
 
 {% if report and report.has_data %}
+{% macro delta(cmp) %}
+{% if cmp %}
+<div class="stat-delta stat-delta-{{ cmp.state }}">
+  {{ '▲' if cmp.state == 'up' else ('▼' if cmp.state == 'down' else '—') }}
+  {{ '%+.2f'|format(cmp.delta) }}
+</div>
+{% endif %}
+{% endmacro %}
+
 <div class="card">
   <h2>Талдау</h2>
+  {% if comparison %}
+  <p class="muted">Өткен апта («{{ comparison.prev_title }}») нәтижесімен салыстырғанда прогресс/регресс төменде көрсетілген.</p>
+  {% endif %}
   <div class="stat-grid">
     {% if report.has_targets %}
     <div class="stat-tile {{ 'stat-good' if report.target_achievement_percent is not none and report.target_achievement_percent >= 100 else 'stat-warn' }}">
       <div class="stat-value">
         {% if report.target_achievement_percent is not none %}{{ report.target_achievement_percent }}%{% else %}—{% endif %}
       </div>
+      {{ delta(comparison.target_achievement if comparison else none) }}
       <div class="stat-label">Мақсат орындалу пайызы (мақсат: {{ week['target_score'] }})</div>
     </div>
     {% endif %}
     <div class="stat-tile">
       <div class="stat-value">{{ report.overall_avg_score }}</div>
+      {{ delta(comparison.avg_score if comparison else none) }}
       <div class="stat-label">СТ ортақ балл (шикі)</div>
     </div>
     <div class="stat-tile stat-good">
       <div class="stat-value">{{ report.max_achiever_students }}</div>
+      {{ delta(comparison.max_achiever_students if comparison else none) }}
       <div class="stat-label">Ең жоғарғы балл жинаған оқушы</div>
     </div>
     <div class="stat-tile stat-warn">
       <div class="stat-value">{{ report.zero_students }}</div>
+      {{ delta(comparison.zero_students if comparison else none) }}
       <div class="stat-label">0 балл жинаған оқушы</div>
     </div>
   </div>
@@ -39,14 +55,17 @@
   <div class="stat-grid">
     <div class="stat-tile">
       <div class="stat-value">{{ report.gold_share }}%</div>
+      {{ delta(comparison.gold_share if comparison else none) }}
       <div class="stat-label">Алтын лига · {{ report.gold_count }} оқушы</div>
     </div>
     <div class="stat-tile">
       <div class="stat-value">{{ report.silver_share }}%</div>
+      {{ delta(comparison.silver_share if comparison else none) }}
       <div class="stat-label">Күміс лига · {{ report.silver_count }} оқушы</div>
     </div>
     <div class="stat-tile">
       <div class="stat-value">{{ report.bronze_share }}%</div>
+      {{ delta(comparison.bronze_share if comparison else none) }}
       <div class="stat-label">Қола лига · {{ report.bronze_count }} оқушы</div>
     </div>
   </div>
