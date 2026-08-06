@@ -516,3 +516,26 @@ def compute_teacher_stream_detail(conn, teacher_id, category_streams):
         }
 
     return result
+
+
+def find_teacher_home_stream(conn, teacher_id):
+    """Мұғалімге тіркелген кураторлардың нақты нәтижесі бар алғашқы ағынды
+    табады — санат/поток таңдамай-ақ, сайдбардан мұғалімнің атын басу арқылы
+    тікелей оның бетіне өту үшін керек (осы ағынның коды бойынша СТ/АТ
+    екеуі де teacher_detail-де кейін қайта табылады)."""
+    curator_rows = conn.execute(
+        "SELECT curator_name FROM teacher_curators WHERE teacher_id = ?", (teacher_id,)
+    ).fetchall()
+    token_list = [_curator_name_tokens(r["curator_name"]) for r in curator_rows]
+    token_list = [t for t in token_list if t]
+    if not token_list:
+        return None
+
+    rows = conn.execute(
+        "SELECT w.stream_id, r.curator FROM results r JOIN weeks w ON w.id = r.week_id "
+        "WHERE r.curator IS NOT NULL AND r.curator != ''"
+    ).fetchall()
+    for row in rows:
+        if any(_teacher_name_matches(tokens, row["curator"]) for tokens in token_list):
+            return row["stream_id"]
+    return None

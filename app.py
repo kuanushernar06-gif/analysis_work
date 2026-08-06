@@ -14,6 +14,7 @@ from analysis import (
     compute_report,
     compute_teacher_stats,
     compute_teacher_stream_detail,
+    find_teacher_home_stream,
 )
 from sheets import fetch_workbook, rows_to_dicts, guess_columns, is_summary_row, is_template_sheet, SheetFetchError
 from gdocs import (
@@ -502,7 +503,46 @@ def teachers_list():
                 {"id": r["id"], "name": r["name"], "curator_names": [c["curator_name"] for c in curator_rows]}
             )
 
-    return render_template("teachers.html", teachers=teachers)
+    return render_template("teachers.html", teachers=teachers, all_teachers=teachers, active_teacher_id=None)
+
+
+@app.route("/teachers/<int:teacher_id>")
+def teacher_home(teacher_id):
+    conn = get_db()
+    teacher = conn.execute("SELECT * FROM teachers WHERE id = ?", (teacher_id,)).fetchone()
+    if teacher is None:
+        flash("Мұғалім табылмады.", "error")
+        return redirect(url_for("teachers_list"))
+
+    stream_id = find_teacher_home_stream(conn, teacher_id)
+    if stream_id is None:
+        flash("Бұл мұғалімнің кураторларының нәтижесі әлі табылған жоқ.", "error")
+        return redirect(url_for("teachers_list"))
+
+    stream = conn.execute("SELECT * FROM streams WHERE id = ?", (stream_id,)).fetchone()
+    program = conn.execute("SELECT * FROM programs WHERE id = ?", (stream["program_id"],)).fetchone()
+
+    sibling_streams = conn.execute(
+        "SELECT id, category FROM streams WHERE program_id = ? AND code = ?",
+        (stream["program_id"], stream["code"]),
+    ).fetchall()
+    category_streams = {}
+    for row in sibling_streams:
+        max_score, _target_score = db.score_defaults_for(program["slug"], row["category"])
+        category_streams[row["category"]] = {"stream_id": row["id"], "max_score": max_score}
+
+    detail = compute_teacher_stream_detail(conn, teacher_id, category_streams)
+
+    all_teachers = conn.execute("SELECT id, name FROM teachers ORDER BY name").fetchall()
+
+    return render_template(
+        "teacher_detail.html",
+        stream=stream,
+        program=program,
+        detail=detail,
+        all_teachers=all_teachers,
+        active_teacher_id=teacher_id,
+    )
 
 
 @app.route("/teachers/add", methods=["POST"])

@@ -4,7 +4,7 @@
 
 <div class="page-head">
   <div>
-    <a class="back-link" href="{{ url_for('stream_teachers', stream_id=stream['id']) }}">← {{ stream['code'] }} мұғалімдері</a>
+    <a class="back-link" href="{{ url_for('teachers_list') }}">← Мұғалімдер</a>
     <h1>{{ detail.teacher['name'] }}</h1>
     <p class="muted">{{ program['name'] }} · {{ stream['code'] }} — осы мұғалімнің өз кураторларының нәтижелері.</p>
   </div>
