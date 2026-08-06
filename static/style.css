@@ -913,6 +913,24 @@ details[open] > .note-head::before { content: "▾"; }
 details { margin: 8px 0 16px; }
 summary { cursor: pointer; color: var(--accent); font-size: 0.9rem; }
 
+.student-list-details { margin: 0; }
+.student-list-details summary {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.student-list-details summary::-webkit-details-marker { display: none; }
+.student-list-details summary::before {
+  content: '▶';
+  font-size: 0.65em;
+  color: var(--critical);
+  transition: transform .15s ease;
+}
+.student-list-details[open] summary::before { transform: rotate(90deg); }
+.student-list-details .table-scroll { margin-top: 10px; }
+
 @media print {
   .no-print { display: none !important; }
   .site-main { padding: 0; max-width: 100%; }

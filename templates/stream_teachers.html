@@ -17,7 +17,7 @@
   {% for t in teachers %}
   <a class="teacher-card" href="{{ url_for('teacher_detail', stream_id=stream['id'], teacher_id=t.id) }}">
     <div class="teacher-card-name">{{ t.name }}</div>
-    <div class="teacher-card-sub">{{ t.avg_score }} ортақ балл · {{ t.curator_count }}/{{ t.total_curators }} куратор</div>
+    <div class="teacher-card-sub">{{ '%.2f'|format(t.avg_score) }} ортақ балл · {{ t.curator_count }}/{{ t.total_curators }} куратор</div>
   </a>
   {% endfor %}
 </div>
@@ -25,9 +25,12 @@
 <div class="card">
   <p class="muted">
     Бұл ағында әзірге ешбір мұғалім-куратор тіркелмеген немесе тіркелген кураторлардың нәтижесі жоқ.
-    Мұғалімдерді <a href="{{ url_for('teachers_list') }}">осы жерде</a> қосуға болады.
   </p>
 </div>
 {% endif %}
+
+<div style="margin-top:20px;">
+  <a class="btn btn-outline" href="{{ url_for('teachers_list') }}">+ Мұғалім қосу</a>
+</div>
 
 {% endblock %}

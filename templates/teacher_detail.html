@@ -19,18 +19,18 @@
   {% else %}
   <div class="stat-grid">
     <div class="stat-tile">
-      <div class="stat-value">{{ cat.overall_avg_score }}</div>
+      <div class="stat-value">{{ '%.2f'|format(cat.overall_avg_score) }}</div>
       <div class="stat-label">{{ 'АТ' if cslug == 'aylyq_test' else 'СТ' }} ортақ балл</div>
     </div>
     {% if cat.best_curator %}
     <div class="stat-tile stat-good">
-      <div class="stat-value">{{ cat.best_curator.avg_score }}</div>
+      <div class="stat-value">{{ '%.2f'|format(cat.best_curator.avg_score) }}</div>
       <div class="stat-label">Ең үздік куратор — {{ cat.best_curator.curator }}</div>
     </div>
     {% endif %}
     {% if cat.worst_curator %}
     <div class="stat-tile stat-warn">
-      <div class="stat-value">{{ cat.worst_curator.avg_score }}</div>
+      <div class="stat-value">{{ '%.2f'|format(cat.worst_curator.avg_score) }}</div>
       <div class="stat-label">Ең нашар куратор — {{ cat.worst_curator.curator }}</div>
     </div>
     {% endif %}
@@ -43,7 +43,7 @@
       <thead><tr><th>Апта</th><th>Ортақ балл</th><th>Жазба саны</th></tr></thead>
       <tbody>
         {% for w in cat.week_breakdown %}
-        <tr><td>{{ w.title }}</td><td>{{ w.avg_score }}</td><td>{{ w.count }}</td></tr>
+        <tr><td>{{ w.title }}</td><td>{{ '%.2f'|format(w.avg_score) }}</td><td>{{ w.count }}</td></tr>
         {% endfor %}
       </tbody>
     </table>
@@ -57,44 +57,48 @@
       <thead><tr><th>Ай</th><th>Ортақ балл</th><th>Жазба саны</th></tr></thead>
       <tbody>
         {% for m in cat.month_breakdown %}
-        <tr><td>{{ m.month_number }}-АЙ</td><td>{{ m.avg_score }}</td><td>{{ m.count }}</td></tr>
+        <tr><td>{{ m.month_number }}-АЙ</td><td>{{ '%.2f'|format(m.avg_score) }}</td><td>{{ m.count }}</td></tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
   {% endif %}
 
-  <h3 class="plan-cell-label" style="margin-top:20px;">Тұрақты үздік оқушылар</h3>
-  {% if cat.top_students %}
-  <div class="table-scroll">
-    <table class="table">
-      <thead><tr><th>Оқушы</th><th>Ортақ балл</th><th>Ортақ пайыз</th><th>Апта саны</th></tr></thead>
-      <tbody>
-        {% for s in cat.top_students %}
-        <tr><td>{{ s.student }}</td><td>{{ s.avg_score }}</td><td>{{ s.avg_percent }}%</td><td>{{ s.weeks }}</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-  {% else %}
-  <p class="muted">Әзірге бұл шартқа сай оқушы жоқ.</p>
-  {% endif %}
+  <details class="student-list-details" style="margin-top:20px;">
+    <summary class="plan-cell-label">Тұрақты үздік оқушылар{% if cat.top_students %} ({{ cat.top_students|length }}){% endif %}</summary>
+    {% if cat.top_students %}
+    <div class="table-scroll">
+      <table class="table">
+        <thead><tr><th>Оқушы</th><th>Ортақ балл</th><th>Ортақ пайыз</th><th>Апта саны</th></tr></thead>
+        <tbody>
+          {% for s in cat.top_students %}
+          <tr><td>{{ s.student }}</td><td>{{ '%.2f'|format(s.avg_score) }}</td><td>{{ s.avg_percent }}%</td><td>{{ s.weeks }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="muted">Әзірге бұл шартқа сай оқушы жоқ.</p>
+    {% endif %}
+  </details>
 
-  <h3 class="plan-cell-label" style="margin-top:20px;">Тұрақты нашар нәтижелі оқушылар</h3>
-  {% if cat.bottom_students %}
-  <div class="table-scroll">
-    <table class="table">
-      <thead><tr><th>Оқушы</th><th>Ортақ балл</th><th>Ортақ пайыз</th><th>Апта саны</th></tr></thead>
-      <tbody>
-        {% for s in cat.bottom_students %}
-        <tr><td>{{ s.student }}</td><td>{{ s.avg_score }}</td><td>{{ s.avg_percent }}%</td><td>{{ s.weeks }}</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-  {% else %}
-  <p class="muted">Әзірге бұл шартқа сай оқушы жоқ.</p>
-  {% endif %}
+  <details class="student-list-details" style="margin-top:12px;">
+    <summary class="plan-cell-label">Тұрақты нашар нәтижелі оқушылар{% if cat.bottom_students %} ({{ cat.bottom_students|length }}){% endif %}</summary>
+    {% if cat.bottom_students %}
+    <div class="table-scroll">
+      <table class="table">
+        <thead><tr><th>Оқушы</th><th>Ортақ балл</th><th>Ортақ пайыз</th><th>Апта саны</th></tr></thead>
+        <tbody>
+          {% for s in cat.bottom_students %}
+          <tr><td>{{ s.student }}</td><td>{{ '%.2f'|format(s.avg_score) }}</td><td>{{ s.avg_percent }}%</td><td>{{ s.weeks }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="muted">Әзірге бұл шартқа сай оқушы жоқ.</p>
+    {% endif %}
+  </details>
   {% endif %}
 </div>
 {% endfor %}
