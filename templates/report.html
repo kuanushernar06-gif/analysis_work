@@ -10,6 +10,15 @@
   <button class="btn btn-outline no-print" onclick="window.print()">🖶 PDF ретінде сақтау / басып шығару</button>
 </div>
 
+{% macro delta(cmp) %}
+{% if cmp %}
+<div class="stat-delta stat-delta-{{ cmp.state }}">
+  {{ '▲' if cmp.state == 'up' else ('▼' if cmp.state == 'down' else '—') }}
+  {{ '%+.2f'|format(cmp.delta) }}
+</div>
+{% endif %}
+{% endmacro %}
+
 {% if not report.has_data %}
 <div class="card">
   <p class="muted">
@@ -21,31 +30,34 @@
 {% else %}
 
 <div class="card">
-  <h2>Жалпы көрсеткіштер</h2>
+  <h2>Талдау</h2>
+  {% if comparison %}
+  <p class="muted">Өткен апта («{{ comparison.prev_title }}») нәтижесімен салыстырғанда прогресс/регресс төменде көрсетілген.</p>
+  {% endif %}
   <div class="stat-grid">
     {% if report.has_targets %}
     <div class="stat-tile {{ 'stat-good' if report.target_achievement_percent is not none and report.target_achievement_percent >= 100 else 'stat-warn' }}">
       <div class="stat-value">
         {% if report.target_achievement_percent is not none %}{{ report.target_achievement_percent }}%{% else %}—{% endif %}
       </div>
+      {{ delta(comparison.target_achievement if comparison else none) }}
       <div class="stat-label">Мақсат орындалу пайызы (мақсат: {{ week['target_score'] }})</div>
     </div>
     {% endif %}
     <div class="stat-tile">
       <div class="stat-value">{{ report.overall_avg_score }}</div>
+      {{ delta(comparison.avg_score if comparison else none) }}
       <div class="stat-label">Ортақ орташа балл (шикі)</div>
     </div>
-    <div class="stat-tile">
-      <div class="stat-value">{{ report.unique_students }}</div>
-      <div class="stat-label">Барлық оқушы саны</div>
+    <div class="stat-tile stat-good">
+      <div class="stat-value">{{ report.max_achiever_students }}</div>
+      {{ delta(comparison.max_achiever_students if comparison else none) }}
+      <div class="stat-label">Ең жоғарғы балл жинаған оқушы</div>
     </div>
     <div class="stat-tile stat-warn">
       <div class="stat-value">{{ report.zero_students }}</div>
+      {{ delta(comparison.zero_students if comparison else none) }}
       <div class="stat-label">0 балл жинаған оқушы</div>
-    </div>
-    <div class="stat-tile stat-good">
-      <div class="stat-value">{{ report.max_achiever_count }}</div>
-      <div class="stat-label">Максималды балл алған нәтиже</div>
     </div>
     {% if best_curator %}
     <div class="stat-tile stat-good">
@@ -60,6 +72,59 @@
     </div>
     {% endif %}
   </div>
+
+  <h3>Лига бойынша үлес</h3>
+  <div class="stat-grid">
+    <div class="stat-tile">
+      <div class="stat-value">{{ report.gold_share }}%</div>
+      {{ delta(comparison.gold_share if comparison else none) }}
+      <div class="stat-label">Алтын лига · {{ report.gold_count }} оқушы</div>
+    </div>
+    <div class="stat-tile">
+      <div class="stat-value">{{ report.silver_share }}%</div>
+      {{ delta(comparison.silver_share if comparison else none) }}
+      <div class="stat-label">Күміс лига · {{ report.silver_count }} оқушы</div>
+    </div>
+    <div class="stat-tile">
+      <div class="stat-value">{{ report.bronze_share }}%</div>
+      {{ delta(comparison.bronze_share if comparison else none) }}
+      <div class="stat-label">Қола лига · {{ report.bronze_count }} оқушы</div>
+    </div>
+  </div>
+  <p class="chart-legend-note">Пайыздар барлық оқушы санына ({{ report.unique_students }}) қатысты есептелген.</p>
+
+  <form method="post" action="{{ url_for('update_league_thresholds', week_id=week['id']) }}" class="inline-form no-print">
+    <label>Алтын шегі (балл)
+      <input type="number" step="0.01" name="gold_threshold" autocomplete="off"
+             value="{{ week['gold_threshold'] if week['gold_threshold'] is not none else '' }}" placeholder="Мысалы: 13">
+    </label>
+    <label>Күміс шегі (балл)
+      <input type="number" step="0.01" name="silver_threshold" autocomplete="off"
+             value="{{ week['silver_threshold'] if week['silver_threshold'] is not none else '' }}" placeholder="Мысалы: 10">
+    </label>
+    <label>Қола (өту) шегі (балл)
+      <input type="number" step="0.01" name="passing_score" autocomplete="off"
+             value="{{ week['passing_score'] if week['passing_score'] is not none else '' }}" placeholder="Мысалы: 7">
+    </label>
+    <button type="submit" class="btn btn-outline btn-small">Жаңарту</button>
+  </form>
+  <p class="chart-legend-note">Балл кестені импорттау кезіндегі максимум баллға қатысты пайызға автоматты айналдырылады.</p>
+
+  {% if not is_month_summary %}
+  <div class="import-submit-row no-print" id="clear-results-area">
+    <button type="button" class="btn btn-danger btn-small" id="clear-results-btn">Барлық нәтижелерді өшіру</button>
+    <div id="clear-results-confirm" style="display:none">
+      <p class="muted">
+        Осы аптаның барлық импортталған рейтинг нәтижелерін (барлығы {{ result_count }} жазба)
+        толық өшіру керек пе? Бұл әрекетті қайтару мүмкін емес.
+      </p>
+      <form method="post" action="{{ url_for('clear_results', week_id=week['id']) }}" style="display:inline">
+        <button type="submit" class="btn btn-danger btn-small">Иә, толық өшіру</button>
+      </form>
+      <button type="button" class="btn btn-outline btn-small" id="clear-results-cancel">Болдырмау</button>
+    </div>
+  </div>
+  {% endif %}
 </div>
 
 {% endif %}
@@ -76,7 +141,7 @@
       {% include "_curator_analysis.html" %}
     {% endif %}
   {% else %}
-    <p class="muted">Кураторлар анализі әлі қосылмаған. <a href="{{ url_for('week_notes', week_id=week['id']) }}">Куратор анализі бетіне өту →</a></p>
+    <p class="muted">Кураторлар анализі әлі қосылмаған. <a href="{{ url_for('week_import', week_id=week['id']) }}">Кестені импорттау бетіне өту →</a></p>
   {% endif %}
 </div>
 
@@ -104,8 +169,8 @@
   </form>
   {% else %}
   <p class="muted">
-    Алдымен <a href="{{ url_for('week_notes', week_id=week['id']) }}">Куратор анализі</a>
-    бетінде Google Docs сілтемесін қосыңыз.
+    Алдымен <a href="{{ url_for('week_import', week_id=week['id']) }}">Кестені импорттау</a>
+    бетінде куратор анализінің Google Docs сілтемесін қосыңыз.
   </p>
   {% endif %}
   {% if week['summary'] %}
@@ -149,4 +214,8 @@
 </script>
 {% endif %}
 
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='results.js') }}"></script>
 {% endblock %}

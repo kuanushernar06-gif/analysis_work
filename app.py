@@ -805,7 +805,7 @@ def week_import(week_id):
             "Нәтижелер осы айдың 1, 2, 3-апта импорттарынан автоматты түрде біріктіріледі.",
             "error",
         )
-        return redirect(url_for("week_results", week_id=week_id))
+        return redirect(url_for("week_report", week_id=week_id))
 
     result_count = conn.execute(
         "SELECT COUNT(*) AS c FROM results WHERE week_id = ?", (week_id,)
@@ -820,89 +820,6 @@ def week_import(week_id):
         active_page="import",
         result_count=result_count,
         note_count=note_count,
-    )
-
-
-@app.route("/weeks/<int:week_id>/results")
-def week_results(week_id):
-    conn = get_db()
-    week, stream, program = get_week_context(conn, week_id)
-    if week is None:
-        flash("Апта табылмады.", "error")
-        return redirect(url_for("index"))
-
-    is_summary = is_month_summary_week(week, stream)
-    if is_summary:
-        combine_ids = [w["id"] for w in get_month_component_weeks(conn, week)]
-        if combine_ids:
-            placeholders = ",".join("?" * len(combine_ids))
-            result_count = conn.execute(
-                f"SELECT COUNT(*) AS c FROM results WHERE week_id IN ({placeholders})", combine_ids
-            ).fetchone()["c"]
-            report = compute_report(conn, week_id, combine_week_ids=combine_ids)
-        else:
-            result_count = 0
-            report = compute_report(conn, week_id)
-    else:
-        result_count = conn.execute(
-            "SELECT COUNT(*) AS c FROM results WHERE week_id = ?", (week_id,)
-        ).fetchone()["c"]
-        report = compute_report(conn, week_id)
-    note_count = 1 if week["curators_doc_url"] else 0
-
-    comparison = None
-    if not is_summary and report and report.get("has_data"):
-        prev_week = get_previous_regular_week(conn, week, stream)
-        if prev_week is not None:
-            prev_report = compute_report(conn, prev_week["id"])
-            if prev_report and prev_report.get("has_data"):
-                comparison = compare_reports(report, prev_report)
-
-    return render_template(
-        "results.html",
-        week=week,
-        stream=stream,
-        program=program,
-        active_page="results",
-        result_count=result_count,
-        note_count=note_count,
-        report=report,
-        is_month_summary=is_summary,
-        comparison=comparison,
-    )
-
-
-@app.route("/weeks/<int:week_id>/notes")
-def week_notes(week_id):
-    conn = get_db()
-    week, stream, program = get_week_context(conn, week_id)
-    if week is None:
-        flash("Апта табылмады.", "error")
-        return redirect(url_for("index"))
-
-    if is_month_summary_week(week, stream):
-        flash(
-            "Бұл — айлық ортақ апта, кураторлар анализі осы айдың 1, 2, 3-апта "
-            "анализдерінен автоматты түрде біріктіріледі. Толық көру үшін «Ортақ анализ» бетін ашыңыз.",
-            "error",
-        )
-        return redirect(url_for("week_report", week_id=week_id))
-
-    result_count = conn.execute(
-        "SELECT COUNT(*) AS c FROM results WHERE week_id = ?", (week_id,)
-    ).fetchone()["c"]
-    note_count = 1 if week["curators_doc_url"] else 0
-    curator_analysis = parse_curator_analysis(week)
-
-    return render_template(
-        "notes.html",
-        week=week,
-        stream=stream,
-        program=program,
-        active_page="notes",
-        result_count=result_count,
-        note_count=note_count,
-        curator_analysis=curator_analysis,
     )
 
 
@@ -954,6 +871,14 @@ def week_report(week_id):
     if report and report.get("has_data") and week["month_number"] is not None and week["month_number"] >= 2:
         best_curator, worst_curator = compute_curator_extremes(conn, curator_week_ids)
 
+    comparison = None
+    if not is_summary and report and report.get("has_data"):
+        prev_week = get_previous_regular_week(conn, week, stream)
+        if prev_week is not None:
+            prev_report = compute_report(conn, prev_week["id"])
+            if prev_report and prev_report.get("has_data"):
+                comparison = compare_reports(report, prev_report)
+
     return render_template(
         "report.html",
         week=week,
@@ -968,6 +893,7 @@ def week_report(week_id):
         summary_text_override=summary_text_override,
         best_curator=best_curator,
         worst_curator=worst_curator,
+        comparison=comparison,
     )
 
 
@@ -1015,7 +941,7 @@ def import_sheet(week_id):
 
     if is_month_summary_week(week, stream):
         flash("Бұл — айлық ортақ апта, кестені осында импорттаудың қажеті жоқ.", "error")
-        return redirect(url_for("week_results", week_id=week_id))
+        return redirect(url_for("week_report", week_id=week_id))
 
     urls = [u.strip() for u in request.form.getlist("sheet_url") if u.strip()]
 
@@ -1136,7 +1062,7 @@ def delete_result(week_id, result_id):
     conn = get_db()
     conn.execute("DELETE FROM results WHERE id = ? AND week_id = ?", (result_id, week_id))
     conn.commit()
-    return redirect(url_for("week_results", week_id=week_id))
+    return redirect(url_for("week_report", week_id=week_id))
 
 
 @app.route("/weeks/<int:week_id>/notes", methods=["POST"])
@@ -1151,7 +1077,7 @@ def save_curators_doc(week_id):
 
     if not doc_url:
         flash("Google Docs сілтемесін енгізіңіз.", "error")
-        return redirect(url_for("week_notes", week_id=week_id))
+        return redirect(url_for("week_import", week_id=week_id))
 
     doc_text = None
     fetch_error = None
@@ -1190,7 +1116,7 @@ def save_curators_doc(week_id):
         flash(f"Мәтін жүктелді, бірақ талдау жасау сәтсіз аяқталды: {analysis_error}", "error")
     else:
         flash("Кураторлар анализі жаңартылды.", "ok")
-    return redirect(url_for("week_notes", week_id=week_id))
+    return redirect(url_for("week_import", week_id=week_id))
 
 
 @app.route("/weeks/<int:week_id>/notes/remove", methods=["POST"])
@@ -1203,7 +1129,7 @@ def remove_curators_doc(week_id):
     )
     conn.commit()
     flash("Сілтеме алынып тасталды.", "ok")
-    return redirect(url_for("week_notes", week_id=week_id))
+    return redirect(url_for("week_import", week_id=week_id))
 
 
 @app.route("/weeks/<int:week_id>/summary/delete", methods=["POST"])
@@ -1231,7 +1157,7 @@ def update_league_thresholds(week_id):
         ),
     )
     conn.commit()
-    return redirect(url_for("week_results", week_id=week_id))
+    return redirect(url_for("week_report", week_id=week_id))
 
 
 if __name__ == "__main__":

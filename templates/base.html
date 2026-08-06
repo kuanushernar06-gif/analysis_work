@@ -55,10 +55,6 @@
           {% if not is_month_summary %}
           <a href="{{ url_for('week_import', week_id=week['id']) }}" class="{{ 'active' if active_page == 'import' else '' }}"><span class="ic">📥</span> Кестені импорттау</a>
           {% endif %}
-          <a href="{{ url_for('week_results', week_id=week['id']) }}" class="{{ 'active' if active_page == 'results' else '' }}"><span class="ic">📋</span> Нәтижелер <span class="badge">{{ result_count }}</span></a>
-          {% if not is_month_summary %}
-          <a href="{{ url_for('week_notes', week_id=week['id']) }}" class="{{ 'active' if active_page == 'notes' else '' }}"><span class="ic">📝</span> Куратор анализі <span class="badge">{{ note_count }}</span></a>
-          {% endif %}
           <a href="{{ url_for('week_report', week_id=week['id']) }}" class="{{ 'active' if active_page == 'report' else '' }}"><span class="ic">📊</span> Ортақ анализ</a>
         {% elif all_teachers is defined %}
           {% for t in all_teachers %}
