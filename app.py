@@ -475,21 +475,50 @@ def teacher_detail(stream_id, teacher_id):
     )
 
 
+def _teacher_stream_picker_data(conn):
+    """Мұғалім қосу пішініндегі 'Бағдарлама → Поток' таңдауы үшін деректер:
+    әр бағдарламаның потоктарын (СТ/АТ жұбының СТ жағы жеткілікті — кодтары
+    ортақ) сол бағдарламаның слагы бойынша топтастырып қайтарады."""
+    rows = conn.execute(
+        "SELECT s.id, s.code, p.slug AS program_slug, p.name AS program_name "
+        "FROM streams s JOIN programs p ON p.id = s.program_id "
+        "WHERE s.category = ? ORDER BY p.sort_order, p.id, s.sort_order, s.id",
+        (db.DEFAULT_CATEGORY,),
+    ).fetchall()
+    programs = conn.execute("SELECT slug, name FROM programs ORDER BY sort_order, id").fetchall()
+    streams_by_program = {}
+    for r in rows:
+        streams_by_program.setdefault(r["program_slug"], []).append({"id": r["id"], "code": r["code"]})
+    return programs, streams_by_program
+
+
 @app.route("/teachers")
 def teachers_list():
     conn = get_db()
     rows = conn.execute(
-        "SELECT t.id, t.name, "
+        "SELECT t.id, t.name, t.stream_id, "
         "array_agg(tc.curator_name) AS curator_names "
         "FROM teachers t LEFT JOIN teacher_curators tc ON tc.teacher_id = t.id "
-        "GROUP BY t.id, t.name ORDER BY t.name"
+        "GROUP BY t.id, t.name, t.stream_id ORDER BY t.name"
         if getattr(conn, "backend", None) == "postgres"
-        else "SELECT id, name FROM teachers ORDER BY name"
+        else "SELECT id, name, stream_id FROM teachers ORDER BY name"
     ).fetchall()
+
+    stream_labels = {
+        r["id"]: f"{r['program_name']} · {r['code']}"
+        for r in conn.execute(
+            "SELECT s.id, s.code, p.name AS program_name FROM streams s JOIN programs p ON p.id = s.program_id"
+        ).fetchall()
+    }
 
     if getattr(conn, "backend", None) == "postgres":
         teachers = [
-            {"id": r["id"], "name": r["name"], "curator_names": [c for c in (r["curator_names"] or []) if c]}
+            {
+                "id": r["id"],
+                "name": r["name"],
+                "curator_names": [c for c in (r["curator_names"] or []) if c],
+                "stream_label": stream_labels.get(r["stream_id"]),
+            }
             for r in rows
         ]
     else:
@@ -500,10 +529,24 @@ def teachers_list():
                 (r["id"],),
             ).fetchall()
             teachers.append(
-                {"id": r["id"], "name": r["name"], "curator_names": [c["curator_name"] for c in curator_rows]}
+                {
+                    "id": r["id"],
+                    "name": r["name"],
+                    "curator_names": [c["curator_name"] for c in curator_rows],
+                    "stream_label": stream_labels.get(r["stream_id"]),
+                }
             )
 
-    return render_template("teachers.html", teachers=teachers, all_teachers=teachers, active_teacher_id=None)
+    programs, streams_by_program = _teacher_stream_picker_data(conn)
+
+    return render_template(
+        "teachers.html",
+        teachers=teachers,
+        all_teachers=teachers,
+        active_teacher_id=None,
+        programs=programs,
+        streams_by_program=streams_by_program,
+    )
 
 
 @app.route("/teachers/<int:teacher_id>")
@@ -514,7 +557,7 @@ def teacher_home(teacher_id):
         flash("Мұғалім табылмады.", "error")
         return redirect(url_for("teachers_list"))
 
-    stream_id = find_teacher_home_stream(conn, teacher_id)
+    stream_id = teacher["stream_id"] or find_teacher_home_stream(conn, teacher_id)
     if stream_id is None:
         flash("Бұл мұғалімнің кураторларының нәтижесі әлі табылған жоқ.", "error")
         return redirect(url_for("teachers_list"))
@@ -551,9 +594,18 @@ def add_teacher():
     name = request.form.get("name", "").strip()
     curator_names_raw = request.form.get("curator_names", "")
     curator_names = [c.strip() for c in curator_names_raw.split("\n") if c.strip()]
+    stream_id_raw = request.form.get("stream_id", "").strip()
 
     if not name:
         flash("Мұғалімнің атын енгізіңіз.", "error")
+        return redirect(url_for("teachers_list"))
+
+    if not stream_id_raw.isdigit():
+        flash("Потокты таңдаңыз.", "error")
+        return redirect(url_for("teachers_list"))
+    stream_id = int(stream_id_raw)
+    if conn.execute("SELECT id FROM streams WHERE id = ?", (stream_id,)).fetchone() is None:
+        flash("Таңдалған поток табылмады.", "error")
         return redirect(url_for("teachers_list"))
 
     # Кураторлар атауы UNIQUE болғандықтан, INSERT-ті орындамас бұрын бар-жоғын
@@ -574,7 +626,7 @@ def add_teacher():
     skipped = [c for c in curator_names if c in existing]
 
     teacher_id = conn.execute(
-        "INSERT INTO teachers (name) VALUES (?) RETURNING id", (name,)
+        "INSERT INTO teachers (name, stream_id) VALUES (?, ?) RETURNING id", (name, stream_id)
     ).fetchone()["id"]
     for curator_name in to_insert:
         conn.execute(

@@ -15,12 +15,27 @@
   </div>
 </div>
 
-<div class="card">
+<div class="card" id="add-teacher-form">
   <h2>Жаңа мұғалім қосу</h2>
   <form method="post" action="{{ url_for('add_teacher') }}" class="form-grid">
     <label>
       Мұғалімнің аты-жөні
       <input type="text" name="name" required autocomplete="off" placeholder="Мысалы: Асанова Гүлнара">
+    </label>
+    <label>
+      Бағдарлама
+      <select id="add-teacher-program" required>
+        <option value="">— таңдаңыз —</option>
+        {% for p in programs %}
+        <option value="{{ p['slug'] }}">{{ p['name'] }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>
+      Поток
+      <select name="stream_id" id="add-teacher-stream" required disabled>
+        <option value="">— алдымен бағдарламаны таңдаңыз —</option>
+      </select>
     </label>
     <label class="col-span-2">
       Кураторлар (әр жолда біреу)
@@ -37,11 +52,12 @@
   {% if teachers %}
   <div class="table-scroll">
     <table class="table">
-      <thead><tr><th>Мұғалім</th><th>Кураторлары</th><th></th></tr></thead>
+      <thead><tr><th>Мұғалім</th><th>Поток</th><th>Кураторлары</th><th></th></tr></thead>
       <tbody>
         {% for t in teachers %}
         <tr>
           <td>{{ t.name }}</td>
+          <td>{{ t.stream_label or '—' }}</td>
           <td>{{ t.curator_names | join(', ') if t.curator_names else '—' }}</td>
           <td>
             <form method="post" action="{{ url_for('delete_teacher', teacher_id=t.id) }}" class="no-print" style="display:inline">
@@ -58,4 +74,30 @@
   {% endif %}
 </div>
 
+{% endblock %}
+
+{% block scripts %}
+<script>
+  (function () {
+    var streamsByProgram = {{ streams_by_program | tojson }};
+    var programSelect = document.getElementById("add-teacher-program");
+    var streamSelect = document.getElementById("add-teacher-stream");
+    if (!programSelect || !streamSelect) return;
+
+    programSelect.addEventListener("change", function () {
+      var streams = streamsByProgram[programSelect.value] || [];
+      streamSelect.innerHTML = "";
+      if (!streams.length) {
+        streamSelect.disabled = true;
+        streamSelect.appendChild(new Option("— алдымен бағдарламаны таңдаңыз —", ""));
+        return;
+      }
+      streamSelect.disabled = false;
+      streamSelect.appendChild(new Option("— таңдаңыз —", ""));
+      streams.forEach(function (s) {
+        streamSelect.appendChild(new Option(s.code, s.id));
+      });
+    });
+  })();
+</script>
 {% endblock %}

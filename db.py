@@ -406,6 +406,9 @@ def _migrate(conn):
     if not _column_exists(conn, "programs", "plan_doc_fetch_error"):
         conn.execute("ALTER TABLE programs ADD COLUMN plan_doc_fetch_error TEXT")
         conn.commit()
+    if not _column_exists(conn, "teachers", "stream_id"):
+        conn.execute("ALTER TABLE teachers ADD COLUMN stream_id INTEGER REFERENCES streams(id)")
+        conn.commit()
     if not _column_exists(conn, "streams", "category"):
         _migrate_stream_categories(conn)
     _migrate_stream_code_rename(conn)

@@ -350,10 +350,12 @@ def compute_teacher_stats(conn, stream_id):
     кестесінде қысқа (мыс. бір есім) жазылатындықтан, мұғалімге тіркелген
     толық аты-жөнмен ДӘЛ сәйкес келуін емес, ортақ сөз (аты/тегі) бар-жоғын
     тексереміз. Осы ағында бірде-бір куратор нәтижесі жоқ мұғалімдер тізімге
-    кірмейді."""
+    кірмейді. 1-айдың нәтижелері есептелмейді — сол айда рейтинг
+    кестелерінде куратор аты-жөндері дұрыс жазылмаған болатын."""
     rows = conn.execute(
         "SELECT r.curator, r.score FROM results r JOIN weeks w ON w.id = r.week_id "
-        "WHERE w.stream_id = ? AND r.score IS NOT NULL AND r.curator IS NOT NULL AND r.curator != ''",
+        "WHERE w.stream_id = ? AND r.score IS NOT NULL AND r.curator IS NOT NULL AND r.curator != '' "
+        "AND (w.month_number IS NULL OR w.month_number != 1)",
         (stream_id,),
     ).fetchall()
 
@@ -404,6 +406,8 @@ def compute_teacher_stream_detail(conn, teacher_id, category_streams):
     кураторларының нәтижелерін санат бойынша бөлек қайтарады: жалпы ортақ
     балл, апта/ай бойынша бөлініс, кураторлар арасындағы ең үздік/ең нашар,
     және осы кураторлардың оқушылары арасындағы тұрақты үздік/нашар тізімі.
+    1-айдың нәтижелері есептелмейді — сол айда рейтинг кестелерінде куратор
+    аты-жөндері дұрыс жазылмаған болатын.
 
     category_streams: {category_slug: {"stream_id":.., "max_score":..}}."""
     teacher = conn.execute("SELECT * FROM teachers WHERE id = ?", (teacher_id,)).fetchone()
@@ -429,7 +433,8 @@ def compute_teacher_stream_detail(conn, teacher_id, category_streams):
             "SELECT r.score, r.curator, r.student, w.id AS week_id, w.title, "
             "w.month_number, w.week_number "
             "FROM results r JOIN weeks w ON w.id = r.week_id "
-            "WHERE w.stream_id = ? AND r.score IS NOT NULL AND r.curator IS NOT NULL AND r.curator != ''",
+            "WHERE w.stream_id = ? AND r.score IS NOT NULL AND r.curator IS NOT NULL AND r.curator != '' "
+            "AND (w.month_number IS NULL OR w.month_number != 1)",
             (stream_id,),
         ).fetchall()
 
@@ -533,7 +538,8 @@ def find_teacher_home_stream(conn, teacher_id):
 
     rows = conn.execute(
         "SELECT w.stream_id, r.curator FROM results r JOIN weeks w ON w.id = r.week_id "
-        "WHERE r.curator IS NOT NULL AND r.curator != ''"
+        "WHERE r.curator IS NOT NULL AND r.curator != '' "
+        "AND (w.month_number IS NULL OR w.month_number != 1)"
     ).fetchall()
     for row in rows:
         if any(_teacher_name_matches(tokens, row["curator"]) for tokens in token_list):
