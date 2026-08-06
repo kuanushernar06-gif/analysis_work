@@ -402,6 +402,17 @@ def _curator_name_tokens(name):
     return {t for t in _NAME_SPLIT_RE.split((name or "").upper()) if len(t) > 1}
 
 
+def _teacher_name_matches(teacher_tokens, curator_raw):
+    """Мұғалімге тіркелген аттың кез келген сөзі осы куратордың нақты
+    атауының (рейтинг кестесіндегі парақ атауының) ІШІНДЕ жол ретінде
+    кездессе де сәйкес деп есептейді — тек екі жақ та бөлек сөзге бөлініп,
+    дәл сол сөз болуын емес. Бұл парақ атауы бөлгішсіз қосымша әріп/сан/
+    топ атымен жазылған жағдайда да (мыс. 'Нұрғазы2', 'НҰРҒАЗЫ-топ')
+    танылуы үшін керек; бас-кіші әріпке қарамайды."""
+    raw_upper = (curator_raw or "").upper()
+    return any(tok in raw_upper for tok in teacher_tokens)
+
+
 def compute_teacher_stats(conn, stream_id):
     """Осы ағынның (поток) нәтижелері бойынша, әр мұғалімнің өз
     кураторларының (teacher_curators-та тіркелген) ортақ балдарының
@@ -420,7 +431,6 @@ def compute_teacher_stats(conn, stream_id):
     for r in rows:
         curator_scores.setdefault(r["curator"].strip(), []).append(float(r["score"]))
     curator_avg = {name: sum(vals) / len(vals) for name, vals in curator_scores.items() if vals}
-    curator_avg_tokens = {name: _curator_name_tokens(name) for name in curator_avg}
 
     teacher_rows = conn.execute(
         "SELECT t.id, t.name, tc.curator_name FROM teacher_curators tc "
@@ -437,11 +447,11 @@ def compute_teacher_stats(conn, stream_id):
         used_curators = set()
         for cname in curator_names:
             cname_tokens = _curator_name_tokens(cname)
-            for actual_name, actual_tokens in curator_avg_tokens.items():
+            for actual_name, avg in curator_avg.items():
                 if actual_name in used_curators:
                     continue
-                if cname_tokens & actual_tokens:
-                    matched_scores.append(curator_avg[actual_name])
+                if _teacher_name_matches(cname_tokens, actual_name):
+                    matched_scores.append(avg)
                     used_curators.add(actual_name)
                     break
         if not matched_scores:
@@ -480,8 +490,7 @@ def compute_teacher_stream_detail(conn, teacher_id, category_streams):
     curator_token_list = [(name, _curator_name_tokens(name)) for name in curator_name_list]
 
     def matches_teacher(curator_raw):
-        raw_tokens = _curator_name_tokens(curator_raw)
-        return any(raw_tokens & tokens for _, tokens in curator_token_list)
+        return any(_teacher_name_matches(tokens, curator_raw) for _, tokens in curator_token_list)
 
     for category_slug, info in category_streams.items():
         stream_id = info["stream_id"]
