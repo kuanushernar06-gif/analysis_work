@@ -8,6 +8,7 @@
     <h1>{{ detail.teacher['name'] }}</h1>
     <p class="muted">{{ program['name'] }} · {{ stream['code'] }} — осы мұғалімнің өз кураторларының нәтижелері.</p>
   </div>
+  <a class="btn btn-outline btn-small no-print" href="{{ request.path }}">↻ Жаңарту</a>
 </div>
 
 {% for cslug, clabel in sidebar_categories %}
@@ -25,13 +26,13 @@
     {% if cat.best_curator %}
     <div class="stat-tile stat-good">
       <div class="stat-value">{{ '%.2f'|format(cat.best_curator.avg_score) }}</div>
-      <div class="stat-label">Ең үздік куратор — {{ cat.best_curator.curator }}</div>
+      <div class="stat-label">Ең үздік ортақ балл — {{ cat.best_curator.curator }}</div>
     </div>
     {% endif %}
     {% if cat.worst_curator %}
     <div class="stat-tile stat-warn">
       <div class="stat-value">{{ '%.2f'|format(cat.worst_curator.avg_score) }}</div>
-      <div class="stat-label">Ең нашар куратор — {{ cat.worst_curator.curator }}</div>
+      <div class="stat-label">Ең нашар ортақ балл — {{ cat.worst_curator.curator }}</div>
     </div>
     {% endif %}
   </div>
