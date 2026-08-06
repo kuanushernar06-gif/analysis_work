@@ -227,7 +227,7 @@ def compute_stream_stats(conn, stream_id, max_score, target_score, min_periods=S
     түспейді — бір ғана сәтті/сәтсіз апта "тұрақты" болмайды; АЙЛЫҚ ТЕСТ
     санатында айына бір рет қана алынатындықтан min_periods=1 беріледі)."""
     rows = conn.execute(
-        "SELECT r.student, r.score, r.week_id FROM results r "
+        "SELECT r.student, r.curator, r.score, r.week_id FROM results r "
         "JOIN weeks w ON w.id = r.week_id WHERE w.stream_id = ? AND r.score IS NOT NULL",
         (stream_id,),
     ).fetchall()
@@ -240,6 +240,8 @@ def compute_stream_stats(conn, stream_id, max_score, target_score, min_periods=S
         "bottom_student": None,
         "top_students": [],
         "bottom_students": [],
+        "best_curator": None,
+        "worst_curator": None,
     }
     if not rows:
         return stats
@@ -275,6 +277,21 @@ def compute_stream_stats(conn, stream_id, max_score, target_score, min_periods=S
     if student_avgs:
         stats["top_student"] = max(student_avgs, key=lambda s: s["avg_score"])
         stats["bottom_student"] = min(student_avgs, key=lambda s: s["avg_score"])
+
+    curator_scores = {}
+    for r in rows:
+        curator = (r["curator"] or "").strip()
+        if not curator:
+            continue
+        curator_scores.setdefault(curator, []).append(float(r["score"]))
+    curator_avgs = [
+        {"curator": name, "avg_score": round(sum(vals) / len(vals), 2)}
+        for name, vals in curator_scores.items()
+        if vals
+    ]
+    if curator_avgs:
+        stats["best_curator"] = max(curator_avgs, key=lambda c: c["avg_score"])
+        stats["worst_curator"] = min(curator_avgs, key=lambda c: c["avg_score"])
 
     qualifying = [s for s in student_avgs if s["weeks"] >= min_periods and s["avg_percent"] is not None]
     stats["top_students"] = sorted(

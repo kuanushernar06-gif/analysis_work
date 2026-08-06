@@ -40,6 +40,18 @@
       <div class="stat-label">Ең төменгі ортақ балл — {{ stats.bottom_student.student }}</div>
     </div>
     {% endif %}
+    {% if stats.best_curator %}
+    <div class="stat-tile stat-good">
+      <div class="stat-value">{{ '%.2f'|format(stats.best_curator.avg_score) }}</div>
+      <div class="stat-label">Ең үздік ортақ балл — {{ stats.best_curator.curator }}</div>
+    </div>
+    {% endif %}
+    {% if stats.worst_curator %}
+    <div class="stat-tile stat-warn">
+      <div class="stat-value">{{ '%.2f'|format(stats.worst_curator.avg_score) }}</div>
+      <div class="stat-label">Ең нашар ортақ балл — {{ stats.worst_curator.curator }}</div>
+    </div>
+    {% endif %}
   </div>
 </div>
 
