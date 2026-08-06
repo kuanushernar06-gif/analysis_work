@@ -700,6 +700,13 @@ input[type="number"]::-webkit-outer-spin-button {
 .table th { color: var(--text-muted); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.03em; }
 .table tbody tr:hover { background: var(--border-strong); }
 
+.teacher-actions { display: flex; align-items: center; gap: 6px; }
+.teacher-actions .teacher-delete-confirm { display: none; align-items: center; gap: 6px; margin: 0; }
+.teacher-actions .teacher-delete-confirm .muted { font-size: 0.78rem; white-space: nowrap; }
+.teacher-actions.is-confirming > a,
+.teacher-actions.is-confirming > .teacher-delete-btn { display: none; }
+.teacher-actions.is-confirming .teacher-delete-confirm { display: flex; }
+
 /* ---------- Flash ---------- */
 .flash-stack { margin-bottom: 16px; }
 .flash {

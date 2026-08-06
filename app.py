@@ -588,6 +588,94 @@ def teacher_home(teacher_id):
     )
 
 
+@app.route("/teachers/<int:teacher_id>/edit", methods=["GET", "POST"])
+def edit_teacher(teacher_id):
+    conn = get_db()
+    teacher = conn.execute("SELECT * FROM teachers WHERE id = ?", (teacher_id,)).fetchone()
+    if teacher is None:
+        flash("Мұғалім табылмады.", "error")
+        return redirect(url_for("teachers_list"))
+
+    if request.method == "POST":
+        name = request.form.get("name", "").strip()
+        curator_names_raw = request.form.get("curator_names", "")
+        curator_names = list(dict.fromkeys(c.strip() for c in curator_names_raw.split("\n") if c.strip()))
+        stream_id_raw = request.form.get("stream_id", "").strip()
+
+        if not name:
+            flash("Мұғалімнің атын енгізіңіз.", "error")
+            return redirect(url_for("edit_teacher", teacher_id=teacher_id))
+        if not stream_id_raw.isdigit():
+            flash("Потокты таңдаңыз.", "error")
+            return redirect(url_for("edit_teacher", teacher_id=teacher_id))
+        stream_id = int(stream_id_raw)
+        if conn.execute("SELECT id FROM streams WHERE id = ?", (stream_id,)).fetchone() is None:
+            flash("Таңдалған поток табылмады.", "error")
+            return redirect(url_for("edit_teacher", teacher_id=teacher_id))
+
+        # add_teacher-дегідей: UNIQUE қатесінен транзакцияны қорғау үшін
+        # алдымен осы мұғалімнің ескі кураторларын өшіріп, содан кейін ғана
+        # жаңа тізімнің басқа мұғалімге тіркелмегенін тексереміз.
+        conn.execute("DELETE FROM teacher_curators WHERE teacher_id = ?", (teacher_id,))
+        existing = set()
+        if curator_names:
+            placeholders = ",".join("?" * len(curator_names))
+            existing = {
+                row["curator_name"]
+                for row in conn.execute(
+                    f"SELECT curator_name FROM teacher_curators WHERE curator_name IN ({placeholders})",
+                    curator_names,
+                ).fetchall()
+            }
+        to_insert = [c for c in curator_names if c not in existing]
+        skipped = [c for c in curator_names if c in existing]
+
+        conn.execute("UPDATE teachers SET name = ?, stream_id = ? WHERE id = ?", (name, stream_id, teacher_id))
+        for curator_name in to_insert:
+            conn.execute(
+                "INSERT INTO teacher_curators (teacher_id, curator_name) VALUES (?, ?)",
+                (teacher_id, curator_name),
+            )
+        conn.commit()
+
+        if skipped:
+            flash(
+                "Мұғалім жаңартылды, бірақ мына кураторлар басқа мұғалімге тіркелген болғандықтан қосылмады: "
+                + ", ".join(skipped),
+                "error",
+            )
+        else:
+            flash("Мұғалім жаңартылды.", "ok")
+        return redirect(url_for("teachers_list"))
+
+    curator_rows = conn.execute(
+        "SELECT curator_name FROM teacher_curators WHERE teacher_id = ? ORDER BY curator_name", (teacher_id,)
+    ).fetchall()
+    curator_names_text = "\n".join(r["curator_name"] for r in curator_rows)
+
+    current_program_slug = None
+    if teacher["stream_id"] is not None:
+        row = conn.execute(
+            "SELECT p.slug FROM streams s JOIN programs p ON p.id = s.program_id WHERE s.id = ?",
+            (teacher["stream_id"],),
+        ).fetchone()
+        current_program_slug = row["slug"] if row else None
+
+    programs, streams_by_program = _teacher_stream_picker_data(conn)
+    all_teachers = conn.execute("SELECT id, name FROM teachers ORDER BY name").fetchall()
+
+    return render_template(
+        "teacher_edit.html",
+        teacher=teacher,
+        curator_names_text=curator_names_text,
+        programs=programs,
+        streams_by_program=streams_by_program,
+        current_program_slug=current_program_slug,
+        all_teachers=all_teachers,
+        active_teacher_id=teacher_id,
+    )
+
+
 @app.route("/teachers/add", methods=["POST"])
 def add_teacher():
     conn = get_db()

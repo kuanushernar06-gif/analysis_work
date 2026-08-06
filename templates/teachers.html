@@ -59,10 +59,16 @@
           <td>{{ t.name }}</td>
           <td>{{ t.stream_label or '—' }}</td>
           <td>{{ t.curator_names | join(', ') if t.curator_names else '—' }}</td>
-          <td>
-            <form method="post" action="{{ url_for('delete_teacher', teacher_id=t.id) }}" class="no-print" style="display:inline">
-              <button type="submit" class="btn btn-danger btn-small">Жою</button>
-            </form>
+          <td class="no-print">
+            <div class="teacher-actions">
+              <a class="btn btn-outline btn-small" href="{{ url_for('edit_teacher', teacher_id=t.id) }}">Өзгерту</a>
+              <button type="button" class="btn btn-danger btn-small teacher-delete-btn">Өшіру</button>
+              <form method="post" action="{{ url_for('delete_teacher', teacher_id=t.id) }}" class="teacher-delete-confirm">
+                <span class="muted">Шынымен өшіру керек пе?</span>
+                <button type="submit" class="btn btn-danger btn-small">Иә, өшіру</button>
+                <button type="button" class="btn btn-outline btn-small teacher-delete-cancel">Болдырмау</button>
+              </form>
+            </div>
           </td>
         </tr>
         {% endfor %}
@@ -97,6 +103,22 @@
       streams.forEach(function (s) {
         streamSelect.appendChild(new Option(s.code, s.id));
       });
+    });
+  })();
+
+  (function () {
+    var table = document.querySelector(".table");
+    if (!table) return;
+    table.addEventListener("click", function (e) {
+      var delBtn = e.target.closest(".teacher-delete-btn");
+      if (delBtn) {
+        delBtn.closest(".teacher-actions").classList.add("is-confirming");
+        return;
+      }
+      var cancelBtn = e.target.closest(".teacher-delete-cancel");
+      if (cancelBtn) {
+        cancelBtn.closest(".teacher-actions").classList.remove("is-confirming");
+      }
     });
   })();
 </script>
