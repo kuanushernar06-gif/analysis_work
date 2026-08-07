@@ -34,8 +34,9 @@ DEFAULT_PROGRAMS = [
 PROGRAM_MONTHS = {"smart": 5, "junior": 5}
 WEEKS_PER_MONTH = 4
 
-# АЙЛЫҚ ТЕСТ АНАЛИЗ санатында апта бөлінісі жоқ — әр айға бір ғана жазба.
-CATEGORY_WEEKS_PER_MONTH_OVERRIDE = {"aylyq_test": 1}
+# АЙЛЫҚ ТЕСТ АНАЛИЗ бен ДЕҢГЕЙЛІК/БАЙҚАУ ТЕСТ АНАЛИЗ санаттарында апта
+# бөлінісі жоқ — әр айға бір ғана жазба.
+CATEGORY_WEEKS_PER_MONTH_OVERRIDE = {"aylyq_test": 1, "baiqau_test": 1}
 
 # Бағдарлама бойынша бекітілген СТ максимум баллы мен мақсат баллы — бұрын
 # әр рейтинг қосқан сайын қолмен енгізілетін, енді осында бір рет бекітіліп,
@@ -43,10 +44,11 @@ CATEGORY_WEEKS_PER_MONTH_OVERRIDE = {"aylyq_test": 1}
 PROGRAM_MAX_SCORE = {"smart": 15, "junior": 10}
 PROGRAM_TARGET_SCORE = {"smart": 13, "junior": 7}
 
-# АЙЛЫҚ ТЕСТ АНАЛИЗ санатында СТ мақсаты жоқ, ал максимум балл бағдарламаға
-# қарамастан бірдей (30) — САБАҚ ТАПСЫРУ АНАЛИЗ-дан өзгеше бекітілген үлгі.
-CATEGORY_MAX_SCORE_OVERRIDE = {"aylyq_test": 30}
-CATEGORY_TARGET_SCORE_OVERRIDE = {"aylyq_test": None}
+# АЙЛЫҚ ТЕСТ АНАЛИЗ бен ДЕҢГЕЙЛІК/БАЙҚАУ ТЕСТ АНАЛИЗ санаттарында мақсат
+# балл жоқ, ал максимум балл бағдарламаға қарамастан бірдей (30) — САБАҚ
+# ТАПСЫРУ АНАЛИЗ-дан өзгеше бекітілген үлгі.
+CATEGORY_MAX_SCORE_OVERRIDE = {"aylyq_test": 30, "baiqau_test": 30}
+CATEGORY_TARGET_SCORE_OVERRIDE = {"aylyq_test": None, "baiqau_test": None}
 
 
 def score_defaults_for(program_slug, category_slug):
@@ -58,12 +60,10 @@ def score_defaults_for(program_slug, category_slug):
 
 # Талдау санаттары — әр бағдарламаның потоктары осы санаттың әрқайсысында
 # бөлек (тәуелсіз апталары/импорттары бар) жазба ретінде қайталанады.
-# (Ескерту: бұрын БАЙҚАУ ТЕСТ/LIVE САБАҚ санаттары да болған, бірақ
-# пайдаланушы сұрауы бойынша толық жойылды — бос болғандықтан деректі
-# жоғалтпады. Керек болса, осы тізімге қайта қосуға болады.)
 CATEGORIES = [
     ("sabaq_tapsyru", "САБАҚ ТАПСЫРУ АНАЛИЗ", 1),
     ("aylyq_test", "АЙЛЫҚ ТЕСТ АНАЛИЗ", 2),
+    ("baiqau_test", "ДЕҢГЕЙЛІК/БАЙҚАУ ТЕСТ АНАЛИЗ", 3),
 ]
 CATEGORY_LABELS = {slug: label for slug, label, _ in CATEGORIES}
 DEFAULT_CATEGORY = CATEGORIES[0][0]
@@ -73,6 +73,7 @@ DEFAULT_CATEGORY = CATEGORIES[0][0]
 CATEGORY_NAV_LABELS = {
     "sabaq_tapsyru": "САБАҚ ТАПСЫРУ АНАЛИЗІ",
     "aylyq_test": "АЙЛЫҚ ТЕСТ АНАЛИЗІ",
+    "baiqau_test": "ДЕҢГЕЙЛІК/БАЙҚАУ ТЕСТ АНАЛИЗІ",
 }
 SIDEBAR_CATEGORIES = [(slug, CATEGORY_NAV_LABELS[slug]) for slug, _label, _order in CATEGORIES]
 
@@ -81,6 +82,7 @@ SIDEBAR_CATEGORIES = [(slug, CATEGORY_NAV_LABELS[slug]) for slug, _label, _order
 CATEGORY_STATS_LABELS = {
     "sabaq_tapsyru": "САБАҚ ТАПСЫРУ МҰҒАЛІМДЕРІ",
     "aylyq_test": "АЙЛЫҚ ТЕСТ МҰҒАЛІМДЕРІ",
+    "baiqau_test": "ДЕҢГЕЙЛІК/БАЙҚАУ ТЕСТ МҰҒАЛІМДЕРІ",
 }
 
 # Постгрес (Neon/Vercel) диалектісі
