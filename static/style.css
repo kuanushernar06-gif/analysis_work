@@ -580,6 +580,7 @@ a.is-loading-link { opacity: 0.5; pointer-events: none; transition: opacity 0.15
 .ic-structure    { -webkit-mask-image: url('img/icons/structure.svg');    mask-image: url('img/icons/structure.svg'); }
 .ic-target       { -webkit-mask-image: url('img/icons/target.svg');       mask-image: url('img/icons/target.svg'); }
 .ic-printer      { -webkit-mask-image: url('img/icons/printer.svg');      mask-image: url('img/icons/printer.svg'); }
+.ic-psychology   { -webkit-mask-image: url('img/icons/psychology.svg');   mask-image: url('img/icons/psychology.svg'); }
 .hero-card-title { font-weight: 800; font-size: 1.05rem; letter-spacing: -0.01em; position: relative; z-index: 1; }
 .hero-card-sub { font-size: 0.85rem; color: rgba(255, 255, 255, 0.85); line-height: 1.4; margin-top: auto; position: relative; z-index: 1; }
 .hero-card-0 { background: linear-gradient(150deg, var(--card-0) 0%, var(--card-0-deep) 100%); }
