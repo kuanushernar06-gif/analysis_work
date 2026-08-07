@@ -50,12 +50,12 @@
       <nav class="site-sidebar-nav">
         {% if week %}
           {% if (not stream or stream['category'] != 'aylyq_test') and not is_month_summary %}
-          <a href="{{ url_for('week_plan', week_id=week['id']) }}" class="{{ 'active' if active_page == 'plan' else '' }}"><span class="ic">🗓️</span> Жоспар</a>
+          <a href="{{ url_for('week_plan', week_id=week['id']) }}" class="{{ 'active' if active_page == 'plan' else '' }}"><span class="ic ic-calendar"></span> Жоспар</a>
           {% endif %}
           {% if not is_month_summary %}
-          <a href="{{ url_for('week_import', week_id=week['id']) }}" class="{{ 'active' if active_page == 'import' else '' }}"><span class="ic">📥</span> Кестені импорттау</a>
+          <a href="{{ url_for('week_import', week_id=week['id']) }}" class="{{ 'active' if active_page == 'import' else '' }}"><span class="ic ic-list"></span> Кестені импорттау</a>
           {% endif %}
-          <a href="{{ url_for('week_report', week_id=week['id']) }}" class="{{ 'active' if active_page == 'report' else '' }}"><span class="ic">📊</span> Ортақ анализ</a>
+          <a href="{{ url_for('week_report', week_id=week['id']) }}" class="{{ 'active' if active_page == 'report' else '' }}"><span class="ic ic-brain"></span> Ортақ анализ</a>
         {% elif all_teachers is defined %}
           {% for t in all_teachers %}
           <a href="{{ url_for('teacher_home', teacher_id=t['id']) }}" class="{{ 'active' if active_teacher_id == t['id'] else '' }}">{{ t['name'] }}</a>

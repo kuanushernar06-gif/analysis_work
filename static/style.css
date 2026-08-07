@@ -541,7 +541,28 @@ a.is-loading-link { opacity: 0.5; pointer-events: none; transition: opacity 0.15
   pointer-events: none;
 }
 .hero-card:hover { transform: translateY(-4px); box-shadow: var(--shadow-hover); }
-.hero-card-icon { font-size: 1.8rem; line-height: 1; position: relative; z-index: 1; }
+.hero-card-icon { width: 32px; height: 32px; position: relative; z-index: 1; }
+
+/* ---------- Icon masks (Tilda Icons — Education pack) ---------- */
+.ic, .hero-card-icon {
+  display: inline-flex;
+  background-color: currentColor;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  flex-shrink: 0;
+}
+.ic { width: 16px; height: 16px; }
+
+.ic-calendar  { -webkit-mask-image: url('img/icons/calendar.svg');  mask-image: url('img/icons/calendar.svg'); }
+.ic-list      { -webkit-mask-image: url('img/icons/list.svg');      mask-image: url('img/icons/list.svg'); }
+.ic-brain     { -webkit-mask-image: url('img/icons/brain.svg');     mask-image: url('img/icons/brain.svg'); }
+.ic-flipchart { -webkit-mask-image: url('img/icons/flipchart.svg'); mask-image: url('img/icons/flipchart.svg'); }
+.ic-beaker    { -webkit-mask-image: url('img/icons/beaker.svg');    mask-image: url('img/icons/beaker.svg'); }
+.ic-teacher   { -webkit-mask-image: url('img/icons/teacher.svg');   mask-image: url('img/icons/teacher.svg'); }
 .hero-card-title { font-weight: 800; font-size: 1.05rem; letter-spacing: -0.01em; position: relative; z-index: 1; }
 .hero-card-sub { font-size: 0.85rem; color: rgba(255, 255, 255, 0.85); line-height: 1.4; margin-top: auto; position: relative; z-index: 1; }
 .hero-card-0 { background: linear-gradient(150deg, var(--card-0) 0%, var(--card-0-deep) 100%); }
