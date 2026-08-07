@@ -3,7 +3,7 @@
 {% block content %}
 
 {% set hero_meta = {
-  'sabaq_tapsyru': {'icon': 'ic-presentation', 'sub': 'Апта сайынғы СТ нәтижелері мен куратор анализі', 'variant': 'hero-card-0'},
+  'sabaq_tapsyru': {'icon': 'ic-flipchart', 'sub': 'Апта сайынғы СТ нәтижелері мен куратор анализі', 'variant': 'hero-card-0'},
   'aylyq_test': {'icon': 'ic-test', 'sub': 'Ай сайынғы АТ нәтижелерін қадағалау', 'variant': 'hero-card-1'},
 } %}
 
@@ -15,7 +15,7 @@
 
 <div class="hero-cards">
   {% for cslug, clabel in sidebar_categories %}
-  {% set meta = hero_meta.get(cslug, {'icon': 'ic-presentation', 'sub': '', 'variant': 'hero-card-2'}) %}
+  {% set meta = hero_meta.get(cslug, {'icon': 'ic-flipchart', 'sub': '', 'variant': 'hero-card-2'}) %}
   <a class="hero-card {{ meta.variant }}" href="{{ url_for('category_picker', category_slug=cslug) }}">
     <span class="hero-card-icon {{ meta.icon }}"></span>
     <div class="hero-card-title">{{ clabel }}</div>
