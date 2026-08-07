@@ -563,6 +563,8 @@ a.is-loading-link { opacity: 0.5; pointer-events: none; transition: opacity 0.15
 .ic-flipchart { -webkit-mask-image: url('img/icons/flipchart.svg'); mask-image: url('img/icons/flipchart.svg'); }
 .ic-beaker    { -webkit-mask-image: url('img/icons/beaker.svg');    mask-image: url('img/icons/beaker.svg'); }
 .ic-teacher   { -webkit-mask-image: url('img/icons/teacher.svg');   mask-image: url('img/icons/teacher.svg'); }
+.ic-book      { -webkit-mask-image: url('img/icons/book.svg');      mask-image: url('img/icons/book.svg'); }
+.ic-timer     { -webkit-mask-image: url('img/icons/timer.svg');     mask-image: url('img/icons/timer.svg'); }
 .hero-card-title { font-weight: 800; font-size: 1.05rem; letter-spacing: -0.01em; position: relative; z-index: 1; }
 .hero-card-sub { font-size: 0.85rem; color: rgba(255, 255, 255, 0.85); line-height: 1.4; margin-top: auto; position: relative; z-index: 1; }
 .hero-card-0 { background: linear-gradient(150deg, var(--card-0) 0%, var(--card-0-deep) 100%); }
