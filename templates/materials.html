@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}Материал тексеру — JUZ40{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <a class="back-link" href="{{ url_for('index') }}">← Басты бет</a>
+    <h1>Материал тексеру</h1>
+    <p class="muted">
+      Әр материал түріне жазба қосыңыз (атауы және сілтемесі), содан кейін
+      тексерілген соң «Тексерілді» деп белгілеңіз.
+    </p>
+  </div>
+</div>
+
+{% for section in sections %}
+<div class="card">
+  <h2>{{ section.label }}</h2>
+
+  <form method="post" action="{{ url_for('add_material') }}" class="form-grid">
+    <input type="hidden" name="material_type" value="{{ section.slug }}">
+    <label>
+      Атауы
+      <input type="text" name="label" required autocomplete="off" placeholder="Мысалы: 1-ай 1-апта SMART">
+    </label>
+    <label>
+      Сілтеме
+      <input type="text" name="link" autocomplete="off" placeholder="https://...">
+    </label>
+    <div class="col-span-2">
+      <button type="submit" class="btn btn-primary">Қосу</button>
+    </div>
+  </form>
+
+  {% if section.entries %}
+  <div class="table-scroll" style="margin-top:16px;">
+    <table class="table">
+      <thead><tr><th>Атауы</th><th>Сілтеме</th><th>Күйі</th><th></th></tr></thead>
+      <tbody>
+        {% for item in section.entries %}
+        <tr>
+          <td>{{ item['label'] }}</td>
+          <td>{% if item['link'] %}<a href="{{ item['link'] }}" target="_blank" rel="noopener">Ашу →</a>{% else %}—{% endif %}</td>
+          <td>
+            <span class="pill {{ 'pill-good' if item['is_checked'] else 'pill-muted' }}">
+              {{ '✓ Тексерілді' if item['is_checked'] else 'Тексерілмеді' }}
+            </span>
+          </td>
+          <td class="no-print">
+            <div class="teacher-actions">
+              <form method="post" action="{{ url_for('toggle_material', material_id=item['id']) }}" style="display:inline">
+                <button type="submit" class="btn btn-outline btn-small">
+                  {{ 'Тексерілмеді деп белгілеу' if item['is_checked'] else 'Тексерілді деп белгілеу' }}
+                </button>
+              </form>
+              <button type="button" class="btn btn-danger btn-small teacher-delete-btn">Өшіру</button>
+              <form method="post" action="{{ url_for('delete_material', material_id=item['id']) }}" class="teacher-delete-confirm">
+                <span class="muted">Шынымен өшіру керек пе?</span>
+                <button type="submit" class="btn btn-danger btn-small">Иә, өшіру</button>
+                <button type="button" class="btn btn-outline btn-small teacher-delete-cancel">Болдырмау</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="muted" style="margin-top:12px;">Әзірге жазба қосылмаған.</p>
+  {% endif %}
+</div>
+{% endfor %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+  (function () {
+    var container = document.querySelector('.site-main');
+    if (!container) return;
+    container.addEventListener('click', function (e) {
+      var delBtn = e.target.closest('.teacher-delete-btn');
+      if (delBtn) {
+        delBtn.closest('.teacher-actions').classList.add('is-confirming');
+        return;
+      }
+      var cancelBtn = e.target.closest('.teacher-delete-cancel');
+      if (cancelBtn) {
+        cancelBtn.closest('.teacher-actions').classList.remove('is-confirming');
+      }
+    });
+  })();
+</script>
+{% endblock %}

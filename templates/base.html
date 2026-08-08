@@ -35,8 +35,8 @@
   {% block header %}{% endblock %}
 
   {% block body %}
-  <div class="site-shell{% if request.endpoint in ('index', 'category_picker', 'program_detail', 'stream_detail') %} no-sidebar{% endif %}">
-    {% if request.endpoint not in ('index', 'category_picker', 'program_detail', 'stream_detail') %}
+  <div class="site-shell{% if request.endpoint in ('index', 'category_picker', 'program_detail', 'stream_detail', 'materials_list') %} no-sidebar{% endif %}">
+    {% if request.endpoint not in ('index', 'category_picker', 'program_detail', 'stream_detail', 'materials_list') %}
     <aside class="site-sidebar no-print">
       <button type="button" class="sidebar-pin-toggle no-print" id="sidebar-pin-toggle" aria-pressed="false" aria-label="Бүйірлік мәзірді ашық қалдыру">
         <span class="sidebar-pin-arrow" aria-hidden="true"></span>

@@ -85,6 +85,18 @@ CATEGORY_STATS_LABELS = {
     "baiqau_test": "ДЕҢГЕЙЛІК/БАЙҚАУ ТЕСТ МҰҒАЛІМДЕРІ",
 }
 
+# МАТЕРИАЛ ТЕКСЕРУ — балл/апта/ай құрылымына тәуелсіз, жай тізім түріндегі
+# бөлім: әр материал түрінің өз жазбалары (атауы, сілтемесі, тексерілді/
+# тексерілмеді белгісі) болады.
+MATERIAL_TYPES = [
+    ("uy_zhumysy", "ҮЙ ЖҰМЫСЫ"),
+    ("quiz_test", "QUIZ ТЕСТ"),
+    ("baza", "БАЗА"),
+    ("sabaq_tapsyru_material", "САБАҚ ТАПСЫРУ"),
+    ("taqyryptyq_test", "ТАҚЫРЫПТЫҚ ТЕСТ"),
+]
+MATERIAL_TYPE_LABELS = {slug: label for slug, label in MATERIAL_TYPES}
+
 # Постгрес (Neon/Vercel) диалектісі
 SCHEMA_PG = """
 CREATE TABLE IF NOT EXISTS programs (
@@ -178,11 +190,21 @@ CREATE TABLE IF NOT EXISTS teacher_curators (
     UNIQUE(curator_name)
 );
 
+CREATE TABLE IF NOT EXISTS material_checks (
+    id SERIAL PRIMARY KEY,
+    material_type TEXT NOT NULL,
+    label TEXT NOT NULL,
+    link TEXT,
+    is_checked BOOLEAN NOT NULL DEFAULT false,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
 CREATE INDEX IF NOT EXISTS idx_streams_program ON streams(program_id);
 CREATE INDEX IF NOT EXISTS idx_results_week ON results(week_id);
 CREATE INDEX IF NOT EXISTS idx_notes_week ON curator_notes(week_id);
 CREATE INDEX IF NOT EXISTS idx_imports_week ON imports(week_id);
 CREATE INDEX IF NOT EXISTS idx_teacher_curators_teacher ON teacher_curators(teacher_id);
+CREATE INDEX IF NOT EXISTS idx_material_checks_type ON material_checks(material_type);
 """
 
 # SQLite диалектісі — DATABASE_URL қойылмаған кезде локальді дамыту үшін
@@ -280,11 +302,21 @@ CREATE TABLE IF NOT EXISTS teacher_curators (
     UNIQUE(curator_name)
 );
 
+CREATE TABLE IF NOT EXISTS material_checks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    material_type TEXT NOT NULL,
+    label TEXT NOT NULL,
+    link TEXT,
+    is_checked INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE INDEX IF NOT EXISTS idx_streams_program ON streams(program_id);
 CREATE INDEX IF NOT EXISTS idx_results_week ON results(week_id);
 CREATE INDEX IF NOT EXISTS idx_notes_week ON curator_notes(week_id);
 CREATE INDEX IF NOT EXISTS idx_imports_week ON imports(week_id);
 CREATE INDEX IF NOT EXISTS idx_teacher_curators_teacher ON teacher_curators(teacher_id);
+CREATE INDEX IF NOT EXISTS idx_material_checks_type ON material_checks(material_type);
 """
 
 

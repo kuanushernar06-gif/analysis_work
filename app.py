@@ -789,6 +789,70 @@ def delete_teacher(teacher_id):
     return redirect(url_for("teachers_list"))
 
 
+@app.route("/materials")
+def materials_list():
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT * FROM material_checks ORDER BY material_type, created_at, id"
+    ).fetchall()
+
+    by_type = {slug: [] for slug, _label in db.MATERIAL_TYPES}
+    for r in rows:
+        by_type.setdefault(r["material_type"], []).append(r)
+
+    sections = [
+        {"slug": slug, "label": label, "entries": by_type.get(slug, [])}
+        for slug, label in db.MATERIAL_TYPES
+    ]
+
+    return render_template("materials.html", sections=sections)
+
+
+@app.route("/materials/add", methods=["POST"])
+def add_material():
+    conn = get_db()
+    material_type = request.form.get("material_type", "").strip()
+    label = request.form.get("label", "").strip()
+    link = request.form.get("link", "").strip()
+
+    if material_type not in db.MATERIAL_TYPE_LABELS:
+        flash("Материал түрін таңдаңыз.", "error")
+        return redirect(url_for("materials_list"))
+    if not label:
+        flash("Жазба атауын енгізіңіз.", "error")
+        return redirect(url_for("materials_list"))
+
+    conn.execute(
+        "INSERT INTO material_checks (material_type, label, link) VALUES (?, ?, ?)",
+        (material_type, label, link or None),
+    )
+    conn.commit()
+    flash("Жазба қосылды.", "ok")
+    return redirect(url_for("materials_list"))
+
+
+@app.route("/materials/<int:material_id>/toggle", methods=["POST"])
+def toggle_material(material_id):
+    conn = get_db()
+    row = conn.execute("SELECT is_checked FROM material_checks WHERE id = ?", (material_id,)).fetchone()
+    if row is not None:
+        conn.execute(
+            "UPDATE material_checks SET is_checked = ? WHERE id = ?",
+            (not row["is_checked"], material_id),
+        )
+        conn.commit()
+    return redirect(url_for("materials_list"))
+
+
+@app.route("/materials/<int:material_id>/delete", methods=["POST"])
+def delete_material(material_id):
+    conn = get_db()
+    conn.execute("DELETE FROM material_checks WHERE id = ?", (material_id,))
+    conn.commit()
+    flash("Жазба жойылды.", "ok")
+    return redirect(url_for("materials_list"))
+
+
 @app.route("/weeks/<int:week_id>/delete", methods=["POST"])
 def delete_week(week_id):
     conn = get_db()

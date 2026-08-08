@@ -29,10 +29,12 @@
   --card-1: #2a5fb0;
   --card-2: #1f8f5c;
   --card-3: #7a2fae;
+  --card-4: #1a8a94;
   --card-0-deep: #6e1a00;
   --card-1-deep: #163c7a;
   --card-2-deep: #0f5c3a;
   --card-3-deep: #4a1c6e;
+  --card-4-deep: #0e565d;
 
   --sidebar-bg: #ffa080;
   --sidebar-text: #ffffff;
@@ -82,10 +84,12 @@
     --card-1: #3672cc;
     --card-2: #239966;
     --card-3: #8f3fc2;
+    --card-4: #24a4af;
     --card-0-deep: #b83e12;
     --card-1-deep: #1f4a8f;
     --card-2-deep: #146b46;
     --card-3-deep: #5f1f8a;
+    --card-4-deep: #146168;
 
     --sidebar-bg: #ffa080;
     --sidebar-text: #2b0f04;
@@ -130,10 +134,12 @@
   --card-1: #3672cc;
   --card-2: #239966;
   --card-3: #8f3fc2;
+  --card-4: #24a4af;
   --card-0-deep: #b83e12;
   --card-1-deep: #1f4a8f;
   --card-2-deep: #146b46;
   --card-3-deep: #5f1f8a;
+  --card-4-deep: #146168;
 
   --sidebar-bg: #ffa080;
   --sidebar-text: #ffffff;
@@ -581,12 +587,14 @@ a.is-loading-link { opacity: 0.5; pointer-events: none; transition: opacity 0.15
 .ic-target       { -webkit-mask-image: url('img/icons/target.svg');       mask-image: url('img/icons/target.svg'); }
 .ic-printer      { -webkit-mask-image: url('img/icons/printer.svg');      mask-image: url('img/icons/printer.svg'); }
 .ic-psychology   { -webkit-mask-image: url('img/icons/psychology.svg');   mask-image: url('img/icons/psychology.svg'); }
+.ic-magnifier    { -webkit-mask-image: url('img/icons/magnifier.svg');    mask-image: url('img/icons/magnifier.svg'); }
 .hero-card-title { font-weight: 800; font-size: 1.05rem; letter-spacing: -0.01em; position: relative; z-index: 1; }
 .hero-card-sub { font-size: 0.85rem; color: rgba(255, 255, 255, 0.85); line-height: 1.4; margin-top: auto; position: relative; z-index: 1; }
 .hero-card-0 { background: linear-gradient(150deg, var(--card-0) 0%, var(--card-0-deep) 100%); }
 .hero-card-1 { background: linear-gradient(150deg, var(--card-1) 0%, var(--card-1-deep) 100%); }
 .hero-card-2 { background: linear-gradient(150deg, var(--card-2) 0%, var(--card-2-deep) 100%); }
 .hero-card-3 { background: linear-gradient(150deg, var(--card-3) 0%, var(--card-3-deep) 100%); }
+.hero-card-4 { background: linear-gradient(150deg, var(--card-4) 0%, var(--card-4-deep) 100%); }
 
 /* ---------- Pills (status badges) ---------- */
 .pill-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
