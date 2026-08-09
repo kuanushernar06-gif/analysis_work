@@ -94,6 +94,7 @@ MATERIAL_TYPES = [
     ("baza", "БАЗА"),
     ("sabaq_tapsyru_material", "САБАҚ ТАПСЫРУ"),
     ("taqyryptyq_test", "ТАҚЫРЫПТЫҚ ТЕСТ"),
+    ("kitaptar", "КІТАПТАР"),
 ]
 MATERIAL_TYPE_LABELS = {slug: label for slug, label in MATERIAL_TYPES}
 

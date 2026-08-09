@@ -32,7 +32,6 @@ from curator_analysis import generate_curator_analysis, build_summary_text, merg
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "juz40-local-dev-secret")
 app.permanent_session_lifetime = timedelta(days=30)
-app.config["MAX_CONTENT_LENGTH"] = 4 * 1024 * 1024  # материалға тіркелетін файл шегі — 4МБ
 
 ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL")
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD")
@@ -821,7 +820,6 @@ def add_material():
     material_type = request.form.get("material_type", "").strip()
     label = request.form.get("label", "").strip()
     link = request.form.get("link", "").strip()
-    upload = request.files.get("file")
 
     if material_type not in db.MATERIAL_TYPE_LABELS:
         flash("Материал түрін таңдаңыз.", "error")
@@ -830,42 +828,13 @@ def add_material():
         flash("Жазба атауын енгізіңіз.", "error")
         return redirect(url_for("materials_list"))
 
-    file_data = file_name = file_mimetype = None
-    if upload is not None and upload.filename:
-        file_data = upload.read()
-        file_name = upload.filename
-        file_mimetype = upload.mimetype
-
     conn.execute(
-        "INSERT INTO material_checks (material_type, label, link, file_data, file_name, file_mimetype) "
-        "VALUES (?, ?, ?, ?, ?, ?)",
-        (material_type, label, link or None, file_data, file_name, file_mimetype),
+        "INSERT INTO material_checks (material_type, label, link) VALUES (?, ?, ?)",
+        (material_type, label, link or None),
     )
     conn.commit()
     flash("Жазба қосылды.", "ok")
     return redirect(url_for("materials_list"))
-
-
-@app.route("/materials/<int:material_id>/file")
-def download_material_file(material_id):
-    conn = get_db()
-    row = conn.execute(
-        "SELECT file_data, file_name, file_mimetype FROM material_checks WHERE id = ?", (material_id,)
-    ).fetchone()
-    if row is None or not row["file_data"]:
-        flash("Файл табылмады.", "error")
-        return redirect(url_for("materials_list"))
-
-    file_data = row["file_data"]
-    if not isinstance(file_data, (bytes, bytearray)):
-        file_data = bytes(file_data)
-
-    file_name = row["file_name"] or "file"
-    return Response(
-        file_data,
-        mimetype=row["file_mimetype"] or "application/octet-stream",
-        headers={"Content-Disposition": f'inline; filename="{file_name}"'},
-    )
 
 
 @app.route("/materials/<int:material_id>/toggle", methods=["POST"])

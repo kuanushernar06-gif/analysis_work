@@ -7,8 +7,8 @@
     <a class="back-link" href="{{ url_for('index') }}">← Басты бет</a>
     <h1>Материал тексеру</h1>
     <p class="muted">
-      Әр материал түріне жазба қосыңыз (атауы, сілтемесі және/немесе файл/
-      сурет), содан кейін тексерілген соң «Тексерілді» деп белгілеңіз.
+      Әр материал түріне жазба қосыңыз (атауы және Google Docs/Drive сілтемесі),
+      содан кейін тексерілген соң «Тексерілді» деп белгілеңіз.
     </p>
   </div>
 </div>
@@ -17,27 +17,15 @@
 <div class="card">
   <h2>{{ section.label }}</h2>
 
-  <form method="post" action="{{ url_for('add_material') }}" enctype="multipart/form-data" class="form-grid">
+  <form method="post" action="{{ url_for('add_material') }}" class="form-grid">
     <input type="hidden" name="material_type" value="{{ section.slug }}">
     <label>
       Атауы
       <input type="text" name="label" required autocomplete="off" placeholder="Мысалы: 1-ай 1-апта SMART">
     </label>
     <label>
-      Сілтеме
+      Сілтеме (Google Docs/Drive)
       <input type="text" name="link" autocomplete="off" placeholder="https://...">
-    </label>
-    <label class="col-span-2">
-      Файл немесе сурет (міндетті емес, макс. 4МБ)
-      <div class="file-dropzone" data-file-dropzone>
-        <span class="ic ic-upload file-dropzone-icon"></span>
-        <span class="file-dropzone-text" data-file-dropzone-text>
-          Файлды осы аймаққа апарыңыз немесе
-          <span class="file-dropzone-link">жүктеу үшін басыңыз</span>
-        </span>
-        <span class="file-dropzone-filename" data-file-dropzone-filename hidden></span>
-        <input type="file" name="file" data-file-dropzone-input>
-      </div>
     </label>
     <div class="col-span-2">
       <button type="submit" class="btn btn-primary">Қосу</button>
@@ -47,13 +35,12 @@
   {% if section.entries %}
   <div class="table-scroll" style="margin-top:16px;">
     <table class="table">
-      <thead><tr><th>Атауы</th><th>Сілтеме</th><th>Файл</th><th>Күйі</th><th></th></tr></thead>
+      <thead><tr><th>Атауы</th><th>Сілтеме</th><th>Күйі</th><th></th></tr></thead>
       <tbody>
         {% for item in section.entries %}
         <tr>
           <td>{{ item['label'] }}</td>
           <td>{% if item['link'] %}<a href="{{ item['link'] }}" target="_blank" rel="noopener">Ашу →</a>{% else %}—{% endif %}</td>
-          <td>{% if item['file_name'] %}<a href="{{ url_for('download_material_file', material_id=item['id']) }}" target="_blank" rel="noopener">{{ item['file_name'] }}</a>{% else %}—{% endif %}</td>
           <td>
             <span class="pill {{ 'pill-good' if item['is_checked'] else 'pill-muted' }}">
               {{ '✓ Тексерілді' if item['is_checked'] else 'Тексерілмеді' }}
@@ -102,44 +89,6 @@
       if (cancelBtn) {
         cancelBtn.closest('.teacher-actions').classList.remove('is-confirming');
       }
-    });
-  })();
-
-  (function () {
-    document.querySelectorAll('[data-file-dropzone]').forEach(function (zone) {
-      var input = zone.querySelector('[data-file-dropzone-input]');
-      var text = zone.querySelector('[data-file-dropzone-text]');
-      var filename = zone.querySelector('[data-file-dropzone-filename]');
-      if (!input) return;
-
-      function showFile() {
-        if (input.files && input.files.length) {
-          filename.textContent = input.files[0].name;
-          filename.hidden = false;
-          text.hidden = true;
-        } else {
-          filename.hidden = true;
-          text.hidden = false;
-        }
-      }
-
-      input.addEventListener('change', showFile);
-      ['dragenter', 'dragover'].forEach(function (evt) {
-        zone.addEventListener(evt, function (e) {
-          e.preventDefault();
-          zone.classList.add('is-dragover');
-        });
-      });
-      ['dragleave', 'drop'].forEach(function (evt) {
-        zone.addEventListener(evt, function () {
-          zone.classList.remove('is-dragover');
-        });
-      });
-      zone.addEventListener('drop', function () {
-        // input[type=file] өзі drop event-ті натив түрде қабылдайды
-        // (ол toлық аймақты жауып тұр) — тек файл атауын жаңарту қалады.
-        setTimeout(showFile, 0);
-      });
     });
   })();
 </script>

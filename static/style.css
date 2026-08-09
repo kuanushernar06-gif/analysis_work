@@ -583,7 +583,6 @@ a.is-loading-link { opacity: 0.5; pointer-events: none; transition: opacity 0.15
 .ic-printer      { -webkit-mask-image: url('img/icons/printer.svg');      mask-image: url('img/icons/printer.svg'); }
 .ic-psychology   { -webkit-mask-image: url('img/icons/psychology.svg');   mask-image: url('img/icons/psychology.svg'); }
 .ic-magnifier    { -webkit-mask-image: url('img/icons/magnifier.svg');    mask-image: url('img/icons/magnifier.svg'); }
-.ic-upload       { -webkit-mask-image: url('img/icons/upload.svg');       mask-image: url('img/icons/upload.svg'); }
 .hero-card-title { font-weight: 800; font-size: 1.05rem; letter-spacing: -0.01em; position: relative; z-index: 1; }
 .hero-card-sub { font-size: 0.85rem; color: rgba(255, 255, 255, 0.85); line-height: 1.4; margin-top: auto; position: relative; z-index: 1; }
 .hero-card-0 { background: linear-gradient(150deg, var(--card-0) 0%, var(--card-0-deep) 100%); }
@@ -791,53 +790,6 @@ input[type="number"]::-webkit-inner-spin-button,
 input[type="number"]::-webkit-outer-spin-button {
   -webkit-appearance: none;
   margin: 0;
-}
-
-/* ---------- Файл жүктеу аймағы (drag & drop dropzone) ---------- */
-.file-dropzone {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 26px 16px;
-  border: 2px dashed var(--border-strong);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  text-align: center;
-  cursor: pointer;
-  transition: border-color .15s ease, background-color .15s ease;
-}
-.file-dropzone:hover { border-color: var(--accent); }
-.file-dropzone.is-dragover { border-color: var(--accent); background: var(--accent-soft); }
-.file-dropzone input[type="file"] {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  opacity: 0;
-  cursor: pointer;
-  border: none;
-  padding: 0;
-}
-.file-dropzone-icon {
-  width: 30px;
-  height: 30px;
-  background-color: var(--text-muted);
-}
-.file-dropzone.is-dragover .file-dropzone-icon,
-.file-dropzone:hover .file-dropzone-icon { background-color: var(--accent); }
-.file-dropzone-text { font-size: 0.85rem; color: var(--text-secondary); line-height: 1.4; }
-.file-dropzone-link { color: var(--accent); font-weight: 700; }
-.file-dropzone-filename {
-  font-size: 0.85rem;
-  font-weight: 700;
-  color: var(--text-primary);
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .btn {
