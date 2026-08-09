@@ -46,7 +46,16 @@ SCHEMA_HINT = """{
   "prevention_measures_taken": "(кураторлар мәтінінде СТ алдында алдын алу шаралары
     (қосымша сабақ, қайталау, мини-тест, т.б.) жасалғаны туралы айтылған ба, соған
     қысқа жауап: 'Иә' немесе 'Жоқ' немесе 'Жартылай', содан кейін бір қысқа сөйлеммен
-    түсініктеме. Мәтінде дерек болмаса 'Белгісіз' деп жаз)"
+    түсініктеме. Мәтінде дерек болмаса 'Белгісіз' деп жаз. Нақты аты-жөндерді бұл
+    жерге жазба — олар төмендегі missing_analysis_curators және
+    no_prevention_curators тізімдеріне барады)",
+  "missing_analysis_curators": ["Аты Жөні", ...] (осы бөлікте мүлдем жазба/есеп
+    қалдырмаған немесе жазбасы толық бос кураторлардың дәл сол құжаттағыдай
+    аты-жөні; ондай куратор болмаса бос тізім),
+  "no_prevention_curators": ["Аты Жөні", ...] (жазба жазған, бірақ алдын алу
+    шаралары (қосымша сабақ, қайталау, мини-тест, т.б.) туралы мүлдем ештеңе
+    айтпаған кураторлардың дәл сол құжаттағыдай аты-жөні; ондай куратор болмаса
+    бос тізім)
 }"""
 
 PROMPT_TEMPLATE = """Сен білім беру ұйымының деректер аналитигісің. Төменде әр түрлі
@@ -61,6 +70,16 @@ PROMPT_TEMPLATE = """Сен білім беру ұйымының деректе�
 тақырыпты немесе себепті атады). Мәтінде сан ретінде шығаруға жеткілікті
 дерек болмаса, тиісті өрісті null немесе бос тізім қалдыр — ойдан сан
 құрастырма.
+
+Әр куратордың жазбасын жеке-жеке тексер: егер куратордың атынан кейін жазба
+мүлдем бос болса (немесе "жоқ", "-" секілді мазмұнсыз белгі ғана болса), оның
+дәл сол құжаттағы аты-жөнін missing_analysis_curators тізіміне қос. Егер
+куратор жазба жазған болса, бірақ онда СТ алдындағы алдын алу шарасы (қосымша
+сабақ, қайталау, мини-тест, СЖ, чек-лист, т.б.) туралы бірде-бір сөз айтылмаса,
+оның аты-жөнін no_prevention_curators тізіміне қос. Бір куратор екі тізімде
+бірдей болмайды — толығымен бос жазба болса, тек missing_analysis_curators-қа
+ғана жаз. Аты-жөндерді ойдан шығарма — тек құжатта нақты кездескендерін ғана
+жаз.
 
 JSON схемасы:
 {schema}
@@ -130,6 +149,11 @@ def _join_names(items, limit=5):
     return "; ".join(joined)
 
 
+def _join_plain_names(names):
+    names = [n for n in (names or []) if n]
+    return "; ".join(names) if names else "Жоқ"
+
+
 def build_summary_text(report, analysis: dict, label: str = "СТ") -> str:
     """Апта қорытындысын қолданушы белгілеген нақты үлгі бойынша құрастырады:
     сандық бөлігі есептелген report-тан (сенімді), сапалы бөлігі AI талдауынан алынады.
@@ -147,6 +171,8 @@ def build_summary_text(report, analysis: dict, label: str = "СТ") -> str:
         "",
         f"Оқушылар көп қателескен сұрақтар: {_join_names(analysis.get('top_error_topics'))}",
         f"Алдын алу шаралары жасалды ма: {analysis.get('prevention_measures_taken') or 'Белгісіз'}",
+        f"Анализ толтырмаған кураторлар: {_join_plain_names(analysis.get('missing_analysis_curators'))}",
+        f"Алдын алу шаралары жасалмаған кураторлар: {_join_plain_names(analysis.get('no_prevention_curators'))}",
         f"Оқушылар неге төмен/жоғары нәтиже көрсетті: {_join_names(analysis.get('low_result_reasons'))}",
         f"Кураторлар тарапынан жіберген қателіктер: {_join_names(analysis.get('curator_mistakes'))}",
         f"Алдын алу шаралары: {_join_names(analysis.get('top_solutions'), limit=10)}",
@@ -305,11 +331,15 @@ def merge_analyses(chunk_analyses):
             [(w, a.get(field)) for w, a in zip(weights, chunk_analyses)], key_field, limit
         )
 
-    priorities = []
-    for a in chunk_analyses:
-        for p in a.get("priority_directions") or []:
-            if p not in priorities:
-                priorities.append(p)
+    def merge_unique(field):
+        seen = []
+        for a in chunk_analyses:
+            for name in a.get(field) or []:
+                if name not in seen:
+                    seen.append(name)
+        return seen
+
+    priorities = merge_unique("priority_directions")
 
     return {
         "curator_count": total_curators,
@@ -324,6 +354,8 @@ def merge_analyses(chunk_analyses):
             (a.get("prevention_measures_taken") for a in chunk_analyses if a.get("prevention_measures_taken")),
             "Белгісіз",
         ),
+        "missing_analysis_curators": merge_unique("missing_analysis_curators"),
+        "no_prevention_curators": merge_unique("no_prevention_curators"),
     }
 
 
