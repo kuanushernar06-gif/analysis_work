@@ -201,6 +201,11 @@ def _call_claude(prompt, api_key):
         {
             "model": MODEL,
             "max_tokens": MAX_COMPLETION_TOKENS,
+            # Бұл — құрылымды JSON шығаратын деректерді алу тапсырмасы, терең
+            # көп қадамды пайымдау қажет емес. "Ойлау" (thinking) режимі
+            # әдепкі бойынша қосулы келеді де, жауапты айтарлықтай баяулатады
+            # — сол себепті оны өшіріп, жылдам әрі тікелей жауап аламыз.
+            "thinking": {"type": "disabled"},
             "messages": [{"role": "user", "content": prompt}],
         }
     ).encode("utf-8")
