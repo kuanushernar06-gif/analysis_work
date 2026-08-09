@@ -29,7 +29,15 @@
     </label>
     <label class="col-span-2">
       Файл немесе сурет (міндетті емес, макс. 4МБ)
-      <input type="file" name="file">
+      <div class="file-dropzone" data-file-dropzone>
+        <span class="ic ic-upload file-dropzone-icon"></span>
+        <span class="file-dropzone-text" data-file-dropzone-text>
+          Файлды осы аймаққа апарыңыз немесе
+          <span class="file-dropzone-link">жүктеу үшін басыңыз</span>
+        </span>
+        <span class="file-dropzone-filename" data-file-dropzone-filename hidden></span>
+        <input type="file" name="file" data-file-dropzone-input>
+      </div>
     </label>
     <div class="col-span-2">
       <button type="submit" class="btn btn-primary">Қосу</button>
@@ -94,6 +102,44 @@
       if (cancelBtn) {
         cancelBtn.closest('.teacher-actions').classList.remove('is-confirming');
       }
+    });
+  })();
+
+  (function () {
+    document.querySelectorAll('[data-file-dropzone]').forEach(function (zone) {
+      var input = zone.querySelector('[data-file-dropzone-input]');
+      var text = zone.querySelector('[data-file-dropzone-text]');
+      var filename = zone.querySelector('[data-file-dropzone-filename]');
+      if (!input) return;
+
+      function showFile() {
+        if (input.files && input.files.length) {
+          filename.textContent = input.files[0].name;
+          filename.hidden = false;
+          text.hidden = true;
+        } else {
+          filename.hidden = true;
+          text.hidden = false;
+        }
+      }
+
+      input.addEventListener('change', showFile);
+      ['dragenter', 'dragover'].forEach(function (evt) {
+        zone.addEventListener(evt, function (e) {
+          e.preventDefault();
+          zone.classList.add('is-dragover');
+        });
+      });
+      ['dragleave', 'drop'].forEach(function (evt) {
+        zone.addEventListener(evt, function () {
+          zone.classList.remove('is-dragover');
+        });
+      });
+      zone.addEventListener('drop', function () {
+        // input[type=file] өзі drop event-ті натив түрде қабылдайды
+        // (ол toлық аймақты жауып тұр) — тек файл атауын жаңарту қалады.
+        setTimeout(showFile, 0);
+      });
     });
   })();
 </script>
