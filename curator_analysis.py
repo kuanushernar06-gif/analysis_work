@@ -1,5 +1,5 @@
-"""Кураторлардың бос мәтіндегі жазбаларын Google Gemini API арқылы құрылымды
-статистикалық анализге айналдыру (тегін тариф).
+"""Кураторлардың бос мәтіндегі жазбаларын Anthropic Claude API арқылы
+құрылымды статистикалық анализге айналдыру.
 
 Құжат өте үлкен болса (мыс., жүздеген куратор), бір сұранысқа сыймай қалу
 қаупіне қарсы мәтін бірнеше бөлікке (chunk) бөлініп, әрқайсысы бөлек
@@ -16,19 +16,19 @@ import urllib.request
 from gdocs import count_curator_entries
 from netfetch import SSL_CONTEXT, USER_AGENT
 
-MODEL = "gemini-flash-latest"
-API_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent"
+MODEL = "claude-sonnet-5"
+API_URL = "https://api.anthropic.com/v1/messages"
+ANTHROPIC_VERSION = "2023-06-01"
 REQUEST_TIMEOUT = 120
 
-# Gemini-дің "ойлау" (thinking) режимі жауап жазбас бұрын көрінбейтін
-# токендерді пайдаланады (maxOutputTokens бюджетінің ішінде) — сол себепті
-# бюджет тым аз болса, соңғы JSON жауап ортасынан үзіліп қалуы мүмкін
-# (invalid JSON). Оны болдырмау үшін бюджетті жеткілікті үлкен қойдық.
+# Claude-тың жауабы да (пікірлеу/ойлау кезеңі қосылса) maxTokens бюджетінің
+# ішінде саналады — бюджет тым аз болса, соңғы JSON жауап ортасынан үзіліп
+# қалуы мүмкін (invalid JSON). Оны болдырмау үшін бюджетті жеткілікті үлкен
+# қойдық (осы шамада стриминг қажет емес, тікелей сұраныс жеткілікті).
 MAX_COMPLETION_TOKENS = 12_000
-# Gemini-дің контекст терезесі өте үлкен болғандықтан (Groq-тың тар TPM
-# шегіне қарағанда), көбіне бүкіл құжат бір ғана сұранысқа сияды. Дегенмен
-# өте үлкен құжаттарда (мыс., 150+ куратор) қауіпсіздік үшін chunk-қа бөлу
-# механизмі сақталған — тек әдепкі шегі әлдеқайда жоғары қойылған.
+# Claude-тың контекст терезесі өте үлкен болғандықтан, көбіне бүкіл құжат
+# бір ғана сұранысқа сияды. Дегенмен өте үлкен құжаттарда (мыс., 150+
+# куратор) қауіпсіздік үшін chunk-қа бөлу механизмі сақталған.
 MAX_CHUNK_CHARS = 60_000
 MAX_STATS_SUBJECTS = 6
 MAX_RETRIES = 6
@@ -184,34 +184,37 @@ def _split_into_chunks(doc_text, max_chars):
     return safe_chunks or [doc_text[:max_chars]]
 
 
-def _extract_retry_delay(error_body_text):
-    """Gemini 429 қатесінің денесінен RetryInfo.retryDelay мәнін алады
-    (мыс., '"retryDelay": "20s"'), болмаса None қайтарады."""
-    match = re.search(r'"retryDelay"\s*:\s*"(\d+(?:\.\d+)?)s"', error_body_text)
-    if match:
+def _extract_retry_delay(headers):
+    """Anthropic 429/529 қатесінің 'retry-after' тақырыбынан секунд санын
+    алады, болмаса None қайтарады."""
+    value = headers.get("retry-after") if headers else None
+    if value:
         try:
-            return float(match.group(1))
+            return float(value)
         except ValueError:
             return None
     return None
 
 
-def _call_gemini(prompt, api_key):
+def _call_claude(prompt, api_key):
     payload = json.dumps(
         {
-            "contents": [{"parts": [{"text": prompt}]}],
-            "generationConfig": {
-                "responseMimeType": "application/json",
-                "maxOutputTokens": MAX_COMPLETION_TOKENS,
-            },
+            "model": MODEL,
+            "max_tokens": MAX_COMPLETION_TOKENS,
+            "messages": [{"role": "user", "content": prompt}],
         }
     ).encode("utf-8")
 
     req = urllib.request.Request(
-        f"{API_URL}?key={api_key}",
+        API_URL,
         data=payload,
         method="POST",
-        headers={"content-type": "application/json", "user-agent": USER_AGENT},
+        headers={
+            "content-type": "application/json",
+            "x-api-key": api_key,
+            "anthropic-version": ANTHROPIC_VERSION,
+            "user-agent": USER_AGENT,
+        },
     )
 
     for attempt in range(MAX_RETRIES):
@@ -221,33 +224,36 @@ def _call_gemini(prompt, api_key):
             break
         except urllib.error.HTTPError as e:
             detail = e.read().decode("utf-8", errors="replace")
-            if e.code in (429, 503) and attempt < MAX_RETRIES - 1:
-                wait_seconds = _extract_retry_delay(detail) or DEFAULT_RETRY_SECONDS
+            if e.code in (429, 500, 529) and attempt < MAX_RETRIES - 1:
+                wait_seconds = _extract_retry_delay(e.headers) or DEFAULT_RETRY_SECONDS
                 time.sleep(min(wait_seconds, 65) + 1)
                 continue
-            raise CuratorAnalysisError(f"Gemini API қатесі (HTTP {e.code}): {detail[:300]}") from e
+            raise CuratorAnalysisError(f"Claude API қатесі (HTTP {e.code}): {detail[:300]}") from e
         except urllib.error.URLError as e:
-            raise CuratorAnalysisError(f"Gemini API-ге қосыла алмадым: {e.reason}") from e
+            raise CuratorAnalysisError(f"Claude API-ге қосыла алмадым: {e.reason}") from e
     else:
-        raise CuratorAnalysisError("Gemini API-дің минуттық сұраныс шегінен байланыса алмадым (тегін тариф).")
+        raise CuratorAnalysisError("Claude API-мен көп қайталаудан кейін де байланыса алмадым.")
 
-    candidate = (body.get("candidates") or [{}])[0]
-    if candidate.get("finishReason") == "MAX_TOKENS":
+    if body.get("stop_reason") == "refusal":
         raise CuratorAnalysisError(
-            "Gemini жауабы жауап көлемінің шегінен (maxOutputTokens) асып, ортасынан үзіліп қалды. "
+            "Claude бұл сұранысты қауіпсіздік саясаты бойынша орындаудан бас тартты."
+        )
+    if body.get("stop_reason") == "max_tokens":
+        raise CuratorAnalysisError(
+            "Claude жауабы жауап көлемінің шегінен (max_tokens) асып, ортасынан үзіліп қалды. "
             "Құжаттың осы бөлігі тым күрделі болуы мүмкін — қайта жүктеп көріңіз."
         )
 
     try:
-        text = candidate["content"]["parts"][0]["text"]
-    except (KeyError, IndexError, TypeError) as e:
-        raise CuratorAnalysisError("Gemini API жауабының форматы күтпеген болды.") from e
+        text = next(b["text"] for b in body["content"] if b.get("type") == "text")
+    except (KeyError, StopIteration, TypeError) as e:
+        raise CuratorAnalysisError("Claude API жауабының форматы күтпеген болды.") from e
 
     text = _strip_code_fence(text)
     try:
         parsed = json.loads(text)
     except json.JSONDecodeError as e:
-        raise CuratorAnalysisError(f"Gemini API жауабын JSON ретінде оқи алмадым: {e}") from e
+        raise CuratorAnalysisError(f"Claude API жауабын JSON ретінде оқи алмадым: {e}") from e
 
     if not isinstance(parsed, dict):
         # Кейде модель күтілген объект орнына тізім немесе басқа пішінде
@@ -255,14 +261,14 @@ def _call_gemini(prompt, api_key):
         # ішінде) түсініксіз AttributeError ретінде емес, осы жерде анық
         # хабарламамен ұстау керек.
         raise CuratorAnalysisError(
-            "Gemini API жауабы күтілген құрылымда (JSON объект) болмады — қайта жүктеп көріңіз."
+            "Claude API жауабы күтілген құрылымда (JSON объект) болмады — қайта жүктеп көріңіз."
         )
     return parsed
 
 
 def _analyze_chunk(chunk_text, stats_section, api_key):
     prompt = PROMPT_TEMPLATE.format(schema=SCHEMA_HINT, doc_text=chunk_text, stats_section=stats_section)
-    return _call_gemini(prompt, api_key)
+    return _call_claude(prompt, api_key)
 
 
 def _weighted_merge_list(chunk_items_with_weights, key_field, limit):
@@ -317,7 +323,7 @@ def merge_analyses(chunk_analyses):
 
 
 def generate_curator_analysis(doc_text: str, report=None) -> dict:
-    api_key = os.environ.get("GEMINI_API_KEY")
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
     if api_key:
         # Ортам айнымалысын веб-интерфейс арқылы қою кезінде кейде көзге
         # көрінбейтін ASCII емес таңбалар (мыс. бос орынның басқа түрі)
@@ -326,8 +332,8 @@ def generate_curator_analysis(doc_text: str, report=None) -> dict:
         api_key = "".join(ch for ch in api_key.strip() if ch.isascii() and ch.isprintable())
     if not api_key:
         raise CuratorAnalysisError(
-            "GEMINI_API_KEY орнатылмаған. .env файлына тегін Gemini API кілтін қосыңыз "
-            "(aistudio.google.com сайтынан алуға болады)."
+            "ANTHROPIC_API_KEY орнатылмаған. .env файлына Anthropic Claude API кілтін қосыңыз "
+            "(platform.claude.com сайтынан алуға болады)."
         )
 
     stats_text = _format_report_stats(report)
