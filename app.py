@@ -859,6 +859,43 @@ def delete_material(material_id):
     return redirect(url_for("materials_list"))
 
 
+@app.route("/books")
+def books_list():
+    conn = get_db()
+    books = conn.execute(
+        "SELECT id, title, link, created_at FROM books ORDER BY created_at, id"
+    ).fetchall()
+    return render_template("books.html", books=books)
+
+
+@app.route("/books/add", methods=["POST"])
+def add_book():
+    conn = get_db()
+    title = request.form.get("title", "").strip()
+    link = request.form.get("link", "").strip()
+
+    if not title:
+        flash("Кітап атауын енгізіңіз.", "error")
+        return redirect(url_for("books_list"))
+
+    conn.execute(
+        "INSERT INTO books (title, link) VALUES (?, ?)",
+        (title, link or None),
+    )
+    conn.commit()
+    flash("Кітап қосылды.", "ok")
+    return redirect(url_for("books_list"))
+
+
+@app.route("/books/<int:book_id>/delete", methods=["POST"])
+def delete_book(book_id):
+    conn = get_db()
+    conn.execute("DELETE FROM books WHERE id = ?", (book_id,))
+    conn.commit()
+    flash("Кітап жойылды.", "ok")
+    return redirect(url_for("books_list"))
+
+
 @app.route("/weeks/<int:week_id>/delete", methods=["POST"])
 def delete_week(week_id):
     conn = get_db()

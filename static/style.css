@@ -223,26 +223,19 @@ a { color: var(--accent); }
    кетуін болдырмау үшін). */
 .site-shell { display: flex; min-height: 100vh; align-items: stretch; padding-left: 72px; transition: padding-left .2s ease; }
 .site-shell.no-sidebar { padding-left: 0; position: relative; }
-.no-sidebar-logout { position: absolute; top: 20px; right: 24px; margin: 0; z-index: 5; }
-.no-sidebar-logout button {
-  background: var(--surface-raised);
-  border: 1px solid var(--border);
-  color: var(--text-secondary);
-  padding: 8px 14px;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  font-size: 0.82rem;
-  font-weight: 600;
-  box-shadow: var(--shadow-glass);
-}
-.no-sidebar-logout button:hover { border-color: var(--accent); color: var(--accent); }
-/* Сайдбары жоқ беттерде (СТ/АТ/Статистика таңдау қадамдары) де экранның
-   оң жақ шетінде тұрақты "Басты бетке өту" тетігі тұрады — сайдбардың
-   брендтік түсін қайталайды, сол арқылы навигация сезімі бірізді болады. */
-.home-edge-link {
+/* Сайдбары жоқ беттердің оң жақ жоғарғы бұрышындағы тұрақты тетіктер
+   тобы (Кітаптар, Басты бетке өту, Шығу) — бір қатарда, бірізді стильде. */
+.top-right-actions {
   position: fixed;
   right: 10px;
   top: 10px;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.top-right-logout-form { margin: 0; }
+.top-right-chip {
   padding: 8px 14px;
   border-radius: var(--radius-sm);
   background: var(--surface-raised);
@@ -253,12 +246,13 @@ a { color: var(--accent); }
   justify-content: center;
   font-size: 0.82rem;
   font-weight: 600;
+  font-family: inherit;
   text-decoration: none;
+  cursor: pointer;
   box-shadow: var(--shadow-glass);
-  z-index: 40;
   transition: box-shadow .15s ease, color .15s ease, border-color .15s ease;
 }
-.home-edge-link:hover { border-color: var(--accent); color: var(--accent); box-shadow: var(--shadow-hover); }
+.top-right-chip:hover { border-color: var(--accent); color: var(--accent); box-shadow: var(--shadow-hover); }
 /* Сайдбар қолмен ашық қалдырылғанда (.is-pinned), артындағы мазмұн жабылып
    қалмасын деп негізгі контентті де оң жаққа ысырамыз ("push" layout) —
    бұрынғыдай тек үстінен жауып тұратын overlay емес. Тек desktop енінде

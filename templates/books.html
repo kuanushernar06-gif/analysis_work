@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Кітаптар — JUZ40{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <a class="back-link" href="{{ url_for('materials_list') }}">← Материал тексеру</a>
+    <h1>Кітаптар</h1>
+    <p class="muted">
+      Кітапты Google Drive-қа жүктеп, атауы мен сілтемесін осында қосыңыз.
+    </p>
+  </div>
+</div>
+
+<div class="card">
+  <form method="post" action="{{ url_for('add_book') }}" class="form-grid">
+    <label>
+      Атауы
+      <input type="text" name="title" required autocomplete="off" placeholder="Мысалы: 6-сынып АТАМҰРА">
+    </label>
+    <label>
+      Сілтеме (Google Drive)
+      <input type="text" name="link" autocomplete="off" placeholder="https://...">
+    </label>
+    <div class="col-span-2">
+      <button type="submit" class="btn btn-primary">Қосу</button>
+    </div>
+  </form>
+
+  {% if books %}
+  <div class="table-scroll" style="margin-top:16px;">
+    <table class="table">
+      <thead><tr><th>Атауы</th><th>Сілтеме</th><th></th></tr></thead>
+      <tbody>
+        {% for book in books %}
+        <tr>
+          <td>{{ book['title'] }}</td>
+          <td>{% if book['link'] %}<a href="{{ book['link'] }}" target="_blank" rel="noopener">Ашу →</a>{% else %}—{% endif %}</td>
+          <td class="no-print">
+            <div class="teacher-actions">
+              <button type="button" class="btn btn-danger btn-small teacher-delete-btn">Өшіру</button>
+              <form method="post" action="{{ url_for('delete_book', book_id=book['id']) }}" class="teacher-delete-confirm">
+                <span class="muted">Шынымен өшіру керек пе?</span>
+                <button type="submit" class="btn btn-danger btn-small">Иә, өшіру</button>
+                <button type="button" class="btn btn-outline btn-small teacher-delete-cancel">Болдырмау</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="muted" style="margin-top:12px;">Әзірге кітап қосылмаған.</p>
+  {% endif %}
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+  (function () {
+    var container = document.querySelector('.site-main');
+    if (!container) return;
+    container.addEventListener('click', function (e) {
+      var delBtn = e.target.closest('.teacher-delete-btn');
+      if (delBtn) {
+        delBtn.closest('.teacher-actions').classList.add('is-confirming');
+        return;
+      }
+      var cancelBtn = e.target.closest('.teacher-delete-cancel');
+      if (cancelBtn) {
+        cancelBtn.closest('.teacher-actions').classList.remove('is-confirming');
+      }
+    });
+  })();
+</script>
+{% endblock %}

@@ -35,8 +35,8 @@
   {% block header %}{% endblock %}
 
   {% block body %}
-  <div class="site-shell{% if request.endpoint in ('index', 'category_picker', 'program_detail', 'stream_detail', 'materials_list') %} no-sidebar{% endif %}">
-    {% if request.endpoint not in ('index', 'category_picker', 'program_detail', 'stream_detail', 'materials_list') %}
+  <div class="site-shell{% if request.endpoint in ('index', 'category_picker', 'program_detail', 'stream_detail', 'materials_list', 'books_list') %} no-sidebar{% endif %}">
+    {% if request.endpoint not in ('index', 'category_picker', 'program_detail', 'stream_detail', 'materials_list', 'books_list') %}
     <aside class="site-sidebar no-print">
       <button type="button" class="sidebar-pin-toggle no-print" id="sidebar-pin-toggle" aria-pressed="false" aria-label="Бүйірлік мәзірді ашық қалдыру">
         <span class="sidebar-pin-arrow" aria-hidden="true"></span>
@@ -82,14 +82,19 @@
       </div>
     </aside>
     {% else %}
-      {% if request.endpoint != 'index' %}
-      <a class="home-edge-link no-print" href="{{ url_for('index') }}">БАСТЫ БЕТКЕ ӨТУ</a>
-      {% endif %}
-      {% if request.endpoint == 'index' %}
-      <form method="post" action="{{ url_for('logout') }}" class="no-sidebar-logout no-print">
-        <button type="submit">Шығу</button>
-      </form>
-      {% endif %}
+      <div class="top-right-actions no-print">
+        {% if request.endpoint == 'materials_list' %}
+        <a class="top-right-chip" href="{{ url_for('books_list') }}">КІТАПТАР</a>
+        {% endif %}
+        {% if request.endpoint != 'index' %}
+        <a class="top-right-chip" href="{{ url_for('index') }}">БАСТЫ БЕТКЕ ӨТУ</a>
+        {% endif %}
+        {% if request.endpoint == 'index' %}
+        <form method="post" action="{{ url_for('logout') }}" class="top-right-logout-form">
+          <button type="submit" class="top-right-chip">Шығу</button>
+        </form>
+        {% endif %}
+      </div>
     {% endif %}
     <main class="site-main">
       {% include "_flashes.html" %}

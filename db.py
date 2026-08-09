@@ -94,7 +94,6 @@ MATERIAL_TYPES = [
     ("baza", "БАЗА"),
     ("sabaq_tapsyru_material", "САБАҚ ТАПСЫРУ"),
     ("taqyryptyq_test", "ТАҚЫРЫПТЫҚ ТЕСТ"),
-    ("kitaptar", "КІТАПТАР"),
 ]
 MATERIAL_TYPE_LABELS = {slug: label for slug, label in MATERIAL_TYPES}
 
@@ -197,6 +196,13 @@ CREATE TABLE IF NOT EXISTS material_checks (
     label TEXT NOT NULL,
     link TEXT,
     is_checked BOOLEAN NOT NULL DEFAULT false,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS books (
+    id SERIAL PRIMARY KEY,
+    title TEXT NOT NULL,
+    link TEXT,
     created_at TIMESTAMPTZ DEFAULT now()
 );
 
@@ -309,6 +315,13 @@ CREATE TABLE IF NOT EXISTS material_checks (
     label TEXT NOT NULL,
     link TEXT,
     is_checked INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS books (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    link TEXT,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
