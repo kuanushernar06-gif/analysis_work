@@ -603,6 +603,7 @@ a.is-loading-link { opacity: 0.5; pointer-events: none; transition: opacity 0.15
 .pill-blue { background: color-mix(in srgb, var(--card-1) 16%, transparent); color: var(--card-1); }
 .pill-purple { background: color-mix(in srgb, var(--card-3) 16%, transparent); color: var(--card-3); }
 .pill-gold { background: var(--warning-bg); color: var(--warning); }
+.pill-bad { background: var(--critical-bg); color: var(--critical); }
 .pill-on-dark { background: rgba(255, 255, 255, 0.18); color: #fff; }
 
 /* Апта таңдау карточкаларындағы "N-АЙ ОРТАҚ" карточкасын ерекшелеу */

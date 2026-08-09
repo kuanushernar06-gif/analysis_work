@@ -4,7 +4,7 @@ import re
 from datetime import datetime, timedelta
 
 from dotenv import load_dotenv
-from flask import Flask, render_template, request, redirect, url_for, g, flash, session, Response
+from flask import Flask, render_template, request, redirect, url_for, g, flash, session, Response, jsonify
 from markupsafe import Markup, escape
 
 load_dotenv()
@@ -28,6 +28,14 @@ from gdocs import (
     strip_template_entry,
 )
 from curator_analysis import generate_curator_analysis, build_summary_text, merge_analyses, CuratorAnalysisError
+from books_ingest import (
+    download_drive_file,
+    get_pdf_page_count,
+    extract_chunk_pdf_bytes,
+    read_chunk_with_claude,
+    BookIngestError,
+    PAGES_PER_CHUNK,
+)
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "juz40-local-dev-secret")
@@ -863,7 +871,8 @@ def delete_material(material_id):
 def books_list():
     conn = get_db()
     books = conn.execute(
-        "SELECT id, title, link, created_at FROM books ORDER BY created_at, id"
+        "SELECT id, title, link, total_pages, ingest_status, ingest_error, created_at "
+        "FROM books ORDER BY created_at, id"
     ).fetchall()
     return render_template("books.html", books=books)
 
@@ -885,6 +894,117 @@ def add_book():
     conn.commit()
     flash("Кітап қосылды.", "ok")
     return redirect(url_for("books_list"))
+
+
+@app.route("/books/<int:book_id>/ingest/step", methods=["POST"])
+def ingest_book_step(book_id):
+    """Кітапты оқу процесінің БІР қадамы: не PDF-ті Drive-тан жүктеп
+    бет санын анықтайды, не кезектегі бөлікті (PAGES_PER_CHUNK бет) Claude-пен
+    оқып, нәтижесін сақтайды. Бөліктің бет аралығы соңғы сақталған
+    book_chunks.page_end-тен есептеледі (тұрақты санмен емес), сол себепті
+    PAGES_PER_CHUNK мәні болашақта өзгерсе де, жартылай оқылған кітаптардың
+    прогресі бұзылмайды. Frontend бұл маршрутты дайын болғанша қайта-қайта
+    шақырады — осылай ұзақ оқу процесі бір ғана веб-сұранысқа сыймай, көп
+    қысқа сұраныстарға бөлінеді (Vercel-дің сұраныс уақыты шегіне соқтықпас
+    үшін)."""
+    conn = get_db()
+    book = conn.execute("SELECT * FROM books WHERE id = ?", (book_id,)).fetchone()
+    if book is None:
+        return jsonify({"status": "error", "error": "Кітап табылмады."}), 404
+
+    if book["ingest_status"] == "done":
+        return jsonify({"status": "done", "total_pages": book["total_pages"], "done_pages": book["total_pages"]})
+
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if api_key:
+        api_key = "".join(ch for ch in api_key.strip() if ch.isascii() and ch.isprintable())
+    if not api_key:
+        err = "ANTHROPIC_API_KEY орнатылмаған."
+        conn.execute("UPDATE books SET ingest_status = 'error', ingest_error = ? WHERE id = ?", (err, book_id))
+        conn.commit()
+        return jsonify({"status": "error", "error": err})
+
+    try:
+        if book["total_pages"] is None:
+            if not book["link"]:
+                raise BookIngestError("Кітаптың Google Drive сілтемесі жоқ.")
+            pdf_bytes = download_drive_file(book["link"])
+            total_pages = get_pdf_page_count(pdf_bytes)
+            conn.execute(
+                "UPDATE books SET total_pages = ?, ingest_status = 'in_progress', raw_pdf_data = ? WHERE id = ?",
+                (total_pages, pdf_bytes, book_id),
+            )
+            conn.commit()
+        else:
+            total_pages = book["total_pages"]
+
+        progress = conn.execute(
+            "SELECT COUNT(*) AS c, COALESCE(MAX(page_end), 0) AS last_page FROM book_chunks WHERE book_id = ?",
+            (book_id,),
+        ).fetchone()
+        done_count, last_page = progress["c"], progress["last_page"]
+
+        if last_page >= total_pages:
+            conn.execute(
+                "UPDATE books SET ingest_status = 'done', raw_pdf_data = NULL WHERE id = ?", (book_id,)
+            )
+            conn.commit()
+            return jsonify({"status": "done", "total_pages": total_pages, "done_pages": total_pages})
+
+        page_start = last_page + 1
+        page_end = min(page_start + PAGES_PER_CHUNK - 1, total_pages)
+
+        pdf_row = conn.execute("SELECT raw_pdf_data FROM books WHERE id = ?", (book_id,)).fetchone()
+        pdf_bytes = pdf_row["raw_pdf_data"]
+        if not isinstance(pdf_bytes, (bytes, bytearray)):
+            pdf_bytes = bytes(pdf_bytes)
+
+        chunk_pdf = extract_chunk_pdf_bytes(pdf_bytes, page_start, page_end)
+        content = read_chunk_with_claude(chunk_pdf, page_start, page_end, api_key)
+
+        try:
+            conn.execute(
+                "INSERT INTO book_chunks (book_id, chunk_index, page_start, page_end, content_text) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (book_id, done_count + 1, page_start, page_end, content),
+            )
+            conn.commit()
+        except Exception as e:
+            # Бір кітапты бірнеше қойынды/пайдаланушы бір мезгілде оқи
+            # бастаса, екі сұраныс та бір last_page-ды оқып, бір chunk_index-ке
+            # жазуға тырысуы мүмкін — бұл нақты қате емес, жай "басқа сұраныс
+            # бұл бөлікті менен бұрын жазып үлгерді" деген жағдай, сол себепті
+            # қатеге шығармай, жай ағымдағы прогресті қайтарамыз.
+            conn.rollback()
+            if "unique" not in str(e).lower() and "duplicate" not in str(e).lower():
+                raise
+            new_last_page = conn.execute(
+                "SELECT COALESCE(MAX(page_end), 0) AS last_page FROM book_chunks WHERE book_id = ?", (book_id,)
+            ).fetchone()["last_page"]
+            if new_last_page >= total_pages:
+                conn.execute(
+                    "UPDATE books SET ingest_status = 'done', raw_pdf_data = NULL WHERE id = ?", (book_id,)
+                )
+                conn.commit()
+                return jsonify({"status": "done", "total_pages": total_pages, "done_pages": total_pages})
+            return jsonify({"status": "in_progress", "total_pages": total_pages, "done_pages": new_last_page})
+
+        done_pages = page_end
+        if done_pages >= total_pages:
+            conn.execute(
+                "UPDATE books SET ingest_status = 'done', raw_pdf_data = NULL WHERE id = ?", (book_id,)
+            )
+            conn.commit()
+            return jsonify({"status": "done", "total_pages": total_pages, "done_pages": total_pages})
+
+        return jsonify({"status": "in_progress", "total_pages": total_pages, "done_pages": done_pages})
+    except BookIngestError as e:
+        conn.execute(
+            "UPDATE books SET ingest_status = 'error', ingest_error = ?, raw_pdf_data = NULL WHERE id = ?",
+            (str(e), book_id),
+        )
+        conn.commit()
+        return jsonify({"status": "error", "error": str(e)})
 
 
 @app.route("/books/<int:book_id>/delete", methods=["POST"])

@@ -203,10 +203,26 @@ CREATE TABLE IF NOT EXISTS books (
     id SERIAL PRIMARY KEY,
     title TEXT NOT NULL,
     link TEXT,
+    total_pages INTEGER,
+    ingest_status TEXT NOT NULL DEFAULT 'pending',
+    ingest_error TEXT,
+    raw_pdf_data BYTEA,
     created_at TIMESTAMPTZ DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS book_chunks (
+    id SERIAL PRIMARY KEY,
+    book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+    chunk_index INTEGER NOT NULL,
+    page_start INTEGER NOT NULL,
+    page_end INTEGER NOT NULL,
+    content_text TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    UNIQUE(book_id, chunk_index)
+);
+
 CREATE INDEX IF NOT EXISTS idx_streams_program ON streams(program_id);
+CREATE INDEX IF NOT EXISTS idx_book_chunks_book ON book_chunks(book_id);
 CREATE INDEX IF NOT EXISTS idx_results_week ON results(week_id);
 CREATE INDEX IF NOT EXISTS idx_notes_week ON curator_notes(week_id);
 CREATE INDEX IF NOT EXISTS idx_imports_week ON imports(week_id);
@@ -322,7 +338,22 @@ CREATE TABLE IF NOT EXISTS books (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     title TEXT NOT NULL,
     link TEXT,
+    total_pages INTEGER,
+    ingest_status TEXT NOT NULL DEFAULT 'pending',
+    ingest_error TEXT,
+    raw_pdf_data BLOB,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS book_chunks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+    chunk_index INTEGER NOT NULL,
+    page_start INTEGER NOT NULL,
+    page_end INTEGER NOT NULL,
+    content_text TEXT NOT NULL,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(book_id, chunk_index)
 );
 
 CREATE INDEX IF NOT EXISTS idx_streams_program ON streams(program_id);
@@ -331,6 +362,7 @@ CREATE INDEX IF NOT EXISTS idx_notes_week ON curator_notes(week_id);
 CREATE INDEX IF NOT EXISTS idx_imports_week ON imports(week_id);
 CREATE INDEX IF NOT EXISTS idx_teacher_curators_teacher ON teacher_curators(teacher_id);
 CREATE INDEX IF NOT EXISTS idx_material_checks_type ON material_checks(material_type);
+CREATE INDEX IF NOT EXISTS idx_book_chunks_book ON book_chunks(book_id);
 """
 
 
@@ -357,6 +389,9 @@ class PgConnection:
 
     def commit(self):
         self._conn.commit()
+
+    def rollback(self):
+        self._conn.rollback()
 
     def close(self):
         self._conn.close()
@@ -466,6 +501,18 @@ def _migrate(conn):
         conn.commit()
     if not _column_exists(conn, "material_checks", "file_mimetype"):
         conn.execute("ALTER TABLE material_checks ADD COLUMN file_mimetype TEXT")
+        conn.commit()
+    if not _column_exists(conn, "books", "total_pages"):
+        conn.execute("ALTER TABLE books ADD COLUMN total_pages INTEGER")
+        conn.commit()
+    if not _column_exists(conn, "books", "ingest_status"):
+        conn.execute("ALTER TABLE books ADD COLUMN ingest_status TEXT NOT NULL DEFAULT 'pending'")
+        conn.commit()
+    if not _column_exists(conn, "books", "ingest_error"):
+        conn.execute("ALTER TABLE books ADD COLUMN ingest_error TEXT")
+        conn.commit()
+    if not _column_exists(conn, "books", "raw_pdf_data"):
+        conn.execute(f"ALTER TABLE books ADD COLUMN raw_pdf_data {blob_type}")
         conn.commit()
     if not _column_exists(conn, "streams", "category"):
         _migrate_stream_categories(conn)
