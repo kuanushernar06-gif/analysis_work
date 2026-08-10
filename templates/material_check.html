@@ -4,7 +4,7 @@
 
 <div class="page-head">
   <div>
-    <a class="back-link" href="{{ url_for('materials_list') }}">← Материал тексеру</a>
+    <a class="back-link" href="{{ url_for('materials_program_page', slug=program['slug']) if program else url_for('materials_list') }}">← Материал тексеру</a>
     <h1>{{ material['label'] }}</h1>
     <p class="muted">{{ material_type_label }} — материалды таңдалған кітаппен салыстырып тексеру.</p>
   </div>

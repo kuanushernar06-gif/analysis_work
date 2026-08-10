@@ -808,8 +808,27 @@ def delete_teacher(teacher_id):
 @app.route("/materials")
 def materials_list():
     conn = get_db()
+    programs = conn.execute("SELECT * FROM programs ORDER BY sort_order, id").fetchall()
+    return render_template("materials_programs.html", programs=programs)
+
+
+def _material_program_or_404(conn, slug):
+    program = conn.execute("SELECT * FROM programs WHERE slug = ?", (slug,)).fetchone()
+    if program is None:
+        flash("Бағдарлама табылмады.", "error")
+    return program
+
+
+@app.route("/materials/<slug>")
+def materials_program_page(slug):
+    conn = get_db()
+    program = _material_program_or_404(conn, slug)
+    if program is None:
+        return redirect(url_for("materials_list"))
+
     rows = conn.execute(
-        "SELECT * FROM material_checks ORDER BY material_type, created_at, id"
+        "SELECT * FROM material_checks WHERE program_id = ? ORDER BY material_type, created_at, id",
+        (program["id"],),
     ).fetchall()
     checked_ids = {
         r["material_id"]
@@ -830,30 +849,76 @@ def materials_list():
         for slug, label in db.MATERIAL_TYPES
     ]
 
-    return render_template("materials.html", sections=sections)
+    return render_template("materials.html", program=program, sections=sections)
+
+
+@app.route("/materials/<slug>/plan/save", methods=["POST"])
+def save_material_plan(slug):
+    conn = get_db()
+    program = _material_program_or_404(conn, slug)
+    if program is None:
+        return redirect(url_for("materials_list"))
+
+    plan_url = request.form.get("material_plan_url", "").strip()
+    if not plan_url:
+        flash("Жоспар сілтемесін енгізіңіз.", "error")
+        return redirect(url_for("materials_program_page", slug=slug))
+
+    conn.execute("UPDATE programs SET material_plan_url = ? WHERE id = ?", (plan_url, program["id"]))
+    conn.commit()
+    flash("Жоспар сілтемесі сақталды.", "ok")
+    return redirect(url_for("materials_program_page", slug=slug))
+
+
+@app.route("/materials/<slug>/plan/remove", methods=["POST"])
+def remove_material_plan(slug):
+    conn = get_db()
+    program = _material_program_or_404(conn, slug)
+    if program is None:
+        return redirect(url_for("materials_list"))
+
+    conn.execute("UPDATE programs SET material_plan_url = NULL WHERE id = ?", (program["id"],))
+    conn.commit()
+    flash("Жоспар сілтемесі алып тасталды.", "ok")
+    return redirect(url_for("materials_program_page", slug=slug))
 
 
 @app.route("/materials/add", methods=["POST"])
 def add_material():
     conn = get_db()
+    program_id = request.form.get("program_id", type=int)
+    program = conn.execute("SELECT * FROM programs WHERE id = ?", (program_id,)).fetchone() if program_id else None
     material_type = request.form.get("material_type", "").strip()
     label = request.form.get("label", "").strip()
     link = request.form.get("link", "").strip()
 
+    if program is None:
+        flash("Бағдарлама табылмады.", "error")
+        return redirect(url_for("materials_list"))
     if material_type not in db.MATERIAL_TYPE_LABELS:
         flash("Материал түрін таңдаңыз.", "error")
-        return redirect(url_for("materials_list"))
+        return redirect(url_for("materials_program_page", slug=program["slug"]))
     if not label:
         flash("Жазба атауын енгізіңіз.", "error")
-        return redirect(url_for("materials_list"))
+        return redirect(url_for("materials_program_page", slug=program["slug"]))
 
     conn.execute(
-        "INSERT INTO material_checks (material_type, label, link) VALUES (?, ?, ?)",
-        (material_type, label, link or None),
+        "INSERT INTO material_checks (program_id, material_type, label, link) VALUES (?, ?, ?, ?)",
+        (program["id"], material_type, label, link or None),
     )
     conn.commit()
     flash("Жазба қосылды.", "ok")
-    return redirect(url_for("materials_list"))
+    return redirect(url_for("materials_program_page", slug=program["slug"]))
+
+
+def _material_redirect_target(conn, material_id):
+    row = conn.execute(
+        "SELECT p.slug FROM material_checks m JOIN programs p ON p.id = m.program_id WHERE m.id = ?",
+        (material_id,),
+    ).fetchone()
+    if row is None:
+        return redirect(url_for("materials_list"))
+    return redirect(url_for("materials_program_page", slug=row["slug"]))
 
 
 @app.route("/materials/<int:material_id>/toggle", methods=["POST"])
@@ -866,16 +931,17 @@ def toggle_material(material_id):
             (not row["is_checked"], material_id),
         )
         conn.commit()
-    return redirect(url_for("materials_list"))
+    return _material_redirect_target(conn, material_id)
 
 
 @app.route("/materials/<int:material_id>/delete", methods=["POST"])
 def delete_material(material_id):
     conn = get_db()
+    target = _material_redirect_target(conn, material_id)
     conn.execute("DELETE FROM material_checks WHERE id = ?", (material_id,))
     conn.commit()
     flash("Жазба жойылды.", "ok")
-    return redirect(url_for("materials_list"))
+    return target
 
 
 @app.route("/materials/<int:material_id>/check")
@@ -885,6 +951,8 @@ def material_check_page(material_id):
     if material is None:
         flash("Жазба табылмады.", "error")
         return redirect(url_for("materials_list"))
+
+    program = conn.execute("SELECT * FROM programs WHERE id = ?", (material["program_id"],)).fetchone()
 
     books = conn.execute(
         "SELECT id, title FROM books WHERE ingest_status = 'done' ORDER BY title"
@@ -903,6 +971,7 @@ def material_check_page(material_id):
     return render_template(
         "material_check.html",
         material=material,
+        program=program,
         material_type_label=db.MATERIAL_TYPE_LABELS.get(material["material_type"], material["material_type"]),
         books=books,
         run=run,

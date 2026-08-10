@@ -4,8 +4,8 @@
 
 <div class="page-head">
   <div>
-    <a class="back-link" href="{{ url_for('index') }}">← Басты бет</a>
-    <h1>Материал тексеру</h1>
+    <a class="back-link" href="{{ url_for('materials_list') }}">← Материал тексеру</a>
+    <h1>{{ program['name'] }} — Материал тексеру</h1>
     <p class="muted">
       Әр материал түріне жазба қосыңыз (атауы және Google Docs/Drive сілтемесі),
       содан кейін тексерілген соң «Тексерілді» деп белгілеңіз.
@@ -13,12 +13,42 @@
   </div>
 </div>
 
+<div class="card">
+  <h2>Жоспар енгізу</h2>
+  <form method="post" action="{{ url_for('save_material_plan', slug=program['slug']) }}" class="form-grid">
+    <label class="col-span-2">
+      Жоспардың сілтемесі (Google Docs/Drive)
+      <input type="text" name="material_plan_url" required value="{{ program['material_plan_url'] or '' }}"
+             placeholder="https://...">
+    </label>
+    <div class="col-span-2">
+      <button type="submit" class="btn btn-primary">
+        {% if program['material_plan_url'] %}Қайта сақтау{% else %}Сақтау{% endif %}
+      </button>
+    </div>
+  </form>
+  {% if program['material_plan_url'] %}
+  <div class="teacher-actions" style="margin-top:12px;">
+    <a class="btn btn-outline btn-small" href="{{ program['material_plan_url'] }}" target="_blank" rel="noopener">Ашу →</a>
+    <button type="button" class="btn btn-danger btn-small teacher-delete-btn">Өшіру</button>
+    <form method="post" action="{{ url_for('remove_material_plan', slug=program['slug']) }}" class="teacher-delete-confirm">
+      <span class="muted">Шынымен алып тастау керек пе?</span>
+      <button type="submit" class="btn btn-danger btn-small">Иә, алып тастау</button>
+      <button type="button" class="btn btn-outline btn-small teacher-delete-cancel">Болдырмау</button>
+    </form>
+  </div>
+  {% endif %}
+</div>
+
+<h2 style="margin-top:28px;">Материалдар</h2>
+
 {% for section in sections %}
 <div class="card">
   <h2>{{ section.label }}</h2>
 
   <form method="post" action="{{ url_for('add_material') }}" class="form-grid">
     <input type="hidden" name="material_type" value="{{ section.slug }}">
+    <input type="hidden" name="program_id" value="{{ program['id'] }}">
     <label>
       Атауы
       <input type="text" name="label" required autocomplete="off" placeholder="Мысалы: 1-ай 1-апта SMART">

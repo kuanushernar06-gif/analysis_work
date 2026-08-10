@@ -105,7 +105,8 @@ CREATE TABLE IF NOT EXISTS programs (
     name TEXT NOT NULL,
     sort_order INTEGER DEFAULT 0,
     plan_doc_url TEXT,
-    plan_doc_fetch_error TEXT
+    plan_doc_fetch_error TEXT,
+    material_plan_url TEXT
 );
 
 CREATE TABLE IF NOT EXISTS streams (
@@ -192,6 +193,7 @@ CREATE TABLE IF NOT EXISTS teacher_curators (
 
 CREATE TABLE IF NOT EXISTS material_checks (
     id SERIAL PRIMARY KEY,
+    program_id INTEGER REFERENCES programs(id) ON DELETE CASCADE,
     material_type TEXT NOT NULL,
     label TEXT NOT NULL,
     link TEXT,
@@ -256,7 +258,8 @@ CREATE TABLE IF NOT EXISTS programs (
     name TEXT NOT NULL,
     sort_order INTEGER DEFAULT 0,
     plan_doc_url TEXT,
-    plan_doc_fetch_error TEXT
+    plan_doc_fetch_error TEXT,
+    material_plan_url TEXT
 );
 
 CREATE TABLE IF NOT EXISTS streams (
@@ -343,6 +346,7 @@ CREATE TABLE IF NOT EXISTS teacher_curators (
 
 CREATE TABLE IF NOT EXISTS material_checks (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    program_id INTEGER REFERENCES programs(id) ON DELETE CASCADE,
     material_type TEXT NOT NULL,
     label TEXT NOT NULL,
     link TEXT,
@@ -545,6 +549,12 @@ def _migrate(conn):
         conn.commit()
     if not _column_exists(conn, "books", "raw_pdf_data"):
         conn.execute(f"ALTER TABLE books ADD COLUMN raw_pdf_data {blob_type}")
+        conn.commit()
+    if not _column_exists(conn, "programs", "material_plan_url"):
+        conn.execute("ALTER TABLE programs ADD COLUMN material_plan_url TEXT")
+        conn.commit()
+    if not _column_exists(conn, "material_checks", "program_id"):
+        conn.execute("ALTER TABLE material_checks ADD COLUMN program_id INTEGER REFERENCES programs(id)")
         conn.commit()
     if not _column_exists(conn, "streams", "category"):
         _migrate_stream_categories(conn)
