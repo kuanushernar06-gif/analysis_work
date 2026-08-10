@@ -46,7 +46,17 @@ app.permanent_session_lifetime = timedelta(days=30)
 ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL")
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD")
 
-db.init_db()
+_DB_INIT_ERROR = None
+try:
+    db.init_db()
+except Exception as e:  # noqa: BLE001 — уақытша диагностика: app мүлдем құламай,
+    # қатені /_diag арқылы көру үшін.
+    _DB_INIT_ERROR = f"{type(e).__name__}: {e}"
+
+
+@app.route("/_diag")
+def _diag():
+    return jsonify({"db_init_error": _DB_INIT_ERROR})
 
 _SUMMARY_LABEL_RE = re.compile(r"^([^:\n]{1,80}):(.*)$")
 
