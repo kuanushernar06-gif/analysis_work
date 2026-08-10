@@ -56,7 +56,18 @@ except Exception as e:  # noqa: BLE001 — уақытша диагностика
 
 @app.route("/_diag")
 def _diag():
-    return jsonify({"db_init_error": _DB_INIT_ERROR})
+    live_error = None
+    try:
+        conn = db.get_connection()
+        conn.execute("SELECT 1")
+        conn.close()
+    except Exception as e:  # noqa: BLE001
+        live_error = f"{type(e).__name__}: {e}"
+    return jsonify({
+        "db_init_error": _DB_INIT_ERROR,
+        "live_query_error": live_error,
+        "database_url_set": bool(os.environ.get("DATABASE_URL")),
+    })
 
 _SUMMARY_LABEL_RE = re.compile(r"^([^:\n]{1,80}):(.*)$")
 
@@ -87,7 +98,7 @@ def inject_category_label():
 
 @app.before_request
 def require_login():
-    if request.endpoint in ("login", "static", "favicon") or request.endpoint is None:
+    if request.endpoint in ("login", "static", "favicon", "_diag") or request.endpoint is None:
         return
     if not session.get("logged_in"):
         return redirect(url_for("login", next=request.path))
