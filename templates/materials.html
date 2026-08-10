@@ -156,14 +156,17 @@
       Сілтеме (Google Docs/Drive)
       <input type="text" name="link" autocomplete="off" placeholder="https://...">
     </label>
-    <label class="col-span-2">
-      Кітап(тар) — бірнеше таңдау үшін Ctrl (Mac-та Cmd) басып тұрып таңдаңыз
-      <select name="book_ids" multiple required size="{{ [books_all | length, 6] | min }}">
+    <div class="col-span-2">
+      <span class="form-label-text">Кітап(тар)</span>
+      <div class="book-checkbox-list">
         {% for book in books_all %}
-        <option value="{{ book['id'] }}">{{ book['title'] }}</option>
+        <label class="book-checkbox-item">
+          <input type="checkbox" name="book_ids" value="{{ book['id'] }}">
+          {{ book['title'] }}
+        </label>
         {% endfor %}
-      </select>
-    </label>
+      </div>
+    </div>
     <label class="col-span-2">
       Тақырып
       <select name="week_key" required>
