@@ -243,6 +243,7 @@ CREATE TABLE IF NOT EXISTS material_check_runs (
     total_pages INTEGER,
     findings_json TEXT,
     result_json TEXT,
+    report_json TEXT,
     error_text TEXT,
     created_at TIMESTAMPTZ DEFAULT now()
 );
@@ -405,6 +406,7 @@ CREATE TABLE IF NOT EXISTS material_check_runs (
     total_pages INTEGER,
     findings_json TEXT,
     result_json TEXT,
+    report_json TEXT,
     error_text TEXT,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
@@ -600,6 +602,9 @@ def _migrate(conn):
         conn.commit()
     if not _column_exists(conn, "material_check_runs", "book_ids_json"):
         conn.execute("ALTER TABLE material_check_runs ADD COLUMN book_ids_json TEXT")
+        conn.commit()
+    if not _column_exists(conn, "material_check_runs", "report_json"):
+        conn.execute("ALTER TABLE material_check_runs ADD COLUMN report_json TEXT")
         conn.commit()
     if not _column_exists(conn, "streams", "category"):
         _migrate_stream_categories(conn)

@@ -38,6 +38,7 @@ from books_ingest import (
     PAGES_PER_CHUNK,
 )
 import material_check
+import report_pdf
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "juz40-local-dev-secret")
@@ -1174,6 +1175,59 @@ def step_material_check(run_id):
         conn.execute("UPDATE material_check_runs SET status = 'error', error_text = ? WHERE id = ?", (str(e), run_id))
         conn.commit()
         return jsonify({"status": "error", "error": str(e)})
+
+
+@app.route("/materials/check_runs/<int:run_id>/report.pdf")
+def material_check_report_pdf(run_id):
+    """Тексеру аяқталған материал үшін қателер есебін PDF ретінде қайтарады.
+    Есептің құрылымды нұсқасы (report_json) алғаш сұралғанда Claude арқылы
+    құрастырылып сақталады, содан кейінгі жүктеулерде қайта есептелмейді."""
+    conn = get_db()
+    run = conn.execute("SELECT * FROM material_check_runs WHERE id = ?", (run_id,)).fetchone()
+    if run is None or run["status"] != "done":
+        flash("Есеп әлі дайын емес.", "error")
+        return _material_redirect_target(conn, run["material_id"] if run else None)
+
+    material = conn.execute("SELECT * FROM material_checks WHERE id = ?", (run["material_id"],)).fetchone()
+    program = conn.execute("SELECT * FROM programs WHERE id = ?", (material["program_id"],)).fetchone()
+
+    if run["report_json"]:
+        report = json.loads(run["report_json"])
+    else:
+        api_key = os.environ.get("ANTHROPIC_API_KEY")
+        if api_key:
+            api_key = "".join(ch for ch in api_key.strip() if ch.isascii() and ch.isprintable())
+        if not api_key:
+            flash("ANTHROPIC_API_KEY орнатылмаған.", "error")
+            return _material_redirect_target(conn, run["material_id"])
+        criteria = material_check.CRITERIA_BY_TYPE.get(material["material_type"])
+        kind = run["material_content_kind"]
+        content = base64.standard_b64decode(run["material_content"]) if kind == "pdf" else run["material_content"]
+        findings = json.loads(run["result_json"] or "[]")
+        try:
+            report = material_check.compile_report(kind, content, findings, criteria, api_key)
+        except material_check.MaterialCheckError as e:
+            flash(f"Есепті құрастыру қатесі: {e}", "error")
+            return _material_redirect_target(conn, run["material_id"])
+        conn.execute(
+            "UPDATE material_check_runs SET report_json = ? WHERE id = ?",
+            (json.dumps(report, ensure_ascii=False), run_id),
+        )
+        conn.commit()
+
+    week_label = f" ({run['target_month']}-ай {run['target_week']}-апта)" if run["mode"] == "targeted" else ""
+    meta = {
+        "title": f"{program['name']} — {material['label']}" if program else material["label"],
+        "subtitle": f"{db.MATERIAL_TYPE_LABELS.get(material['material_type'], material['material_type'])}"
+                    f"{week_label} — оқулықпен салыстыру есебі",
+    }
+    pdf_bytes = report_pdf.render_report_pdf(report, meta)
+    filename = f"tekseru-esebi-{material['id']}.pdf"
+    return Response(
+        pdf_bytes,
+        mimetype="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 def _books_back_url(conn, slug):

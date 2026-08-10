@@ -63,6 +63,8 @@
         {% else %}
         <p class="muted" style="margin:0;">Қате табылмады.</p>
         {% endif %}
+        <a class="btn btn-outline btn-small" style="margin-top:10px;"
+           href="{{ url_for('material_check_report_pdf', run_id=run['id']) }}">PDF есепті жүктеп алу →</a>
       {% endif %}
     {% else %}
     <p class="muted" style="margin:0;">Әзірге тексерілмеген.</p>

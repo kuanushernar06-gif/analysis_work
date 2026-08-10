@@ -230,7 +230,7 @@ def _extract_retry_delay(headers):
     return None
 
 
-def _call_claude_with_key(content_blocks, api_key, thinking_disabled=True):
+def _call_claude_with_key(content_blocks, api_key, thinking_disabled=True, expect=list):
     payload = {
         "model": CHECK_MODEL,
         "max_tokens": MAX_COMPLETION_TOKENS,
@@ -285,8 +285,9 @@ def _call_claude_with_key(content_blocks, api_key, thinking_disabled=True):
         parsed = json.loads(text)
     except json.JSONDecodeError as e:
         raise MaterialCheckError(f"Claude API жауабын JSON ретінде оқи алмадым: {e}") from e
-    if not isinstance(parsed, list):
-        raise MaterialCheckError("Claude API жауабы күтілген құрылымда (JSON тізім) болмады.")
+    if not isinstance(parsed, expect):
+        kind = "тізім" if expect is list else "объект"
+        raise MaterialCheckError(f"Claude API жауабы күтілген құрылымда (JSON {kind}) болмады.")
     return parsed
 
 
@@ -367,3 +368,69 @@ def final_review(findings, criteria, api_key):
     )
     content_blocks = [{"type": "text", "text": prompt}]
     return _call_claude_with_key(content_blocks, api_key, thinking_disabled=False)
+
+
+REPORT_SCHEMA_HINT = """{
+  "checked_document_summary": "(тексерілген құжаттың қысқаша сипаттамасы: түрі, жалпы сұрақ/тапсырма саны)",
+  "sources": [
+    {"title": "(эталон кітаптың атауы)", "detail": "(неше сұрақ осы кітапқа сілтейді, қай беттер қамтылды)"}
+  ],
+  "methodology": "(тексеру әдіснамасы, 1-2 сөйлем)",
+  "overall_conclusion": "(жалпы қорытынды абзац — неше сұрақ дұрыс/қатесіз, пайызбен, негізгі тұжырым)",
+  "category_summary": [
+    {"category": "(санат атауы)", "count": 0, "severity": "(Жоғары/Орташа/Төмен-орташа/Төмен/—)"}
+  ],
+  "issue_groups": [
+    {
+      "group_title": "(санат тақырыбы, мыс. 'Ақпараттың сәйкес келмеуі — дереккөз/бет сілтемесі қате')",
+      "items": [
+        {
+          "label": "(мыс. 'Сұрақ 32')",
+          "text_ref": "(сұрақтың/жауаптың қысқаша дәйексөзі немесе сипаттамасы)",
+          "problem": "(мәселенің егжей-тегжейлі сипаттамасы, кітаптағы дәл орнын көрсетіп)",
+          "suggestion": "(нақты түзету ұсынысы)"
+        }
+      ]
+    }
+  ],
+  "positive_notes": ["(тексеруде расталған оң тұстар, әрқайсысы жеке жол)"],
+  "final_recommendations": ["(қорытынды, іс-әрекетке негізделген ұсыныстар тізімі)"]
+}"""
+
+COMPILE_REPORT_PROMPT = """Сен білім беру материалдарын тексеретін сарапшысың. Материалды кітап(тар)пен
+салыстыру толық аяқталды. Төменде: тексеру критерийлері, тексерілген материалдың
+өзі, және тексеру барысында жиналған қателер тізімі берілген.
+
+{criteria}
+
+Осы деректер негізінде толық, кәсіби есеп құрастыр — куратор/әдіскер оқитын,
+нақты дәйексөздер мен бет нөмірлерін келтіретін, әр қатені санатқа бөліп
+топтастыратын есеп. Материалдың өзін оқып, жалпы сұрақ/тапсырма санын өзің
+есепте (findings тізіміндегі сан емес — тек ҚАТЕЛЕР саны, ал есепте жалпы
+санды да көрсету керек). category_summary-де ТЕК осы тексеруге қатысты
+санаттарды ғана көрсет (мыс. егер аппеляциялық қате табылмаса, "0" деп жаз,
+бірақ санатты алып тастама — критерийде көрсетілген санаттардың барлығын
+қамту керек). issue_groups-те әр қатені өз санатына топтастыр, әр топтың
+ішінде items тізімінде әр жеке қатені жеке жазба ретінде бер (findings
+тізіміндегідей "Қате жоқ" жазбаларды қоспа).
+
+Жиналған қателер тізімі:
+{findings}
+
+Жауапты ТЕК осы JSON схемасына сәйкес таза JSON объект түрінде қайтар —
+түсіндірме, markdown белгісі (```), қосымша мәтін қоспа.
+
+JSON схемасы:
+{schema}
+"""
+
+
+def compile_report(material_kind, material_content, findings, criteria, api_key):
+    """Тексеру аяқталған соң, материалдың өзін қайта оқып, жиналған
+    қателер тізімін толық, құрылымды есепке (JSON объект) айналдырады —
+    PDF ретінде экспорттауға дайын."""
+    prompt = COMPILE_REPORT_PROMPT.format(
+        criteria=criteria, findings=json.dumps(findings, ensure_ascii=False, indent=2), schema=REPORT_SCHEMA_HINT,
+    )
+    content_blocks = [_material_content_block(material_kind, material_content), {"type": "text", "text": prompt}]
+    return _call_claude_with_key(content_blocks, api_key, thinking_disabled=False, expect=dict)
