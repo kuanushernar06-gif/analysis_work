@@ -832,7 +832,8 @@ def materials_program_page(slug):
     ).fetchall()
 
     run_rows = conn.execute(
-        "SELECT id, material_id, status, processed_pages, total_pages FROM material_check_runs ORDER BY id DESC"
+        "SELECT id, material_id, status, processed_pages, total_pages, error_text, result_json "
+        "FROM material_check_runs ORDER BY id DESC"
     ).fetchall()
     latest_run_by_material = {}
     for r in run_rows:
@@ -841,7 +842,14 @@ def materials_program_page(slug):
     by_type = {slug: [] for slug, _label in db.MATERIAL_TYPES}
     for r in rows:
         entry = dict(r)
-        entry["latest_run"] = latest_run_by_material.get(entry["id"])
+        run = latest_run_by_material.get(entry["id"])
+        entry["latest_run"] = run
+        entry["latest_run_results"] = None
+        if run and run["result_json"]:
+            try:
+                entry["latest_run_results"] = json.loads(run["result_json"])
+            except (TypeError, ValueError):
+                entry["latest_run_results"] = None
         by_type.setdefault(entry["material_type"], []).append(entry)
 
     sections = [

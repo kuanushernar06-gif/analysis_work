@@ -114,7 +114,9 @@
           </td>
           <td class="no-print">
             <div class="teacher-actions">
-              <a class="btn btn-outline btn-small" href="{{ url_for('material_check_page', material_id=item['id']) }}">Ашу</a>
+              <button type="button" class="btn btn-outline btn-small material-expand-btn" aria-expanded="false">
+                <span class="expand-arrow" aria-hidden="true">▸</span><span class="expand-label">Ашу</span>
+              </button>
               <button type="button" class="btn btn-danger btn-small teacher-delete-btn">Өшіру</button>
               <form method="post" action="{{ url_for('delete_material', material_id=item['id']) }}" class="teacher-delete-confirm">
                 <span class="muted">Шынымен өшіру керек пе?</span>
@@ -122,6 +124,44 @@
                 <button type="button" class="btn btn-outline btn-small teacher-delete-cancel">Болдырмау</button>
               </form>
             </div>
+          </td>
+        </tr>
+        <tr class="material-expand-row" style="display:none">
+          <td colspan="4">
+            {% if run %}
+              {% if run['status'] == 'error' %}
+              <p class="muted" style="color: var(--critical); margin:0;">Қате: {{ run['error_text'] }}</p>
+              {% elif run['status'] == 'running' %}
+              <p class="muted" style="margin:0;">Тексерісте… ({{ run['processed_pages'] }}/{{ run['total_pages'] }} бет)</p>
+              {% elif run['status'] == 'done' %}
+                {% set results = item['latest_run_results'] %}
+                {% if results %}
+                <div class="table-scroll">
+                  <table class="table">
+                    <thead>
+                      <tr><th>№</th><th>Тесттегі нұсқа</th><th>Кітаптағы дұрысы</th><th>Қате түрі</th><th>Сенімділік</th></tr>
+                    </thead>
+                    <tbody>
+                      {% for row in results %}
+                      <tr>
+                        <td>{{ row.get('question_number', '') }}</td>
+                        <td>{{ row.get('test_variant', '') }}</td>
+                        <td>{{ row.get('book_correct', '') }}</td>
+                        <td>{{ row.get('error_type', '') }}</td>
+                        <td>{{ row.get('confidence', '') }}</td>
+                      </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
+                {% else %}
+                <p class="muted" style="margin:0;">Қате табылмады.</p>
+                {% endif %}
+              {% endif %}
+            {% else %}
+            <p class="muted" style="margin:0;">Әзірге тексерілмеген.</p>
+            {% endif %}
+            <a href="{{ url_for('material_check_page', material_id=item['id']) }}" class="btn btn-outline btn-small" style="margin-top:10px;">Толық бетте ашу / қайта тексеру →</a>
           </td>
         </tr>
         {% endfor %}
@@ -153,6 +193,18 @@
     var container = document.querySelector('.site-main');
     if (!container) return;
     container.addEventListener('click', function (e) {
+      var expandBtn = e.target.closest('.material-expand-btn');
+      if (expandBtn) {
+        var row = expandBtn.closest('tr');
+        var detailsRow = row && row.nextElementSibling;
+        if (!detailsRow || !detailsRow.classList.contains('material-expand-row')) return;
+        var isOpen = detailsRow.style.display !== 'none';
+        detailsRow.style.display = isOpen ? 'none' : '';
+        expandBtn.setAttribute('aria-expanded', String(!isOpen));
+        expandBtn.querySelector('.expand-arrow').textContent = isOpen ? '▸' : '▾';
+        expandBtn.querySelector('.expand-label').textContent = isOpen ? 'Ашу' : 'Жабу';
+        return;
+      }
       var delBtn = e.target.closest('.teacher-delete-btn');
       if (delBtn) {
         delBtn.closest('.teacher-actions').classList.add('is-confirming');

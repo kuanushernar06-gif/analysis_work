@@ -877,6 +877,8 @@ input[type="number"]::-webkit-outer-spin-button {
 .teacher-actions.is-confirming > .teacher-delete-btn { display: none; }
 .teacher-actions.is-confirming .teacher-delete-confirm { display: flex; }
 
+.material-expand-btn .expand-arrow { display: inline-block; width: 0.8em; margin-right: 2px; }
+
 /* ---------- Flash ---------- */
 .flash-stack { margin-bottom: 16px; }
 .flash {
