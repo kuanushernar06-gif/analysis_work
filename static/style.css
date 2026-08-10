@@ -56,7 +56,7 @@
   :root:where(:not([data-theme="light"])) {
     color-scheme: dark;
     --page: #0e0f16;
-    --page-texture: none;
+    --page-texture: url('img/bg-texture-dark.jpg');
     --surface: #14151f;
     --surface-raised: #1a1b28;
     --text-primary: #f5f5f7;
@@ -106,7 +106,7 @@
 :root[data-theme="dark"] {
   color-scheme: dark;
   --page: #0e0f16;
-  --page-texture: none;
+  --page-texture: url('img/bg-texture-dark.jpg');
   --surface: #14151f;
   --surface-raised: #1a1b28;
   --text-primary: #f5f5f7;
@@ -223,8 +223,9 @@ a { color: var(--accent); }
    кетуін болдырмау үшін). */
 .site-shell { display: flex; min-height: 100vh; align-items: stretch; padding-left: 72px; transition: padding-left .2s ease; }
 .site-shell.no-sidebar { padding-left: 0; position: relative; }
-/* Сайдбары жоқ беттердің оң жақ жоғарғы бұрышындағы тұрақты тетіктер
-   тобы (Кітаптар, Басты бетке өту, Шығу) — бір қатарда, бірізді стильде. */
+/* Әр беттің оң жақ жоғарғы бұрышындағы тұрақты тетіктер тобы (Кітаптар,
+   Басты бетке өту, Шығу, қараңғы/жарық тақырып) — бір қатарда, бірізді
+   стильде. Сайдбары бар беттерде тек тақырып тетігі көрінеді. */
 .top-right-actions {
   position: fixed;
   right: 10px;
@@ -253,6 +254,9 @@ a { color: var(--accent); }
   transition: box-shadow .15s ease, color .15s ease, border-color .15s ease;
 }
 .top-right-chip:hover { border-color: var(--accent); color: var(--accent); box-shadow: var(--shadow-hover); }
+.theme-toggle-chip { padding: 9px; }
+.theme-toggle-icon { width: 17px; height: 17px; background-color: var(--text-secondary); }
+.theme-toggle-chip:hover .theme-toggle-icon { background-color: var(--accent); }
 /* Сайдбар қолмен ашық қалдырылғанда (.is-pinned), артындағы мазмұн жабылып
    қалмасын деп негізгі контентті де оң жаққа ысырамыз ("push" layout) —
    бұрынғыдай тек үстінен жауып тұратын overlay емес. Тек desktop енінде
@@ -376,38 +380,6 @@ html[data-sidebar-pinned="true"] .site-sidebar-footer {
 .site-sidebar-nav a.sidebar-add-teacher:hover { color: var(--sidebar-text); }
 
 .site-sidebar-footer { display: flex; flex-direction: column; gap: 8px; }
-.theme-toggle {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  background: transparent;
-  border: 1px solid var(--sidebar-border);
-  color: var(--sidebar-text);
-  padding: 10px 14px;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  font: inherit;
-  font-size: 0.85rem;
-}
-.theme-toggle:hover { background: var(--sidebar-link-hover-bg); }
-.theme-toggle-track {
-  position: relative;
-  width: 32px;
-  height: 18px;
-  border-radius: 999px;
-  background: rgba(43, 15, 4, 0.18);
-  flex-shrink: 0;
-}
-.theme-toggle-thumb {
-  position: absolute;
-  top: 2px; left: 2px;
-  width: 14px; height: 14px;
-  border-radius: 50%;
-  background: var(--sidebar-text);
-  transition: transform .15s ease;
-}
-:root[data-theme="dark"] .theme-toggle-thumb { transform: translateX(14px); }
 
 .site-sidebar-logout { margin: 0; }
 .site-sidebar-logout button {
@@ -577,6 +549,7 @@ a.is-loading-link { opacity: 0.5; pointer-events: none; transition: opacity 0.15
 .ic-printer      { -webkit-mask-image: url('img/icons/printer.svg');      mask-image: url('img/icons/printer.svg'); }
 .ic-psychology   { -webkit-mask-image: url('img/icons/psychology.svg');   mask-image: url('img/icons/psychology.svg'); }
 .ic-magnifier    { -webkit-mask-image: url('img/icons/magnifier.svg');    mask-image: url('img/icons/magnifier.svg'); }
+.ic-theme-toggle { -webkit-mask-image: url('img/icons/theme-toggle.png'); mask-image: url('img/icons/theme-toggle.png'); }
 .hero-card-title { font-weight: 800; font-size: 1.05rem; letter-spacing: -0.01em; position: relative; z-index: 1; }
 .hero-card-sub { font-size: 0.85rem; color: rgba(255, 255, 255, 0.85); line-height: 1.4; margin-top: auto; position: relative; z-index: 1; }
 .hero-card-0 { background: linear-gradient(150deg, var(--card-0) 0%, var(--card-0-deep) 100%); }

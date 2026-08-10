@@ -72,15 +72,16 @@
         {% endif %}
       </nav>
       <div class="site-sidebar-footer">
-        <button type="button" class="theme-toggle no-print" id="theme-toggle" aria-pressed="false" aria-label="Жарық/қараңғы тақырыпты ауыстыру">
-          <span class="theme-toggle-track"><span class="theme-toggle-thumb"></span></span>
-          <span class="theme-toggle-label">Қараңғы тақырып</span>
-        </button>
         <form method="post" action="{{ url_for('logout') }}" class="site-sidebar-logout">
           <button type="submit">Шығу</button>
         </form>
       </div>
     </aside>
+    <div class="top-right-actions no-print">
+      <button type="button" class="top-right-chip theme-toggle-chip" id="theme-toggle" aria-pressed="false" aria-label="Жарық/қараңғы тақырыпты ауыстыру">
+        <span class="ic ic-theme-toggle theme-toggle-icon"></span>
+      </button>
+    </div>
     {% else %}
       <div class="top-right-actions no-print">
         {% if request.endpoint == 'materials_list' %}
@@ -94,6 +95,9 @@
           <button type="submit" class="top-right-chip">Шығу</button>
         </form>
         {% endif %}
+        <button type="button" class="top-right-chip theme-toggle-chip" id="theme-toggle" aria-pressed="false" aria-label="Жарық/қараңғы тақырыпты ауыстыру">
+          <span class="ic ic-theme-toggle theme-toggle-icon"></span>
+        </button>
       </div>
     {% endif %}
     <main class="site-main">
