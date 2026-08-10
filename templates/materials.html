@@ -141,6 +141,10 @@
   <p class="muted" style="margin-top:12px;">
     Тексеру үшін алдымен жоғарыдағы «Жоспар енгізу» бөліміне жоспар сілтемесін қосыңыз.
   </p>
+  {% elif not books_all %}
+  <p class="muted" style="margin-top:12px;">
+    Тексеру үшін алдымен <a href="{{ url_for('books_list', from=program['slug']) }}">Кітаптар</a> бетінен кітап қосыңыз.
+  </p>
   {% else %}
   <form method="post" action="{{ url_for('add_material') }}" class="form-grid">
     <input type="hidden" name="material_type" value="{{ section.slug }}">
@@ -153,21 +157,25 @@
       Сілтеме (Google Docs/Drive)
       <input type="text" name="link" autocomplete="off" placeholder="https://...">
     </label>
-    <label>
-      Ай
-      <select name="month" required>
-        <option value="" disabled selected>Айды таңдаңыз</option>
-        {% for m in range(1, 6) %}
-        <option value="{{ m }}">{{ m }}-ай</option>
+    <div class="col-span-2">
+      <span class="form-label-text">Кітап(тар)</span>
+      <div class="book-checkbox-list">
+        {% for book in books_all %}
+        <label class="book-checkbox-item">
+          <input type="checkbox" name="book_ids" value="{{ book['id'] }}">
+          {{ book['title'] }}
+        </label>
         {% endfor %}
-      </select>
-    </label>
-    <label>
-      Апта
-      <select name="week" required>
-        <option value="" disabled selected>Аптаны таңдаңыз</option>
-        {% for w in range(1, 5) %}
-        <option value="{{ w }}">{{ w }}-апта</option>
+      </div>
+    </div>
+    <label class="col-span-2">
+      Тақырып
+      <select name="week_key" required>
+        <option value="" disabled selected>Таңдаңыз</option>
+        {% for w in plan_weeks %}
+        <option value="{{ w.month }}-{{ w.week }}" {% if not w.has_pages %}disabled{% endif %}>
+          {{ w.month }}-ай {{ w.week }}-апта — {{ w.topic }}{% if not w.has_pages %} (бет ауқымы табылмады){% endif %}
+        </option>
         {% endfor %}
       </select>
     </label>
