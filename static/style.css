@@ -736,28 +736,6 @@ label {
   color: var(--text-secondary);
 }
 
-.form-label-text { display: block; font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 4px; }
-.book-checkbox-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  max-height: 180px;
-  overflow-y: auto;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 10px 12px;
-  background: var(--page);
-}
-.book-checkbox-item {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 8px;
-  font-size: 0.9rem;
-  color: var(--text-primary);
-}
-.book-checkbox-item input[type="checkbox"] { width: auto; margin: 0; }
-
 input, select, textarea {
   font: inherit;
   color: var(--text-primary);

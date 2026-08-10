@@ -236,7 +236,6 @@ CREATE TABLE IF NOT EXISTS material_check_runs (
     target_topic TEXT,
     target_page_start INTEGER,
     target_page_end INTEGER,
-    book_ids_json TEXT,
     material_content TEXT,
     material_content_kind TEXT,
     processed_pages INTEGER NOT NULL DEFAULT 0,
@@ -398,7 +397,6 @@ CREATE TABLE IF NOT EXISTS material_check_runs (
     target_topic TEXT,
     target_page_start INTEGER,
     target_page_end INTEGER,
-    book_ids_json TEXT,
     material_content TEXT,
     material_content_kind TEXT,
     processed_pages INTEGER NOT NULL DEFAULT 0,
@@ -597,9 +595,6 @@ def _migrate(conn):
         conn.commit()
     if not _column_exists(conn, "material_check_runs", "target_page_end"):
         conn.execute("ALTER TABLE material_check_runs ADD COLUMN target_page_end INTEGER")
-        conn.commit()
-    if not _column_exists(conn, "material_check_runs", "book_ids_json"):
-        conn.execute("ALTER TABLE material_check_runs ADD COLUMN book_ids_json TEXT")
         conn.commit()
     if not _column_exists(conn, "streams", "category"):
         _migrate_stream_categories(conn)
