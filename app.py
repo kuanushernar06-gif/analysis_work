@@ -1782,3 +1782,4 @@ if __name__ == "__main__":
     # серверді қайта қосу қажет болса, қолмен (мыс. Claude арқылы) қайта
     # іске қосылады.
     app.run(debug=True, port=5050, use_reloader=False)
+
