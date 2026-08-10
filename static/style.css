@@ -737,6 +737,8 @@ label {
 }
 
 .form-label-text { display: block; font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 4px; }
+.book-picker { margin: 0; }
+.book-picker summary { font-size: 0.85rem; }
 .book-checkbox-list {
   display: flex;
   flex-direction: column;
@@ -746,6 +748,7 @@ label {
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   padding: 10px 12px;
+  margin-top: 8px;
   background: var(--page);
 }
 .book-checkbox-item {

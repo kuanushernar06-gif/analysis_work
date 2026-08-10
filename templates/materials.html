@@ -156,8 +156,8 @@
       Сілтеме (Google Docs/Drive)
       <input type="text" name="link" autocomplete="off" placeholder="https://...">
     </label>
-    <div class="col-span-2">
-      <span class="form-label-text">Кітап(тар)</span>
+    <details class="col-span-2 book-picker">
+      <summary>Кітап(тар) — таңдау үшін ашыңыз</summary>
       <div class="book-checkbox-list">
         {% for book in books_all %}
         <label class="book-checkbox-item">
@@ -166,7 +166,7 @@
         </label>
         {% endfor %}
       </div>
-    </div>
+    </details>
     <label class="col-span-2">
       Тақырып
       <select name="week_key" required>
@@ -232,6 +232,18 @@
       if (cancelBtn) {
         cancelBtn.closest('.teacher-actions').classList.remove('is-confirming');
       }
+    });
+
+    // Кітап(тар) ашылмалы тізімінің тақырыбында нешеуі таңдалғанын көрсетіп
+    // тұрамыз — жабық күйде де таңдауды ұмытпау үшін.
+    document.querySelectorAll('.book-picker').forEach(function (picker) {
+      var summary = picker.querySelector('summary');
+      var defaultText = summary.textContent;
+      function updateSummary() {
+        var n = picker.querySelectorAll('input[name="book_ids"]:checked').length;
+        summary.textContent = n ? n + ' кітап таңдалды' : defaultText;
+      }
+      picker.addEventListener('change', updateSummary);
     });
 
     // Жаңа қосылған материалдардың тексеру статусын (Тексерісте…) тірі
