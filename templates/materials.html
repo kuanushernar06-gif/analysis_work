@@ -7,8 +7,8 @@
     <a class="back-link" href="{{ url_for('materials_list') }}">← Материал тексеру</a>
     <h1>{{ program['name'] }} — Материал тексеру</h1>
     <p class="muted">
-      Әр материал түріне жазба қосыңыз (атауы және Google Docs/Drive сілтемесі),
-      содан кейін тексерілген соң «Тексерілді» деп белгілеңіз.
+      Әр материал түріне жазба қосып, «Тексеру» батырмасын басыңыз — тексеру
+      бірден автоматты түрде басталады.
     </p>
   </div>
 </div>
@@ -51,6 +51,11 @@
 <div class="card">
   <h2>{{ section.label }}</h2>
 
+  {% if not books_all %}
+  <p class="muted" style="margin-top:12px;">
+    Тексеру үшін алдымен <a href="{{ url_for('books_list') }}">Кітаптар</a> бетінен кітап қосыңыз.
+  </p>
+  {% else %}
   <form method="post" action="{{ url_for('add_material') }}" class="form-grid">
     <input type="hidden" name="material_type" value="{{ section.slug }}">
     <input type="hidden" name="program_id" value="{{ program['id'] }}">
@@ -62,10 +67,32 @@
       Сілтеме (Google Docs/Drive)
       <input type="text" name="link" autocomplete="off" placeholder="https://...">
     </label>
+    <label>
+      Кітап
+      <select name="book_id" required>
+        <option value="" disabled selected>Кітапты таңдаңыз</option>
+        {% for book in books_all %}
+        <option value="{{ book['id'] }}">{{ book['title'] }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>
+      Ай/апта
+      <select name="week_key" required>
+        <option value="" disabled selected>Таңдаңыз</option>
+        {% for w in plan_weeks %}
+        <option value="{{ w.month }}-{{ w.week }}" {% if not w.has_pages %}disabled{% endif %}>
+          {{ w.month }}-ай {{ w.week }}-апта — {{ w.topic }}{% if not w.has_pages %} (бет ауқымы табылмады){% endif %}
+        </option>
+        {% endfor %}
+        <option value="full">Толық кітап (толық оқылған болу керек)</option>
+      </select>
+    </label>
     <div class="col-span-2">
-      <button type="submit" class="btn btn-primary">Қосу</button>
+      <button type="submit" class="btn btn-primary">Тексеру</button>
     </div>
   </form>
+  {% endif %}
 
   {% if section.entries %}
   <div class="table-scroll" style="margin-top:16px;">
@@ -73,22 +100,24 @@
       <thead><tr><th>Атауы</th><th>Сілтеме</th><th>Күйі</th><th></th></tr></thead>
       <tbody>
         {% for item in section.entries %}
-        <tr>
+        {% set run = item['latest_run'] %}
+        <tr {% if run and run['status'] == 'running' %}data-run-row data-run-id="{{ run['id'] }}"{% endif %}>
           <td>{{ item['label'] }}</td>
           <td>{% if item['link'] %}<a href="{{ item['link'] }}" target="_blank" rel="noopener">Ашу →</a>{% else %}—{% endif %}</td>
-          <td>
-            <span class="pill {{ 'pill-good' if item['is_checked'] else 'pill-muted' }}">
-              {{ '✓ Тексерілді' if item['is_checked'] else 'Тексерілмеді' }}
-            </span>
+          <td class="run-status-cell">
+            {% if not run %}
+            <span class="pill pill-muted">Тексерілмеді</span>
+            {% elif run['status'] == 'running' %}
+            <span class="pill pill-muted">Тексерісте…</span>
+            {% elif run['status'] == 'error' %}
+            <span class="pill pill-bad">Қате</span>
+            {% else %}
+            <span class="pill pill-good">✓ Тексерілді</span>
+            {% endif %}
           </td>
           <td class="no-print">
             <div class="teacher-actions">
-              <a class="btn btn-outline btn-small" href="{{ url_for('material_check_page', material_id=item['id']) }}">Тексеру</a>
-              <form method="post" action="{{ url_for('toggle_material', material_id=item['id']) }}" style="display:inline">
-                <button type="submit" class="btn btn-outline btn-small">
-                  {{ 'Тексерілмеді деп белгілеу' if item['is_checked'] else 'Тексерілді деп белгілеу' }}
-                </button>
-              </form>
+              <a class="btn btn-outline btn-small" href="{{ url_for('material_check_page', material_id=item['id']) }}">Ашу</a>
               <button type="button" class="btn btn-danger btn-small teacher-delete-btn">Өшіру</button>
               <form method="post" action="{{ url_for('delete_material', material_id=item['id']) }}" class="teacher-delete-confirm">
                 <span class="muted">Шынымен өшіру керек пе?</span>
@@ -136,6 +165,27 @@
       if (cancelBtn) {
         cancelBtn.closest('.teacher-actions').classList.remove('is-confirming');
       }
+    });
+
+    // Жаңа қосылған материалдардың тексеру статусын (Тексерісте…) тірі
+    // түрде бақылап, аяқталған/қателескен соң бетті жаңартамыз — сонда
+    // "Тексерілген материалдар" тізімі де дереу жаңарады.
+    document.querySelectorAll('tr[data-run-row]').forEach(function (row) {
+      var runId = row.getAttribute('data-run-id');
+      var cell = row.querySelector('.run-status-cell');
+      function poll() {
+        fetch('/materials/check_runs/' + runId + '/step', { method: 'POST' })
+          .then(function (r) { return r.json(); })
+          .then(function (data) {
+            if (data.status === 'done' || data.status === 'error') {
+              window.location.reload();
+              return;
+            }
+            setTimeout(poll, 400);
+          })
+          .catch(function () { setTimeout(poll, 1500); });
+      }
+      poll();
     });
   })();
 </script>

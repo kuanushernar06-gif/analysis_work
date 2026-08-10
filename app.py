@@ -830,26 +830,55 @@ def materials_program_page(slug):
         "SELECT * FROM material_checks WHERE program_id = ? ORDER BY material_type, created_at, id",
         (program["id"],),
     ).fetchall()
-    checked_ids = {
-        r["material_id"]
-        for r in conn.execute("SELECT DISTINCT material_id FROM material_check_runs WHERE status = 'done'").fetchall()
-    }
+
+    run_rows = conn.execute(
+        "SELECT id, material_id, status, processed_pages, total_pages FROM material_check_runs ORDER BY id DESC"
+    ).fetchall()
+    latest_run_by_material = {}
+    for r in run_rows:
+        latest_run_by_material.setdefault(r["material_id"], r)
 
     by_type = {slug: [] for slug, _label in db.MATERIAL_TYPES}
     for r in rows:
-        by_type.setdefault(r["material_type"], []).append(r)
+        entry = dict(r)
+        entry["latest_run"] = latest_run_by_material.get(entry["id"])
+        by_type.setdefault(entry["material_type"], []).append(entry)
 
     sections = [
         {
             "slug": slug,
             "label": label,
             "entries": by_type.get(slug, []),
-            "checked_entries": [e for e in by_type.get(slug, []) if e["id"] in checked_ids],
+            "checked_entries": [
+                e for e in by_type.get(slug, []) if e["latest_run"] and e["latest_run"]["status"] == "done"
+            ],
         }
         for slug, label in db.MATERIAL_TYPES
     ]
 
-    return render_template("materials.html", program=program, sections=sections)
+    books_done = conn.execute(
+        "SELECT id, title FROM books WHERE ingest_status = 'done' ORDER BY title"
+    ).fetchall()
+    books_all = conn.execute(
+        "SELECT id, title FROM books WHERE link IS NOT NULL AND link != '' ORDER BY title"
+    ).fetchall()
+
+    plan_weeks = []
+    if program["material_plan_text"]:
+        parsed = material_check.parse_plan_weeks(program["material_plan_text"])
+        plan_weeks = [
+            {"month": m, "week": w, "topic": info["topic"], "has_pages": info["page_start"] is not None}
+            for (m, w), info in sorted(parsed.items())
+        ]
+
+    return render_template(
+        "materials.html",
+        program=program,
+        sections=sections,
+        books_done=books_done,
+        books_all=books_all,
+        plan_weeks=plan_weeks,
+    )
 
 
 @app.route("/materials/<slug>/plan/save", methods=["POST"])
@@ -901,6 +930,57 @@ def remove_material_plan(slug):
     return redirect(url_for("materials_program_page", slug=slug))
 
 
+def _create_material_check_run(conn, material, mode, book_id, month=None, week=None):
+    """material үшін жаңа тексеру жазбасын бастайды.
+    Табысты болса (True, run_id), сәтсіз болса (False, error_text) қайтарады."""
+    if mode == "targeted":
+        book = conn.execute("SELECT * FROM books WHERE id = ? AND link IS NOT NULL", (book_id,)).fetchone()
+        if book is None:
+            return False, "Кітапты таңдаңыз."
+        program = conn.execute("SELECT * FROM programs WHERE id = ?", (material["program_id"],)).fetchone()
+        if not program or not program["material_plan_text"]:
+            return False, "Алдымен жоспар сілтемесін қосыңыз."
+
+        plan_weeks = material_check.parse_plan_weeks(program["material_plan_text"])
+        info = plan_weeks.get((month, week))
+        if not info or info["page_start"] is None:
+            return False, (
+                "Осы ай/апта үшін жоспардан бет ауқымын таба алмадым "
+                "('Оқулық бет' жолын тексеріңіз) — толық кітап режимін қолданыңыз."
+            )
+
+        conn.execute(
+            "INSERT INTO material_check_runs "
+            "(material_id, book_id, status, mode, target_month, target_week, target_topic, "
+            "target_page_start, target_page_end, total_pages) "
+            "VALUES (?, ?, 'running', 'targeted', ?, ?, ?, ?, ?, ?)",
+            (
+                material["id"], book_id, month, week, info["topic"],
+                info["page_start"], info["page_end"],
+                info["page_end"] - info["page_start"] + 1,
+            ),
+        )
+    else:
+        book = conn.execute(
+            "SELECT * FROM books WHERE id = ? AND ingest_status = 'done'", (book_id,)
+        ).fetchone()
+        if book is None:
+            return False, "Кітапты таңдаңыз (толық оқылған болу керек)."
+
+        conn.execute(
+            "INSERT INTO material_check_runs (material_id, book_id, status, mode, total_pages) "
+            "VALUES (?, ?, 'running', 'full', ?)",
+            (material["id"], book_id, book["total_pages"]),
+        )
+
+    conn.commit()
+    run_id = conn.execute(
+        "SELECT id FROM material_check_runs WHERE material_id = ? ORDER BY id DESC LIMIT 1",
+        (material["id"],),
+    ).fetchone()["id"]
+    return True, run_id
+
+
 @app.route("/materials/add", methods=["POST"])
 def add_material():
     conn = get_db()
@@ -909,6 +989,8 @@ def add_material():
     material_type = request.form.get("material_type", "").strip()
     label = request.form.get("label", "").strip()
     link = request.form.get("link", "").strip()
+    book_id = request.form.get("book_id", type=int)
+    week_key = request.form.get("week_key", "").strip()
 
     if program is None:
         flash("Бағдарлама табылмады.", "error")
@@ -919,13 +1001,37 @@ def add_material():
     if not label:
         flash("Жазба атауын енгізіңіз.", "error")
         return redirect(url_for("materials_program_page", slug=program["slug"]))
+    if not book_id or not week_key:
+        flash("Кітапты және ай/апта (немесе «Толық кітап») таңдаңыз.", "error")
+        return redirect(url_for("materials_program_page", slug=program["slug"]))
+
+    if week_key == "full":
+        mode, month, week = "full", None, None
+    else:
+        try:
+            month_s, week_s = week_key.split("-", 1)
+            month, week = int(month_s), int(week_s)
+        except (ValueError, AttributeError):
+            flash("Ай/апта таңдауы дұрыс емес.", "error")
+            return redirect(url_for("materials_program_page", slug=program["slug"]))
+        mode = "targeted"
 
     conn.execute(
         "INSERT INTO material_checks (program_id, material_type, label, link) VALUES (?, ?, ?, ?)",
         (program["id"], material_type, label, link or None),
     )
     conn.commit()
-    flash("Жазба қосылды.", "ok")
+    material = conn.execute(
+        "SELECT * FROM material_checks WHERE program_id = ? AND material_type = ? AND label = ? "
+        "ORDER BY id DESC LIMIT 1",
+        (program["id"], material_type, label),
+    ).fetchone()
+
+    ok, result = _create_material_check_run(conn, material, mode, book_id, month, week)
+    if not ok:
+        flash(f"Жазба қосылды, бірақ тексеру басталмады: {result}", "error")
+    else:
+        flash("Жазба қосылды, тексеру басталды.", "ok")
     return redirect(url_for("materials_program_page", slug=program["slug"]))
 
 
@@ -937,19 +1043,6 @@ def _material_redirect_target(conn, material_id):
     if row is None:
         return redirect(url_for("materials_list"))
     return redirect(url_for("materials_program_page", slug=row["slug"]))
-
-
-@app.route("/materials/<int:material_id>/toggle", methods=["POST"])
-def toggle_material(material_id):
-    conn = get_db()
-    row = conn.execute("SELECT is_checked FROM material_checks WHERE id = ?", (material_id,)).fetchone()
-    if row is not None:
-        conn.execute(
-            "UPDATE material_checks SET is_checked = ? WHERE id = ?",
-            (not row["is_checked"], material_id),
-        )
-        conn.commit()
-    return _material_redirect_target(conn, material_id)
 
 
 @app.route("/materials/<int:material_id>/delete", methods=["POST"])
@@ -1020,58 +1113,13 @@ def start_material_check(material_id):
 
     mode = request.form.get("mode", "full")
     book_id = request.form.get("book_id", type=int)
+    month = request.form.get("month", type=int) if mode == "targeted" else None
+    week = request.form.get("week", type=int) if mode == "targeted" else None
 
-    if mode == "targeted":
-        month = request.form.get("month", type=int)
-        week = request.form.get("week", type=int)
-        book = conn.execute("SELECT * FROM books WHERE id = ? AND link IS NOT NULL", (book_id,)).fetchone()
-        if book is None:
-            return jsonify({"status": "error", "error": "Кітапты таңдаңыз."}), 400
-        program = conn.execute("SELECT * FROM programs WHERE id = ?", (material["program_id"],)).fetchone()
-        if not program or not program["material_plan_text"]:
-            return jsonify({"status": "error", "error": "Алдымен жоспар сілтемесін қосыңыз."}), 400
-
-        plan_weeks = material_check.parse_plan_weeks(program["material_plan_text"])
-        info = plan_weeks.get((month, week))
-        if not info or info["page_start"] is None:
-            return jsonify(
-                {
-                    "status": "error",
-                    "error": "Осы ай/апта үшін жоспардан бет ауқымын таба алмадым "
-                    "('Оқулық бет' жолын тексеріңіз) — толық кітап режимін қолданыңыз.",
-                }
-            ), 400
-
-        conn.execute(
-            "INSERT INTO material_check_runs "
-            "(material_id, book_id, status, mode, target_month, target_week, target_topic, "
-            "target_page_start, target_page_end, total_pages) "
-            "VALUES (?, ?, 'running', 'targeted', ?, ?, ?, ?, ?, ?)",
-            (
-                material_id, book_id, month, week, info["topic"],
-                info["page_start"], info["page_end"],
-                info["page_end"] - info["page_start"] + 1,
-            ),
-        )
-    else:
-        book = conn.execute(
-            "SELECT * FROM books WHERE id = ? AND ingest_status = 'done'", (book_id,)
-        ).fetchone()
-        if book is None:
-            return jsonify({"status": "error", "error": "Кітапты таңдаңыз (толық оқылған болу керек)."}), 400
-
-        conn.execute(
-            "INSERT INTO material_check_runs (material_id, book_id, status, mode, total_pages) "
-            "VALUES (?, ?, 'running', 'full', ?)",
-            (material_id, book_id, book["total_pages"]),
-        )
-
-    conn.commit()
-    run_id = conn.execute(
-        "SELECT id FROM material_check_runs WHERE material_id = ? ORDER BY id DESC LIMIT 1",
-        (material_id,),
-    ).fetchone()["id"]
-    return jsonify({"status": "ok", "run_id": run_id})
+    ok, result = _create_material_check_run(conn, material, mode, book_id, month, week)
+    if not ok:
+        return jsonify({"status": "error", "error": result}), 400
+    return jsonify({"status": "ok", "run_id": result})
 
 
 @app.route("/materials/check_runs/<int:run_id>/step", methods=["POST"])
