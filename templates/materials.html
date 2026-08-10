@@ -27,6 +27,11 @@
       </button>
     </div>
   </form>
+  {% if program['material_plan_fetch_error'] %}
+  <p class="flash flash-error" style="margin-top:12px;">Жоспарды жүктеу қатесі: {{ program['material_plan_fetch_error'] }}</p>
+  {% elif program['material_plan_url'] and program['material_plan_text'] %}
+  <p class="muted" style="margin-top:12px;">Жоспар жүктелді — «Тексеру» бетінде ай/апта бойынша таңдауға болады.</p>
+  {% endif %}
   {% if program['material_plan_url'] %}
   <div class="teacher-actions" style="margin-top:12px;">
     <a class="btn btn-outline btn-small" href="{{ program['material_plan_url'] }}" target="_blank" rel="noopener">Ашу →</a>

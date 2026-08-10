@@ -106,7 +106,9 @@ CREATE TABLE IF NOT EXISTS programs (
     sort_order INTEGER DEFAULT 0,
     plan_doc_url TEXT,
     plan_doc_fetch_error TEXT,
-    material_plan_url TEXT
+    material_plan_url TEXT,
+    material_plan_text TEXT,
+    material_plan_fetch_error TEXT
 );
 
 CREATE TABLE IF NOT EXISTS streams (
@@ -228,6 +230,12 @@ CREATE TABLE IF NOT EXISTS material_check_runs (
     material_id INTEGER NOT NULL REFERENCES material_checks(id) ON DELETE CASCADE,
     book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE,
     status TEXT NOT NULL DEFAULT 'running',
+    mode TEXT NOT NULL DEFAULT 'full',
+    target_month INTEGER,
+    target_week INTEGER,
+    target_topic TEXT,
+    target_page_start INTEGER,
+    target_page_end INTEGER,
     material_content TEXT,
     material_content_kind TEXT,
     processed_pages INTEGER NOT NULL DEFAULT 0,
@@ -259,7 +267,9 @@ CREATE TABLE IF NOT EXISTS programs (
     sort_order INTEGER DEFAULT 0,
     plan_doc_url TEXT,
     plan_doc_fetch_error TEXT,
-    material_plan_url TEXT
+    material_plan_url TEXT,
+    material_plan_text TEXT,
+    material_plan_fetch_error TEXT
 );
 
 CREATE TABLE IF NOT EXISTS streams (
@@ -381,6 +391,12 @@ CREATE TABLE IF NOT EXISTS material_check_runs (
     material_id INTEGER NOT NULL REFERENCES material_checks(id) ON DELETE CASCADE,
     book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE,
     status TEXT NOT NULL DEFAULT 'running',
+    mode TEXT NOT NULL DEFAULT 'full',
+    target_month INTEGER,
+    target_week INTEGER,
+    target_topic TEXT,
+    target_page_start INTEGER,
+    target_page_end INTEGER,
     material_content TEXT,
     material_content_kind TEXT,
     processed_pages INTEGER NOT NULL DEFAULT 0,
@@ -553,8 +569,32 @@ def _migrate(conn):
     if not _column_exists(conn, "programs", "material_plan_url"):
         conn.execute("ALTER TABLE programs ADD COLUMN material_plan_url TEXT")
         conn.commit()
+    if not _column_exists(conn, "programs", "material_plan_text"):
+        conn.execute("ALTER TABLE programs ADD COLUMN material_plan_text TEXT")
+        conn.commit()
+    if not _column_exists(conn, "programs", "material_plan_fetch_error"):
+        conn.execute("ALTER TABLE programs ADD COLUMN material_plan_fetch_error TEXT")
+        conn.commit()
     if not _column_exists(conn, "material_checks", "program_id"):
         conn.execute("ALTER TABLE material_checks ADD COLUMN program_id INTEGER REFERENCES programs(id)")
+        conn.commit()
+    if not _column_exists(conn, "material_check_runs", "mode"):
+        conn.execute("ALTER TABLE material_check_runs ADD COLUMN mode TEXT NOT NULL DEFAULT 'full'")
+        conn.commit()
+    if not _column_exists(conn, "material_check_runs", "target_month"):
+        conn.execute("ALTER TABLE material_check_runs ADD COLUMN target_month INTEGER")
+        conn.commit()
+    if not _column_exists(conn, "material_check_runs", "target_week"):
+        conn.execute("ALTER TABLE material_check_runs ADD COLUMN target_week INTEGER")
+        conn.commit()
+    if not _column_exists(conn, "material_check_runs", "target_topic"):
+        conn.execute("ALTER TABLE material_check_runs ADD COLUMN target_topic TEXT")
+        conn.commit()
+    if not _column_exists(conn, "material_check_runs", "target_page_start"):
+        conn.execute("ALTER TABLE material_check_runs ADD COLUMN target_page_start INTEGER")
+        conn.commit()
+    if not _column_exists(conn, "material_check_runs", "target_page_end"):
+        conn.execute("ALTER TABLE material_check_runs ADD COLUMN target_page_end INTEGER")
         conn.commit()
     if not _column_exists(conn, "streams", "category"):
         _migrate_stream_categories(conn)

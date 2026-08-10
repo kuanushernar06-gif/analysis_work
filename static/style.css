@@ -782,6 +782,26 @@ input[type="number"]::-webkit-outer-spin-button {
 .btn-danger { background: var(--critical-bg); color: var(--critical); }
 .btn-danger:hover { filter: brightness(0.96); }
 .btn-small { padding: 5px 10px; font-size: 0.8rem; border-radius: 8px; }
+
+.tabs { display: flex; gap: 6px; margin-bottom: 4px; }
+.tab-btn {
+  font: inherit;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-secondary);
+  padding: 8px 14px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 600;
+  transition: background-color .12s ease, color .12s ease, border-color .12s ease;
+}
+.tab-btn:hover { border-color: var(--accent); color: var(--accent); }
+.tab-btn.is-active {
+  background: linear-gradient(155deg, var(--accent-2) 0%, var(--accent) 70%);
+  border-color: transparent;
+  color: #fff;
+}
 .btn.is-loading {
   display: inline-flex;
   align-items: center;

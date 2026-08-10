@@ -864,9 +864,23 @@ def save_material_plan(slug):
         flash("Жоспар сілтемесін енгізіңіз.", "error")
         return redirect(url_for("materials_program_page", slug=slug))
 
-    conn.execute("UPDATE programs SET material_plan_url = ? WHERE id = ?", (plan_url, program["id"]))
+    plan_text = None
+    fetch_error = None
+    try:
+        plan_text = fetch_doc_text(plan_url, max_chars=200_000)
+    except DocFetchError as e:
+        fetch_error = str(e)
+
+    conn.execute(
+        "UPDATE programs SET material_plan_url = ?, material_plan_text = ?, material_plan_fetch_error = ? "
+        "WHERE id = ?",
+        (plan_url, plan_text, fetch_error, program["id"]),
+    )
     conn.commit()
-    flash("Жоспар сілтемесі сақталды.", "ok")
+    if fetch_error:
+        flash(f"Жоспар сілтемесі сақталды, бірақ жүктеу сәтсіз аяқталды: {fetch_error}", "error")
+    else:
+        flash("Жоспар сілтемесі сақталды және жүктелді.", "ok")
     return redirect(url_for("materials_program_page", slug=slug))
 
 
@@ -877,7 +891,11 @@ def remove_material_plan(slug):
     if program is None:
         return redirect(url_for("materials_list"))
 
-    conn.execute("UPDATE programs SET material_plan_url = NULL WHERE id = ?", (program["id"],))
+    conn.execute(
+        "UPDATE programs SET material_plan_url = NULL, material_plan_text = NULL, "
+        "material_plan_fetch_error = NULL WHERE id = ?",
+        (program["id"],),
+    )
     conn.commit()
     flash("Жоспар сілтемесі алып тасталды.", "ok")
     return redirect(url_for("materials_program_page", slug=slug))
@@ -954,9 +972,21 @@ def material_check_page(material_id):
 
     program = conn.execute("SELECT * FROM programs WHERE id = ?", (material["program_id"],)).fetchone()
 
-    books = conn.execute(
+    books_done = conn.execute(
         "SELECT id, title FROM books WHERE ingest_status = 'done' ORDER BY title"
     ).fetchall()
+    books_all = conn.execute(
+        "SELECT id, title FROM books WHERE link IS NOT NULL AND link != '' ORDER BY title"
+    ).fetchall()
+
+    plan_weeks = []
+    if program and program["material_plan_text"]:
+        parsed = material_check.parse_plan_weeks(program["material_plan_text"])
+        plan_weeks = [
+            {"month": m, "week": w, "topic": info["topic"], "has_pages": info["page_start"] is not None}
+            for (m, w), info in sorted(parsed.items())
+        ]
+
     run = conn.execute(
         "SELECT * FROM material_check_runs WHERE material_id = ? ORDER BY id DESC LIMIT 1",
         (material_id,),
@@ -973,7 +1003,9 @@ def material_check_page(material_id):
         material=material,
         program=program,
         material_type_label=db.MATERIAL_TYPE_LABELS.get(material["material_type"], material["material_type"]),
-        books=books,
+        books_done=books_done,
+        books_all=books_all,
+        plan_weeks=plan_weeks,
         run=run,
         results=results,
     )
@@ -986,18 +1018,54 @@ def start_material_check(material_id):
     if material is None:
         return jsonify({"status": "error", "error": "Жазба табылмады."}), 404
 
+    mode = request.form.get("mode", "full")
     book_id = request.form.get("book_id", type=int)
-    book = conn.execute(
-        "SELECT * FROM books WHERE id = ? AND ingest_status = 'done'", (book_id,)
-    ).fetchone()
-    if book is None:
-        return jsonify({"status": "error", "error": "Кітапты таңдаңыз (толық оқылған болу керек)."}), 400
 
-    conn.execute(
-        "INSERT INTO material_check_runs (material_id, book_id, status, total_pages) "
-        "VALUES (?, ?, 'running', ?)",
-        (material_id, book_id, book["total_pages"]),
-    )
+    if mode == "targeted":
+        month = request.form.get("month", type=int)
+        week = request.form.get("week", type=int)
+        book = conn.execute("SELECT * FROM books WHERE id = ? AND link IS NOT NULL", (book_id,)).fetchone()
+        if book is None:
+            return jsonify({"status": "error", "error": "Кітапты таңдаңыз."}), 400
+        program = conn.execute("SELECT * FROM programs WHERE id = ?", (material["program_id"],)).fetchone()
+        if not program or not program["material_plan_text"]:
+            return jsonify({"status": "error", "error": "Алдымен жоспар сілтемесін қосыңыз."}), 400
+
+        plan_weeks = material_check.parse_plan_weeks(program["material_plan_text"])
+        info = plan_weeks.get((month, week))
+        if not info or info["page_start"] is None:
+            return jsonify(
+                {
+                    "status": "error",
+                    "error": "Осы ай/апта үшін жоспардан бет ауқымын таба алмадым "
+                    "('Оқулық бет' жолын тексеріңіз) — толық кітап режимін қолданыңыз.",
+                }
+            ), 400
+
+        conn.execute(
+            "INSERT INTO material_check_runs "
+            "(material_id, book_id, status, mode, target_month, target_week, target_topic, "
+            "target_page_start, target_page_end, total_pages) "
+            "VALUES (?, ?, 'running', 'targeted', ?, ?, ?, ?, ?, ?)",
+            (
+                material_id, book_id, month, week, info["topic"],
+                info["page_start"], info["page_end"],
+                info["page_end"] - info["page_start"] + 1,
+            ),
+        )
+    else:
+        book = conn.execute(
+            "SELECT * FROM books WHERE id = ? AND ingest_status = 'done'", (book_id,)
+        ).fetchone()
+        if book is None:
+            return jsonify({"status": "error", "error": "Кітапты таңдаңыз (толық оқылған болу керек)."}), 400
+
+        conn.execute(
+            "INSERT INTO material_check_runs (material_id, book_id, status, mode, total_pages) "
+            "VALUES (?, ?, 'running', 'full', ?)",
+            (material_id, book_id, book["total_pages"]),
+        )
+
     conn.commit()
     run_id = conn.execute(
         "SELECT id FROM material_check_runs WHERE material_id = ? ORDER BY id DESC LIMIT 1",
@@ -1068,29 +1136,45 @@ def step_material_check(run_id):
                 {"status": "done", "processed_pages": total_pages, "total_pages": total_pages, "results": final}
             )
 
-        page_start = processed + 1
-        page_end = min(page_start + material_check.PAGES_PER_BATCH - 1, total_pages)
-        chunks = conn.execute(
-            "SELECT content_text FROM book_chunks WHERE book_id = ? AND page_start >= ? AND page_end <= ? "
-            "ORDER BY page_start",
-            (run["book_id"], page_start, page_end),
-        ).fetchall()
-        book_segment = "\n\n".join(c["content_text"] for c in chunks)
+        if run["mode"] == "targeted":
+            book = conn.execute("SELECT * FROM books WHERE id = ?", (run["book_id"],)).fetchone()
+            if book is None or not book["link"]:
+                raise material_check.MaterialCheckError("Кітап табылмады немесе сілтемесі жоқ.")
+            page_start = run["target_page_start"]
+            page_end = run["target_page_end"]
+            pdf_bytes = download_drive_file(book["link"])
+            book_pdf_slice = extract_chunk_pdf_bytes(pdf_bytes, page_start, page_end)
+            batch_findings = material_check.check_targeted(
+                kind, content, book_pdf_slice, page_start, page_end, run["target_topic"], criteria, api_key
+            )
+        else:
+            page_start = processed + 1
+            page_end = min(page_start + material_check.PAGES_PER_BATCH - 1, total_pages)
+            chunks = conn.execute(
+                "SELECT content_text FROM book_chunks WHERE book_id = ? AND page_start >= ? AND page_end <= ? "
+                "ORDER BY page_start",
+                (run["book_id"], page_start, page_end),
+            ).fetchall()
+            book_segment = "\n\n".join(c["content_text"] for c in chunks)
+            batch_findings = material_check.check_batch(
+                kind, content, book_segment, page_start, page_end, criteria, api_key
+            )
 
-        batch_findings = material_check.check_batch(
-            kind, content, book_segment, page_start, page_end, criteria, api_key
-        )
+        # targeted режимде бүкіл ауқым бір қадамда өтеді, сол себепті
+        # processed_pages-ты (қатысты санауыш, 0..total_pages) толық деп
+        # белгілейміз — page_end (кітаптағы абсолютті бет нөмірі) емес.
+        new_processed = total_pages if run["mode"] == "targeted" else page_end
 
         existing = json.loads(run["findings_json"] or "[]")
         existing.extend(batch_findings)
         conn.execute(
             "UPDATE material_check_runs SET findings_json = ?, processed_pages = ? WHERE id = ?",
-            (json.dumps(existing, ensure_ascii=False), page_end, run_id),
+            (json.dumps(existing, ensure_ascii=False), new_processed, run_id),
         )
         conn.commit()
 
-        return jsonify({"status": "running", "processed_pages": page_end, "total_pages": total_pages})
-    except material_check.MaterialCheckError as e:
+        return jsonify({"status": "running", "processed_pages": new_processed, "total_pages": total_pages})
+    except (material_check.MaterialCheckError, BookIngestError) as e:
         conn.execute("UPDATE material_check_runs SET status = 'error', error_text = ? WHERE id = ?", (str(e), run_id))
         conn.commit()
         return jsonify({"status": "error", "error": str(e)})

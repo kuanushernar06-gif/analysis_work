@@ -11,12 +11,13 @@
 
 import base64
 import json
+import re
 import time
 import urllib.error
 import urllib.request
 
 from books_ingest import download_drive_file, BookIngestError
-from gdocs import fetch_doc_text, DocFetchError
+from gdocs import fetch_doc_text, DocFetchError, parse_weekly_plan, classify_plan_sections, PlanParseError
 from netfetch import SSL_CONTEXT, USER_AGENT
 
 CHECK_MODEL = "claude-sonnet-5"
@@ -73,6 +74,47 @@ CRITERIA_BY_TYPE = {
 5) техникалық/дизайндық қателіктер
 6) вариант дұрыс құралған ба""",
 }
+
+# Жоспар құжатындағы "Оқулық бет" жолдарында бет ауқымы екі түрлі ретпен
+# кездесуі мүмкін: сан алдында ("Оқулық бет 8-11") немесе сан артында
+# ("8-11 беттер") — екеуін де таниміз.
+PAGE_RANGE_RE_PREFIX = re.compile(r"бет(?:і|тер)?\s*[:\-]?\s*(\d+)\s*[-–—]\s*(\d+)")
+PAGE_RANGE_RE_SUFFIX = re.compile(r"(\d+)\s*[-–—]\s*(\d+)\s*беттер?")
+
+
+def extract_page_range(text):
+    text = text or ""
+    m = PAGE_RANGE_RE_PREFIX.search(text) or PAGE_RANGE_RE_SUFFIX.search(text)
+    if not m:
+        return None
+    a, b = int(m.group(1)), int(m.group(2))
+    return (min(a, b), max(a, b))
+
+
+def parse_plan_weeks(plan_text):
+    """Жоспар мәтінінен әр (ай, апта) үшін тақырып пен бет ауқымын алады:
+    {(ай, апта): {"topic": str, "page_start": int|None, "page_end": int|None}}.
+    Бет ауқымы табылмаса, кейін толық кітап режиміне ауысуға болады деп,
+    page_start/page_end None болып қалады — қате шығармаймыз."""
+    try:
+        weeks = parse_weekly_plan(plan_text)
+    except PlanParseError:
+        return {}
+
+    result = {}
+    for (month, week), text in weeks.items():
+        sections = classify_plan_sections(text)
+        topic_line = ""
+        if sections["topics"]:
+            topic_line = sections["topics"].split("\n")[0].strip()
+        page_range = extract_page_range(sections["scope"]) or extract_page_range(text)
+        result[(month, week)] = {
+            "topic": topic_line or f"{month}-ай {week}-апта",
+            "page_start": page_range[0] if page_range else None,
+            "page_end": page_range[1] if page_range else None,
+        }
+    return result
+
 
 FINDING_SCHEMA_HINT = """[
   {
@@ -261,6 +303,46 @@ def check_batch(material_kind, material_content, book_segment_text, page_start, 
         book_segment=book_segment_text, schema=FINDING_SCHEMA_HINT,
     )
     content_blocks = [_material_content_block(material_kind, material_content), {"type": "text", "text": prompt}]
+    return _call_claude_with_key(content_blocks, api_key, thinking_disabled=True)
+
+
+TARGETED_PROMPT = """Сен білім беру материалдарын тексеретін сарапшысың.
+
+{criteria}
+
+Тексерілетін материал мен эталон кітаптың {page_start}-{page_end} беттері
+(жоспар бойынша тақырыбы: «{topic}») төменде құжат түрінде тіркелген.
+Материалдағы осы тақырыпқа қатысты әр сұрақ/тапсырманы кітап мазмұнымен
+салыстырып тексер. Материалда осы тақырыпқа қатысы жоқ сұрақтар болса,
+оларды елемей өт.
+
+Жауапты ТЕК осы JSON схемасына сәйкес таза JSON тізім түрінде қайтар —
+түсіндірме, markdown белгісі (```), қосымша мәтін қоспа. Қате табылмаса, бос
+тізім [] қайтар.
+
+JSON схемасы:
+{schema}
+"""
+
+
+def check_targeted(material_kind, material_content, book_pdf_bytes, page_start, page_end, topic, criteria, api_key):
+    """Толық кітапты алдын ала оқымай-ақ, жоспардан табылған нақты бет
+    ауқымын кітаптың Drive сілтемесінен сол сәтте жүктеп алып, материалмен
+    бір-ақ сұраныста салыстырады — books_ingest.py-дың бет-бетімен алдын ала
+    оқу процесіне тәуелді емес."""
+    prompt = TARGETED_PROMPT.format(
+        criteria=criteria, page_start=page_start, page_end=page_end,
+        topic=topic or "белгісіз", schema=FINDING_SCHEMA_HINT,
+    )
+    book_block = {
+        "type": "document",
+        "source": {
+            "type": "base64",
+            "media_type": "application/pdf",
+            "data": base64.standard_b64encode(book_pdf_bytes).decode("ascii"),
+        },
+    }
+    content_blocks = [_material_content_block(material_kind, material_content), book_block, {"type": "text", "text": prompt}]
     return _call_claude_with_key(content_blocks, api_key, thinking_disabled=True)
 
 
