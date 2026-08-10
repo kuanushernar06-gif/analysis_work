@@ -112,8 +112,40 @@ def parse_plan_weeks(plan_text):
             "topic": topic_line or f"{month}-ай {week}-апта",
             "page_start": page_range[0] if page_range else None,
             "page_end": page_range[1] if page_range else None,
+            "raw_text": text,
         }
     return result
+
+
+_GRADE_RE = re.compile(r"(\d+)\s*-?\s*сынып", re.IGNORECASE)
+
+
+def match_book_for_week(books, week_text):
+    """Аптаның жоспар мәтінінен сынып пен баспа атауын анықтап, соған сәйкес
+    келетін жалғыз кітапты табады. Кітап атауы '<N>-сынып, <БАСПА>' пішімінде
+    деп есептеледі. Сынып саны ғана сәйкес келуі жеткіліксіз — баспа атауы да
+    мәтінде кездесуі керек (бір сыныпта бірнеше баспа болуы мүмкін, мыс.
+    «8-сынып, Мектеп» мен «8-сынып, Атамұра» шатастырмау үшін). Дәл бір кітап
+    табылмаса (жоқ немесе бірнешеу сәйкес келсе), None қайтарады."""
+    text_lower = (week_text or "").lower()
+    matches = []
+    for b in books:
+        title = b["title"] or ""
+        grade_m = _GRADE_RE.search(title)
+        if not grade_m:
+            continue
+        grade_num = grade_m.group(1)
+        parts = title.split(",", 1)
+        publisher = parts[1].strip() if len(parts) > 1 else ""
+        if not publisher:
+            continue
+        grade_ok = re.search(rf"{re.escape(grade_num)}\s*-?\s*сынып", text_lower) is not None
+        publisher_ok = publisher.lower() in text_lower
+        if grade_ok and publisher_ok:
+            matches.append(b)
+    if len(matches) == 1:
+        return matches[0]
+    return None
 
 
 FINDING_SCHEMA_HINT = """[

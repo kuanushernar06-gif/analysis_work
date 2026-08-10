@@ -856,29 +856,7 @@ def materials_program_page(slug):
         for slug, label in db.MATERIAL_TYPES
     ]
 
-    books_done = conn.execute(
-        "SELECT id, title FROM books WHERE ingest_status = 'done' ORDER BY title"
-    ).fetchall()
-    books_all = conn.execute(
-        "SELECT id, title FROM books WHERE link IS NOT NULL AND link != '' ORDER BY title"
-    ).fetchall()
-
-    plan_weeks = []
-    if program["material_plan_text"]:
-        parsed = material_check.parse_plan_weeks(program["material_plan_text"])
-        plan_weeks = [
-            {"month": m, "week": w, "topic": info["topic"], "has_pages": info["page_start"] is not None}
-            for (m, w), info in sorted(parsed.items())
-        ]
-
-    return render_template(
-        "materials.html",
-        program=program,
-        sections=sections,
-        books_done=books_done,
-        books_all=books_all,
-        plan_weeks=plan_weeks,
-    )
+    return render_template("materials.html", program=program, sections=sections)
 
 
 @app.route("/materials/<slug>/plan/save", methods=["POST"])
@@ -981,6 +959,36 @@ def _create_material_check_run(conn, material, mode, book_id, month=None, week=N
     return True, run_id
 
 
+def _auto_start_material_check(conn, material, month, week):
+    """Ай/апта бойынша тексеруді бастайды — кітапты қолмен таңдатпай,
+    жоспардың сол апталық мәтінінен сынып пен баспа атауын оқып, соған сай
+    келетін кітапты material_check.match_book_for_week арқылы өзі табады."""
+    program = conn.execute("SELECT * FROM programs WHERE id = ?", (material["program_id"],)).fetchone()
+    if not program or not program["material_plan_text"]:
+        return False, "Алдымен жоспар сілтемесін қосыңыз."
+
+    plan_weeks = material_check.parse_plan_weeks(program["material_plan_text"])
+    info = plan_weeks.get((month, week))
+    if not info or info["page_start"] is None:
+        return False, (
+            "Осы ай/апта үшін жоспардан бет ауқымын таба алмадым "
+            "('Оқулық бет' жолын тексеріңіз)."
+        )
+
+    books = conn.execute(
+        "SELECT id, title FROM books WHERE link IS NOT NULL AND link != ''"
+    ).fetchall()
+    book = material_check.match_book_for_week(books, info["raw_text"])
+    if book is None:
+        return False, (
+            "Осы аптаның жоспар мәтінінен сынып/баспа бойынша сәйкес кітапты анықтай "
+            "алмадым — Кітаптар тізіміндегі атаудың (мыс. «8-сынып, Мектеп») жоспар "
+            "мәтініндегі сынып пен баспа атауына дәл сай екенін тексеріңіз."
+        )
+
+    return _create_material_check_run(conn, material, "targeted", book["id"], month, week)
+
+
 @app.route("/materials/add", methods=["POST"])
 def add_material():
     conn = get_db()
@@ -989,8 +997,8 @@ def add_material():
     material_type = request.form.get("material_type", "").strip()
     label = request.form.get("label", "").strip()
     link = request.form.get("link", "").strip()
-    book_id = request.form.get("book_id", type=int)
-    week_key = request.form.get("week_key", "").strip()
+    month = request.form.get("month", type=int)
+    week = request.form.get("week", type=int)
 
     if program is None:
         flash("Бағдарлама табылмады.", "error")
@@ -1001,20 +1009,9 @@ def add_material():
     if not label:
         flash("Жазба атауын енгізіңіз.", "error")
         return redirect(url_for("materials_program_page", slug=program["slug"]))
-    if not book_id or not week_key:
-        flash("Кітапты және ай/апта (немесе «Толық кітап») таңдаңыз.", "error")
+    if not month or not week or not (1 <= month <= 5) or not (1 <= week <= 4):
+        flash("Айды (1-5) және аптаны (1-4) таңдаңыз.", "error")
         return redirect(url_for("materials_program_page", slug=program["slug"]))
-
-    if week_key == "full":
-        mode, month, week = "full", None, None
-    else:
-        try:
-            month_s, week_s = week_key.split("-", 1)
-            month, week = int(month_s), int(week_s)
-        except (ValueError, AttributeError):
-            flash("Ай/апта таңдауы дұрыс емес.", "error")
-            return redirect(url_for("materials_program_page", slug=program["slug"]))
-        mode = "targeted"
 
     conn.execute(
         "INSERT INTO material_checks (program_id, material_type, label, link) VALUES (?, ?, ?, ?)",
@@ -1027,7 +1024,7 @@ def add_material():
         (program["id"], material_type, label),
     ).fetchone()
 
-    ok, result = _create_material_check_run(conn, material, mode, book_id, month, week)
+    ok, result = _auto_start_material_check(conn, material, month, week)
     if not ok:
         flash(f"Жазба қосылды, бірақ тексеру басталмады: {result}", "error")
     else:
