@@ -1236,6 +1236,14 @@ def step_material_check(run_id):
         return jsonify({"status": "error", "error": str(e)})
 
 
+def _books_back_url(conn, slug):
+    if slug:
+        program = _material_program_or_404(conn, slug)
+        if program is not None:
+            return url_for("materials_program_page", slug=slug)
+    return url_for("materials_list")
+
+
 @app.route("/books")
 def books_list():
     conn = get_db()
@@ -1243,7 +1251,13 @@ def books_list():
         "SELECT id, title, link, total_pages, ingest_status, ingest_error, created_at "
         "FROM books ORDER BY created_at, id"
     ).fetchall()
-    return render_template("books.html", books=books)
+    from_slug = request.args.get("from", "").strip()
+    return render_template(
+        "books.html",
+        books=books,
+        from_slug=from_slug,
+        back_url=_books_back_url(conn, from_slug),
+    )
 
 
 @app.route("/books/add", methods=["POST"])
@@ -1251,10 +1265,11 @@ def add_book():
     conn = get_db()
     title = request.form.get("title", "").strip()
     link = request.form.get("link", "").strip()
+    from_slug = request.form.get("from", "").strip()
 
     if not title:
         flash("Кітап атауын енгізіңіз.", "error")
-        return redirect(url_for("books_list"))
+        return redirect(url_for("books_list", **({"from": from_slug} if from_slug else {})))
 
     conn.execute(
         "INSERT INTO books (title, link) VALUES (?, ?)",
@@ -1262,7 +1277,7 @@ def add_book():
     )
     conn.commit()
     flash("Кітап қосылды.", "ok")
-    return redirect(url_for("books_list"))
+    return redirect(url_for("books_list", **({"from": from_slug} if from_slug else {})))
 
 
 @app.route("/books/<int:book_id>/ingest/step", methods=["POST"])
@@ -1379,10 +1394,11 @@ def ingest_book_step(book_id):
 @app.route("/books/<int:book_id>/delete", methods=["POST"])
 def delete_book(book_id):
     conn = get_db()
+    from_slug = request.form.get("from", "").strip()
     conn.execute("DELETE FROM books WHERE id = ?", (book_id,))
     conn.commit()
     flash("Кітап жойылды.", "ok")
-    return redirect(url_for("books_list"))
+    return redirect(url_for("books_list", **({"from": from_slug} if from_slug else {})))
 
 
 @app.route("/weeks/<int:week_id>/delete", methods=["POST"])

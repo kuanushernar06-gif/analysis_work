@@ -4,18 +4,19 @@
 
 <div class="page-head">
   <div>
-    <a class="back-link" href="{{ url_for('materials_list') }}">← Материал тексеру</a>
+    <a class="back-link" href="{{ back_url }}">← Материал тексеру</a>
     <h1>Кітаптар</h1>
     <p class="muted">
       Кітапты Google Drive-қа жүктеп, атауы мен сілтемесін осында қосыңыз.
-      Кітап қосылған соң, Клод оны толық бет-бетімен автоматты түрде оқып алады —
-      бұл біраз уақыт алуы мүмкін, бетті жаппай-ақ күте аласыз.
+      Ай/апта бойынша тексеру кітаптың тек керек беттерін сол сәтте оқиды,
+      сондықтан кітапты алдын ала толық оқытудың қажеті жоқ.
     </p>
   </div>
 </div>
 
 <div class="card">
   <form method="post" action="{{ url_for('add_book') }}" class="form-grid">
+    <input type="hidden" name="from" value="{{ from_slug }}">
     <label>
       Атауы
       <input type="text" name="title" required autocomplete="off" placeholder="Мысалы: 6-сынып АТАМҰРА">
@@ -32,25 +33,17 @@
   {% if books %}
   <div class="table-scroll" style="margin-top:16px;">
     <table class="table">
-      <thead><tr><th>Атауы</th><th>Сілтеме</th><th>Оқылу күйі</th><th></th></tr></thead>
+      <thead><tr><th>Атауы</th><th>Сілтеме</th><th></th></tr></thead>
       <tbody>
         {% for book in books %}
         <tr data-book-row data-book-id="{{ book['id'] }}" data-ingest-status="{{ book['ingest_status'] }}">
           <td>{{ book['title'] }}</td>
           <td>{% if book['link'] %}<a href="{{ book['link'] }}" target="_blank" rel="noopener">Ашу →</a>{% else %}—{% endif %}</td>
-          <td data-ingest-cell>
-            {% if book['ingest_status'] == 'done' %}
-            <span class="pill pill-good">✓ Оқылды{% if book['total_pages'] %} ({{ book['total_pages'] }} бет){% endif %}</span>
-            {% elif book['ingest_status'] == 'error' %}
-            <span class="pill pill-bad" title="{{ book['ingest_error'] or '' }}">Қате</span>
-            {% else %}
-            <span class="pill pill-gold">Оқылуда…</span>
-            {% endif %}
-          </td>
           <td class="no-print">
             <div class="teacher-actions">
               <button type="button" class="btn btn-danger btn-small teacher-delete-btn">Өшіру</button>
               <form method="post" action="{{ url_for('delete_book', book_id=book['id']) }}" class="teacher-delete-confirm">
+                <input type="hidden" name="from" value="{{ from_slug }}">
                 <span class="muted">Шынымен өшіру керек пе?</span>
                 <button type="submit" class="btn btn-danger btn-small">Иә, өшіру</button>
                 <button type="button" class="btn btn-outline btn-small teacher-delete-cancel">Болдырмау</button>
@@ -84,45 +77,6 @@
       if (cancelBtn) {
         cancelBtn.closest('.teacher-actions').classList.remove('is-confirming');
       }
-    });
-  })();
-
-  (function () {
-    function setCell(row, html) {
-      var cell = row.querySelector('[data-ingest-cell]');
-      if (cell) cell.innerHTML = html;
-    }
-
-    function pill(cls, text, title) {
-      var t = title ? ' title="' + title.replace(/"/g, '&quot;') + '"' : '';
-      return '<span class="pill ' + cls + '"' + t + '>' + text + '</span>';
-    }
-
-    function stepOnce(row) {
-      var bookId = row.getAttribute('data-book-id');
-      fetch('/books/' + bookId + '/ingest/step', { method: 'POST' })
-        .then(function (r) { return r.json(); })
-        .then(function (data) {
-          if (data.status === 'done') {
-            setCell(row, pill('pill-good', '✓ Оқылды' + (data.total_pages ? ' (' + data.total_pages + ' бет)' : '')));
-          } else if (data.status === 'error') {
-            setCell(row, pill('pill-bad', 'Қате', data.error));
-          } else {
-            var progress = data.done_pages && data.total_pages
-              ? data.done_pages + '/' + data.total_pages + ' бет'
-              : 'Оқылуда…';
-            setCell(row, pill('pill-gold', progress));
-            setTimeout(function () { stepOnce(row); }, 300);
-          }
-        })
-        .catch(function () {
-          setCell(row, pill('pill-bad', 'Қате', 'Желі қатесі — бетті жаңартып көріңіз.'));
-        });
-    }
-
-    document.querySelectorAll('[data-book-row]').forEach(function (row) {
-      var status = row.getAttribute('data-ingest-status');
-      if (status !== 'done') stepOnce(row);
     });
   })();
 </script>

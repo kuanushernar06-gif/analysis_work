@@ -85,7 +85,7 @@
     {% else %}
       <div class="top-right-actions no-print">
         {% if request.endpoint == 'materials_program_page' %}
-        <a class="top-right-chip" href="{{ url_for('books_list') }}">КІТАПТАР</a>
+        <a class="top-right-chip" href="{{ url_for('books_list', from=program['slug']) }}">КІТАПТАР</a>
         {% endif %}
         {% if request.endpoint != 'index' %}
         <a class="top-right-chip" href="{{ url_for('index') }}">БАСТЫ БЕТКЕ ӨТУ</a>
