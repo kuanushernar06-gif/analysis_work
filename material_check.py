@@ -117,35 +117,6 @@ def parse_plan_weeks(plan_text):
     return result
 
 
-_GRADE_RE = re.compile(r"(\d+)\s*-?\s*сынып", re.IGNORECASE)
-
-
-def match_book_for_week(books, week_text):
-    """Аптаның жоспар мәтінінен сынып пен баспа атауын анықтап, соған сәйкес
-    келетін жалғыз кітапты табады. Кітап атауы '<N>-сынып, <БАСПА>' пішімінде
-    деп есептеледі. Сынып саны ғана сәйкес келуі жеткіліксіз — баспа атауы да
-    мәтінде кездесуі керек (бір сыныпта бірнеше баспа болуы мүмкін, мыс.
-    «8-сынып, Мектеп» мен «8-сынып, Атамұра» шатастырмау үшін). Дәл бір кітап
-    табылмаса (жоқ немесе бірнешеу сәйкес келсе), None қайтарады."""
-    text_lower = (week_text or "").lower()
-    matches = []
-    for b in books:
-        title = b["title"] or ""
-        grade_m = _GRADE_RE.search(title)
-        if not grade_m:
-            continue
-        grade_num = grade_m.group(1)
-        parts = title.split(",", 1)
-        publisher = parts[1].strip() if len(parts) > 1 else ""
-        if not publisher:
-            continue
-        grade_ok = re.search(rf"{re.escape(grade_num)}\s*-?\s*сынып", text_lower) is not None
-        publisher_ok = publisher.lower() in text_lower
-        if grade_ok and publisher_ok:
-            matches.append(b)
-    if len(matches) == 1:
-        return matches[0]
-    return None
 
 
 FINDING_SCHEMA_HINT = """[
@@ -342,11 +313,12 @@ TARGETED_PROMPT = """Сен білім беру материалдарын те�
 
 {criteria}
 
-Тексерілетін материал мен эталон кітаптың {page_start}-{page_end} беттері
-(жоспар бойынша тақырыбы: «{topic}») төменде құжат түрінде тіркелген.
-Материалдағы осы тақырыпқа қатысты әр сұрақ/тапсырманы кітап мазмұнымен
-салыстырып тексер. Материалда осы тақырыпқа қатысы жоқ сұрақтар болса,
-оларды елемей өт.
+Тексерілетін материал мен эталон кітап(тар)дың {page_start}-{page_end} беттері
+(жоспар бойынша тақырыбы: «{topic}») төменде құжат түрінде тіркелген.{books_note}
+Материалдағы осы тақырыпқа қатысты әр сұрақ/тапсырманы кітап(тар) мазмұнымен
+салыстырып тексер. Бірнеше эталон кітап тіркелген болса, әрқайсысын жеке
+ескеріп, сол кітапқа сай нұсқа/жауапты сол кітаппен салыстыр. Материалда осы
+тақырыпқа қатысы жоқ сұрақтар болса, оларды елемей өт.
 
 Жауапты ТЕК осы JSON схемасына сәйкес таза JSON тізім түрінде қайтар —
 түсіндірме, markdown белгісі (```), қосымша мәтін қоспа. Қате табылмаса, бос
@@ -357,24 +329,33 @@ JSON схемасы:
 """
 
 
-def check_targeted(material_kind, material_content, book_pdf_bytes, page_start, page_end, topic, criteria, api_key):
+def check_targeted(material_kind, material_content, book_pdf_items, page_start, page_end, topic, criteria, api_key):
     """Толық кітапты алдын ала оқымай-ақ, жоспардан табылған нақты бет
-    ауқымын кітаптың Drive сілтемесінен сол сәтте жүктеп алып, материалмен
+    ауқымын кітап(тар)дың Drive сілтемесінен сол сәтте жүктеп алып, материалмен
     бір-ақ сұраныста салыстырады — books_ingest.py-дың бет-бетімен алдын ала
-    оқу процесіне тәуелді емес."""
+    оқу процесіне тәуелді емес. book_pdf_items: [(кітап атауы, PDF байттары), ...]
+    — бір немесе бірнеше эталон кітап, барлығы бір біріктірілген нәтижеге
+    салыстырылады."""
+    books_note = ""
+    if len(book_pdf_items) > 1:
+        titles = ", ".join(title for title, _ in book_pdf_items)
+        books_note = f" Төменде {len(book_pdf_items)} эталон кітап тіркелген: {titles}."
     prompt = TARGETED_PROMPT.format(
         criteria=criteria, page_start=page_start, page_end=page_end,
-        topic=topic or "белгісіз", schema=FINDING_SCHEMA_HINT,
+        topic=topic or "белгісіз", schema=FINDING_SCHEMA_HINT, books_note=books_note,
     )
-    book_block = {
-        "type": "document",
-        "source": {
-            "type": "base64",
-            "media_type": "application/pdf",
-            "data": base64.standard_b64encode(book_pdf_bytes).decode("ascii"),
-        },
-    }
-    content_blocks = [_material_content_block(material_kind, material_content), book_block, {"type": "text", "text": prompt}]
+    book_blocks = [
+        {
+            "type": "document",
+            "source": {
+                "type": "base64",
+                "media_type": "application/pdf",
+                "data": base64.standard_b64encode(pdf_bytes).decode("ascii"),
+            },
+        }
+        for _title, pdf_bytes in book_pdf_items
+    ]
+    content_blocks = [_material_content_block(material_kind, material_content), *book_blocks, {"type": "text", "text": prompt}]
     return _call_claude_with_key(content_blocks, api_key, thinking_disabled=True)
 
 
