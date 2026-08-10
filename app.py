@@ -856,7 +856,10 @@ def materials_program_page(slug):
         {
             "slug": slug,
             "label": label,
-            "entries": by_type.get(slug, []),
+            "entries": [
+                e for e in by_type.get(slug, [])
+                if not (e["latest_run"] and e["latest_run"]["status"] == "done")
+            ],
             "checked_entries": [
                 e for e in by_type.get(slug, []) if e["latest_run"] and e["latest_run"]["status"] == "done"
             ],
