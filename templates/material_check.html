@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+{% block title %}{{ material['label'] }} — Тексеру — JUZ40{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <a class="back-link" href="{{ url_for('materials_list') }}">← Материал тексеру</a>
+    <h1>{{ material['label'] }}</h1>
+    <p class="muted">{{ material_type_label }} — материалды таңдалған кітаппен салыстырып тексеру.</p>
+  </div>
+</div>
+
+<div class="card">
+  {% if not books %}
+  <p class="muted">
+    Әзірге толық оқылған кітап жоқ. Алдымен
+    <a href="{{ url_for('books_list') }}">Кітаптар</a> бетінен кітап қосып, толық оқылуын күтіңіз.
+  </p>
+  {% else %}
+  <form id="check-start-form" class="form-grid">
+    <label>
+      Кітап
+      <select name="book_id" required>
+        <option value="" disabled {% if not run %}selected{% endif %}>Кітапты таңдаңыз</option>
+        {% for book in books %}
+        <option value="{{ book['id'] }}" {% if run and run['book_id'] == book['id'] %}selected{% endif %}>{{ book['title'] }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <div class="col-span-2">
+      <button type="submit" class="btn btn-primary" id="check-start-btn">Тексеруді бастау</button>
+    </div>
+  </form>
+  {% endif %}
+
+  <div id="check-status" style="margin-top:16px;"
+       data-run-id="{{ run['id'] if run else '' }}"
+       data-run-status="{{ run['status'] if run else '' }}">
+    {% if run %}
+      {% if run['status'] == 'running' %}
+      <p class="muted">Тексерілуде… ({{ run['processed_pages'] }}/{{ run['total_pages'] }} бет)</p>
+      {% elif run['status'] == 'error' %}
+      <p class="muted" style="color: var(--critical);">Қате: {{ run['error_text'] }}</p>
+      {% elif run['status'] == 'done' %}
+      <p class="muted">Тексеру аяқталды.</p>
+      {% endif %}
+    {% endif %}
+  </div>
+
+  {% if run and run['status'] == 'done' %}
+  <div id="check-results" style="margin-top:16px;">
+    {% if results %}
+    <div class="table-scroll">
+      <table class="table">
+        <thead>
+          <tr><th>№</th><th>Тесттегі нұсқа</th><th>Кітаптағы дұрысы</th><th>Қате түрі</th><th>Сенімділік</th></tr>
+        </thead>
+        <tbody>
+          {% for row in results %}
+          <tr>
+            <td>{{ row.get('question_number', '') }}</td>
+            <td>{{ row.get('test_variant', '') }}</td>
+            <td>{{ row.get('book_correct', '') }}</td>
+            <td>{{ row.get('error_type', '') }}</td>
+            <td>{{ row.get('confidence', '') }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="muted">Қате табылмады.</p>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+  (function () {
+    var statusBox = document.getElementById('check-status');
+    var resultsBox = document.getElementById('check-results');
+    var startForm = document.getElementById('check-start-form');
+    var startBtn = document.getElementById('check-start-btn');
+
+    function renderResults(rows) {
+      if (!resultsBox) {
+        resultsBox = document.createElement('div');
+        resultsBox.id = 'check-results';
+        resultsBox.style.marginTop = '16px';
+        statusBox.parentNode.appendChild(resultsBox);
+      }
+      if (!rows || !rows.length) {
+        resultsBox.innerHTML = '<p class="muted">Қате табылмады.</p>';
+        return;
+      }
+      var html = '<div class="table-scroll"><table class="table"><thead><tr>' +
+        '<th>№</th><th>Тесттегі нұсқа</th><th>Кітаптағы дұрысы</th><th>Қате түрі</th><th>Сенімділік</th>' +
+        '</tr></thead><tbody>';
+      rows.forEach(function (row) {
+        html += '<tr><td>' + (row.question_number || '') + '</td><td>' + (row.test_variant || '') +
+          '</td><td>' + (row.book_correct || '') + '</td><td>' + (row.error_type || '') +
+          '</td><td>' + (row.confidence || '') + '</td></tr>';
+      });
+      html += '</tbody></table></div>';
+      resultsBox.innerHTML = html;
+    }
+
+    function pollStep(runId) {
+      fetch('/materials/check_runs/' + runId + '/step', { method: 'POST' })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (data.status === 'done') {
+            statusBox.innerHTML = '<p class="muted">Тексеру аяқталды.</p>';
+            renderResults(data.results);
+          } else if (data.status === 'error') {
+            statusBox.innerHTML = '<p class="muted" style="color: var(--critical);">Қате: ' +
+              (data.error || 'белгісіз қате') + '</p>';
+          } else {
+            statusBox.innerHTML = '<p class="muted">Тексерілуде… (' + data.processed_pages + '/' +
+              data.total_pages + ' бет)</p>';
+            setTimeout(function () { pollStep(runId); }, 300);
+          }
+        })
+        .catch(function () {
+          statusBox.innerHTML = '<p class="muted" style="color: var(--critical);">Желі қатесі — бетті жаңартып көріңіз.</p>';
+        });
+    }
+
+    if (statusBox && statusBox.getAttribute('data-run-status') === 'running') {
+      pollStep(statusBox.getAttribute('data-run-id'));
+    }
+
+    if (startForm) {
+      startForm.addEventListener('submit', function (e) {
+        e.preventDefault();
+        var bookId = startForm.querySelector('select[name="book_id"]').value;
+        if (!bookId) return;
+        startBtn.disabled = true;
+        var fd = new FormData();
+        fd.append('book_id', bookId);
+        fetch('{{ url_for("start_material_check", material_id=material["id"]) }}', { method: 'POST', body: fd })
+          .then(function (r) { return r.json(); })
+          .then(function (data) {
+            startBtn.disabled = false;
+            if (data.status === 'error') {
+              statusBox.innerHTML = '<p class="muted" style="color: var(--critical);">Қате: ' +
+                (data.error || 'белгісіз қате') + '</p>';
+              return;
+            }
+            if (resultsBox) resultsBox.innerHTML = '';
+            statusBox.innerHTML = '<p class="muted">Тексерілуде…</p>';
+            pollStep(data.run_id);
+          })
+          .catch(function () {
+            startBtn.disabled = false;
+            statusBox.innerHTML = '<p class="muted" style="color: var(--critical);">Желі қатесі.</p>';
+          });
+      });
+    }
+  })();
+</script>
+{% endblock %}

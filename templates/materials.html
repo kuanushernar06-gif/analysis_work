@@ -48,6 +48,7 @@
           </td>
           <td class="no-print">
             <div class="teacher-actions">
+              <a class="btn btn-outline btn-small" href="{{ url_for('material_check_page', material_id=item['id']) }}">Тексеру</a>
               <form method="post" action="{{ url_for('toggle_material', material_id=item['id']) }}" style="display:inline">
                 <button type="submit" class="btn btn-outline btn-small">
                   {{ 'Тексерілмеді деп белгілеу' if item['is_checked'] else 'Тексерілді деп белгілеу' }}
@@ -68,6 +69,17 @@
   </div>
   {% else %}
   <p class="muted" style="margin-top:12px;">Әзірге жазба қосылмаған.</p>
+  {% endif %}
+
+  {% if section.checked_entries %}
+  <details class="checked-materials" style="margin-top:16px;">
+    <summary>Тексерілген материалдар ({{ section.checked_entries | length }})</summary>
+    <ul class="checked-materials-list">
+      {% for item in section.checked_entries %}
+      <li><a href="{{ url_for('material_check_page', material_id=item['id']) }}">{{ item['label'] }}</a></li>
+      {% endfor %}
+    </ul>
+  </details>
   {% endif %}
 </div>
 {% endfor %}

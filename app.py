@@ -1,3 +1,4 @@
+import base64
 import json
 import os
 import re
@@ -36,6 +37,7 @@ from books_ingest import (
     BookIngestError,
     PAGES_PER_CHUNK,
 )
+import material_check
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "juz40-local-dev-secret")
@@ -809,13 +811,22 @@ def materials_list():
     rows = conn.execute(
         "SELECT * FROM material_checks ORDER BY material_type, created_at, id"
     ).fetchall()
+    checked_ids = {
+        r["material_id"]
+        for r in conn.execute("SELECT DISTINCT material_id FROM material_check_runs WHERE status = 'done'").fetchall()
+    }
 
     by_type = {slug: [] for slug, _label in db.MATERIAL_TYPES}
     for r in rows:
         by_type.setdefault(r["material_type"], []).append(r)
 
     sections = [
-        {"slug": slug, "label": label, "entries": by_type.get(slug, [])}
+        {
+            "slug": slug,
+            "label": label,
+            "entries": by_type.get(slug, []),
+            "checked_entries": [e for e in by_type.get(slug, []) if e["id"] in checked_ids],
+        }
         for slug, label in db.MATERIAL_TYPES
     ]
 
@@ -865,6 +876,155 @@ def delete_material(material_id):
     conn.commit()
     flash("Жазба жойылды.", "ok")
     return redirect(url_for("materials_list"))
+
+
+@app.route("/materials/<int:material_id>/check")
+def material_check_page(material_id):
+    conn = get_db()
+    material = conn.execute("SELECT * FROM material_checks WHERE id = ?", (material_id,)).fetchone()
+    if material is None:
+        flash("Жазба табылмады.", "error")
+        return redirect(url_for("materials_list"))
+
+    books = conn.execute(
+        "SELECT id, title FROM books WHERE ingest_status = 'done' ORDER BY title"
+    ).fetchall()
+    run = conn.execute(
+        "SELECT * FROM material_check_runs WHERE material_id = ? ORDER BY id DESC LIMIT 1",
+        (material_id,),
+    ).fetchone()
+    results = None
+    if run and run["result_json"]:
+        try:
+            results = json.loads(run["result_json"])
+        except (TypeError, ValueError):
+            results = None
+
+    return render_template(
+        "material_check.html",
+        material=material,
+        material_type_label=db.MATERIAL_TYPE_LABELS.get(material["material_type"], material["material_type"]),
+        books=books,
+        run=run,
+        results=results,
+    )
+
+
+@app.route("/materials/<int:material_id>/check/start", methods=["POST"])
+def start_material_check(material_id):
+    conn = get_db()
+    material = conn.execute("SELECT * FROM material_checks WHERE id = ?", (material_id,)).fetchone()
+    if material is None:
+        return jsonify({"status": "error", "error": "Жазба табылмады."}), 404
+
+    book_id = request.form.get("book_id", type=int)
+    book = conn.execute(
+        "SELECT * FROM books WHERE id = ? AND ingest_status = 'done'", (book_id,)
+    ).fetchone()
+    if book is None:
+        return jsonify({"status": "error", "error": "Кітапты таңдаңыз (толық оқылған болу керек)."}), 400
+
+    conn.execute(
+        "INSERT INTO material_check_runs (material_id, book_id, status, total_pages) "
+        "VALUES (?, ?, 'running', ?)",
+        (material_id, book_id, book["total_pages"]),
+    )
+    conn.commit()
+    run_id = conn.execute(
+        "SELECT id FROM material_check_runs WHERE material_id = ? ORDER BY id DESC LIMIT 1",
+        (material_id,),
+    ).fetchone()["id"]
+    return jsonify({"status": "ok", "run_id": run_id})
+
+
+@app.route("/materials/check_runs/<int:run_id>/step", methods=["POST"])
+def step_material_check(run_id):
+    """Материалды кітаппен салыстыру процесінің БІР қадамы: кезектегі бет
+    тобын (PAGES_PER_BATCH бет) тексереді де, нәтижесін жинақтайды. Барлық
+    бет өткен соң, жиналған тізімді тағы бір рет қарап шығатын қорытынды
+    қадам жүреді. Frontend бұл маршрутты дайын болғанша қайта-қайта
+    шақырады (кітапты оқу процесіндегі сияқты)."""
+    conn = get_db()
+    run = conn.execute("SELECT * FROM material_check_runs WHERE id = ?", (run_id,)).fetchone()
+    if run is None:
+        return jsonify({"status": "error", "error": "Тексеру табылмады."}), 404
+    if run["status"] in ("done", "error"):
+        return jsonify(
+            {"status": run["status"], "processed_pages": run["processed_pages"], "total_pages": run["total_pages"]}
+        )
+
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if api_key:
+        api_key = "".join(ch for ch in api_key.strip() if ch.isascii() and ch.isprintable())
+    if not api_key:
+        err = "ANTHROPIC_API_KEY орнатылмаған."
+        conn.execute("UPDATE material_check_runs SET status = 'error', error_text = ? WHERE id = ?", (err, run_id))
+        conn.commit()
+        return jsonify({"status": "error", "error": err})
+
+    material = conn.execute("SELECT * FROM material_checks WHERE id = ?", (run["material_id"],)).fetchone()
+    criteria = material_check.CRITERIA_BY_TYPE.get(material["material_type"]) if material else None
+    if not criteria:
+        err = "Бұл материал түрі үшін тексеру критерийі анықталмаған."
+        conn.execute("UPDATE material_check_runs SET status = 'error', error_text = ? WHERE id = ?", (err, run_id))
+        conn.commit()
+        return jsonify({"status": "error", "error": err})
+
+    try:
+        if run["material_content"] is None:
+            kind, content = material_check.fetch_material_content(material["link"])
+            content_to_store = base64.standard_b64encode(content).decode("ascii") if kind == "pdf" else content
+            conn.execute(
+                "UPDATE material_check_runs SET material_content = ?, material_content_kind = ? WHERE id = ?",
+                (content_to_store, kind, run_id),
+            )
+            conn.commit()
+            run = conn.execute("SELECT * FROM material_check_runs WHERE id = ?", (run_id,)).fetchone()
+
+        kind = run["material_content_kind"]
+        content = base64.standard_b64decode(run["material_content"]) if kind == "pdf" else run["material_content"]
+
+        total_pages = run["total_pages"]
+        processed = run["processed_pages"]
+
+        if processed >= total_pages:
+            findings = json.loads(run["findings_json"] or "[]")
+            final = material_check.final_review(findings, criteria, api_key)
+            conn.execute(
+                "UPDATE material_check_runs SET status = 'done', result_json = ? WHERE id = ?",
+                (json.dumps(final, ensure_ascii=False), run_id),
+            )
+            conn.commit()
+            return jsonify(
+                {"status": "done", "processed_pages": total_pages, "total_pages": total_pages, "results": final}
+            )
+
+        page_start = processed + 1
+        page_end = min(page_start + material_check.PAGES_PER_BATCH - 1, total_pages)
+        chunks = conn.execute(
+            "SELECT content_text FROM book_chunks WHERE book_id = ? AND page_start >= ? AND page_end <= ? "
+            "ORDER BY page_start",
+            (run["book_id"], page_start, page_end),
+        ).fetchall()
+        book_segment = "\n\n".join(c["content_text"] for c in chunks)
+
+        batch_findings = material_check.check_batch(
+            kind, content, book_segment, page_start, page_end, criteria, api_key
+        )
+
+        existing = json.loads(run["findings_json"] or "[]")
+        existing.extend(batch_findings)
+        conn.execute(
+            "UPDATE material_check_runs SET findings_json = ?, processed_pages = ? WHERE id = ?",
+            (json.dumps(existing, ensure_ascii=False), page_end, run_id),
+        )
+        conn.commit()
+
+        return jsonify({"status": "running", "processed_pages": page_end, "total_pages": total_pages})
+    except material_check.MaterialCheckError as e:
+        conn.execute("UPDATE material_check_runs SET status = 'error', error_text = ? WHERE id = ?", (str(e), run_id))
+        conn.commit()
+        return jsonify({"status": "error", "error": str(e)})
 
 
 @app.route("/books")

@@ -221,8 +221,24 @@ CREATE TABLE IF NOT EXISTS book_chunks (
     UNIQUE(book_id, chunk_index)
 );
 
+CREATE TABLE IF NOT EXISTS material_check_runs (
+    id SERIAL PRIMARY KEY,
+    material_id INTEGER NOT NULL REFERENCES material_checks(id) ON DELETE CASCADE,
+    book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+    status TEXT NOT NULL DEFAULT 'running',
+    material_content TEXT,
+    material_content_kind TEXT,
+    processed_pages INTEGER NOT NULL DEFAULT 0,
+    total_pages INTEGER,
+    findings_json TEXT,
+    result_json TEXT,
+    error_text TEXT,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
 CREATE INDEX IF NOT EXISTS idx_streams_program ON streams(program_id);
 CREATE INDEX IF NOT EXISTS idx_book_chunks_book ON book_chunks(book_id);
+CREATE INDEX IF NOT EXISTS idx_material_check_runs_material ON material_check_runs(material_id);
 CREATE INDEX IF NOT EXISTS idx_results_week ON results(week_id);
 CREATE INDEX IF NOT EXISTS idx_notes_week ON curator_notes(week_id);
 CREATE INDEX IF NOT EXISTS idx_imports_week ON imports(week_id);
@@ -356,7 +372,23 @@ CREATE TABLE IF NOT EXISTS book_chunks (
     UNIQUE(book_id, chunk_index)
 );
 
+CREATE TABLE IF NOT EXISTS material_check_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    material_id INTEGER NOT NULL REFERENCES material_checks(id) ON DELETE CASCADE,
+    book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+    status TEXT NOT NULL DEFAULT 'running',
+    material_content TEXT,
+    material_content_kind TEXT,
+    processed_pages INTEGER NOT NULL DEFAULT 0,
+    total_pages INTEGER,
+    findings_json TEXT,
+    result_json TEXT,
+    error_text TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE INDEX IF NOT EXISTS idx_streams_program ON streams(program_id);
+CREATE INDEX IF NOT EXISTS idx_material_check_runs_material ON material_check_runs(material_id);
 CREATE INDEX IF NOT EXISTS idx_results_week ON results(week_id);
 CREATE INDEX IF NOT EXISTS idx_notes_week ON curator_notes(week_id);
 CREATE INDEX IF NOT EXISTS idx_imports_week ON imports(week_id);
