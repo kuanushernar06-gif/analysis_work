@@ -51,6 +51,51 @@
 <div class="card">
   <h2>{{ section.label }}</h2>
 
+  {% if section.checked_entries %}
+  <details class="checked-materials" style="margin-bottom:16px;">
+    <summary>Тексерілген материалдар ({{ section.checked_entries | length }})</summary>
+    <ul class="checked-materials-list">
+      {% for item in section.checked_entries %}
+      <li>
+        <details class="checked-material-item">
+          <summary>{{ item['label'] }}</summary>
+          <div class="checked-material-body">
+            {% set run = item['latest_run'] %}
+            {% if run and run['status'] == 'error' %}
+            <p class="muted" style="color: var(--critical);">Қате: {{ run['error_text'] }}</p>
+            {% else %}
+              {% set results = item['latest_run_results'] %}
+              {% if results %}
+              <div class="table-scroll">
+                <table class="table">
+                  <thead>
+                    <tr><th>№</th><th>Тесттегі нұсқа</th><th>Кітаптағы дұрысы</th><th>Қате түрі</th><th>Сенімділік</th></tr>
+                  </thead>
+                  <tbody>
+                    {% for row in results %}
+                    <tr>
+                      <td>{{ row.get('question_number', '') }}</td>
+                      <td>{{ row.get('test_variant', '') }}</td>
+                      <td>{{ row.get('book_correct', '') }}</td>
+                      <td>{{ row.get('error_type', '') }}</td>
+                      <td>{{ row.get('confidence', '') }}</td>
+                    </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+              {% else %}
+              <p class="muted">Қате табылмады.</p>
+              {% endif %}
+            {% endif %}
+          </div>
+        </details>
+      </li>
+      {% endfor %}
+    </ul>
+  </details>
+  {% endif %}
+
   {% if not program['material_plan_text'] %}
   <p class="muted" style="margin-top:12px;">
     Тексеру үшін алдымен жоғарыдағы «Жоспар енгізу» бөліміне жоспар сілтемесін қосыңыз.
@@ -170,17 +215,6 @@
   </div>
   {% else %}
   <p class="muted" style="margin-top:12px;">Әзірге жазба қосылмаған.</p>
-  {% endif %}
-
-  {% if section.checked_entries %}
-  <details class="checked-materials" style="margin-top:16px;">
-    <summary>Тексерілген материалдар ({{ section.checked_entries | length }})</summary>
-    <ul class="checked-materials-list">
-      {% for item in section.checked_entries %}
-      <li><a href="{{ url_for('material_check_page', material_id=item['id']) }}">{{ item['label'] }}</a></li>
-      {% endfor %}
-    </ul>
-  </details>
   {% endif %}
 </div>
 {% endfor %}
