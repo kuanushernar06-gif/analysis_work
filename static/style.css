@@ -1125,15 +1125,6 @@ details[open] > .note-head::before { content: "▾"; }
 details { margin: 8px 0 16px; }
 summary { cursor: pointer; color: var(--accent); font-size: 0.9rem; }
 
-.checked-materials-list { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-.checked-materials-list a { color: var(--text-primary); text-decoration: none; font-size: 0.9rem; }
-.checked-materials-list a:hover { color: var(--accent); }
-
-.checked-material-item { margin: 0; }
-.checked-material-item summary { color: var(--text-primary); font-size: 0.9rem; }
-.checked-material-item summary:hover { color: var(--accent); }
-.checked-material-body { margin-top: 8px; padding-left: 14px; }
-
 .student-list-details { margin: 0; }
 .student-list-details summary {
   cursor: pointer;
