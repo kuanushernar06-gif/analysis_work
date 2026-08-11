@@ -170,16 +170,13 @@
       </div>
     </details>
     <details class="col-span-2 book-picker">
-      <summary>Тақырып — таңдау үшін ашыңыз</summary>
-      <div class="book-checkbox-list topic-checkbox-list">
+      <summary>Апта — таңдау үшін ашыңыз</summary>
+      <div class="book-checkbox-list">
         {% for w in plan_weeks %}
-        <div class="topic-week-heading">{{ w.month }}-ай {{ w.week }}-апта</div>
-        {% for t in w.topics %}
         <label class="book-checkbox-item">
-          <input type="radio" name="week_key" value="{{ w.month }}-{{ w.week }}-{{ t.index }}" required>
-          {{ t.text }}
+          <input type="radio" name="week_key" value="{{ w.month }}-{{ w.week }}" required>
+          {{ w.month }}-ай {{ w.week }}-апта ({{ w.topic_count }} тақырып)
         </label>
-        {% endfor %}
         {% endfor %}
       </div>
     </details>
