@@ -20,7 +20,7 @@
   </td>
   <td class="no-print">
     <div class="teacher-actions">
-      {% if run and run['status'] == 'done' %}
+      {% if run and run['status'] in ('done', 'error') %}
       <button type="button" class="btn btn-outline btn-small material-expand-btn" aria-expanded="false">
         <span class="expand-arrow" aria-hidden="true">▸</span><span class="expand-label">Ашу</span>
       </button>
@@ -62,6 +62,12 @@
     {% endif %}
     <a class="btn btn-outline btn-small" style="margin-top:10px;"
        href="{{ url_for('material_check_report_pdf', run_id=run['id']) }}">PDF есепті жүктеп алу →</a>
+  </td>
+</tr>
+{% elif run and run['status'] == 'error' %}
+<tr class="material-expand-row" style="display:none">
+  <td colspan="4">
+    <p class="muted" style="color: var(--critical); margin:0;">{{ run['error_text'] }}</p>
   </td>
 </tr>
 {% endif %}
