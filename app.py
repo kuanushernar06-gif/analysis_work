@@ -875,10 +875,9 @@ def materials_program_page(slug):
     plan_weeks = []
     if program["material_plan_text"]:
         parsed = material_check.parse_plan_weeks(program["material_plan_text"])
-        plan_weeks = [
-            {"month": m, "week": w, "topic": info["topic"]}
-            for (m, w), info in sorted(parsed.items())
-        ]
+        for (m, w), info in sorted(parsed.items()):
+            for i, topic in enumerate(info["topics"]):
+                plan_weeks.append({"month": m, "week": w, "topic_index": i, "topic": topic})
 
     return render_template(
         "materials.html",
@@ -938,7 +937,7 @@ def remove_material_plan(slug):
     return redirect(url_for("materials_program_page", slug=slug))
 
 
-def _create_material_check_run(conn, material, mode, book_ids, month=None, week=None):
+def _create_material_check_run(conn, material, mode, book_ids, month=None, week=None, topic_index=0):
     """material үшін жаңа тексеру жазбасын бастайды. book_ids — таңдалған
     кітаптардың id тізімі (targeted режимде бірнешеу болуы мүмкін, барлығы
     бір біріктірілген нәтижеге салыстырылады; full режимде тек біріншісі
@@ -961,8 +960,9 @@ def _create_material_check_run(conn, material, mode, book_ids, month=None, week=
 
         plan_weeks = material_check.parse_plan_weeks(program["material_plan_text"])
         info = plan_weeks.get((month, week))
-        if not info:
-            return False, "Осы ай/апта жоспардан табылмады."
+        if not info or not (0 <= topic_index < len(info["topics"])):
+            return False, "Осы тақырып жоспардан табылмады."
+        topic_text = info["topics"][topic_index]
 
         # Бет ауқымы жоспарда көрсетілмейді — тексеру басталған кезде
         # (step_material_check) әр кітаптың өз мазмұнынан осы тақырыпты
@@ -970,10 +970,10 @@ def _create_material_check_run(conn, material, mode, book_ids, month=None, week=
         # нақты мән беттер табылған соң қайта есептеледі.
         conn.execute(
             "INSERT INTO material_check_runs "
-            "(material_id, book_id, book_ids_json, status, mode, target_month, target_week, target_topic, "
-            "total_pages) "
-            "VALUES (?, ?, ?, 'running', 'targeted', ?, ?, ?, 1)",
-            (material["id"], book_ids[0], json.dumps(book_ids), month, week, info["topic"]),
+            "(material_id, book_id, book_ids_json, status, mode, target_month, target_week, target_topic_index, "
+            "target_topic, total_pages) "
+            "VALUES (?, ?, ?, 'running', 'targeted', ?, ?, ?, ?, 1)",
+            (material["id"], book_ids[0], json.dumps(book_ids), month, week, topic_index, topic_text),
         )
     else:
         book = conn.execute(
@@ -1020,8 +1020,8 @@ def add_material():
         flash("Кемінде бір кітап таңдаңыз.", "error")
         return redirect(url_for("materials_program_page", slug=program["slug"]))
     try:
-        month_s, week_s = week_key.split("-", 1)
-        month, week = int(month_s), int(week_s)
+        month_s, week_s, topic_index_s = week_key.split("-", 2)
+        month, week, topic_index = int(month_s), int(week_s), int(topic_index_s)
     except (ValueError, AttributeError):
         flash("Тақырыпты таңдаңыз.", "error")
         return redirect(url_for("materials_program_page", slug=program["slug"]))
@@ -1037,7 +1037,7 @@ def add_material():
         (program["id"], material_type, label),
     ).fetchone()
 
-    ok, result = _create_material_check_run(conn, material, "targeted", book_ids, month, week)
+    ok, result = _create_material_check_run(conn, material, "targeted", book_ids, month, week, topic_index)
     if not ok:
         flash(f"Жазба қосылды, бірақ тексеру басталмады: {result}", "error")
     else:
@@ -1105,8 +1105,9 @@ def step_material_check(run_id):
             for bid in book_ids:
                 cached = conn.execute(
                     "SELECT page_start, page_end FROM book_topic_pages "
-                    "WHERE book_id = ? AND program_id = ? AND month = ? AND week = ?",
-                    (bid, material["program_id"], run["target_month"], run["target_week"]),
+                    "WHERE book_id = ? AND program_id = ? AND month = ? AND week = ? AND topic_index = ?",
+                    (bid, material["program_id"], run["target_month"], run["target_week"],
+                     run["target_topic_index"]),
                 ).fetchone()
                 if cached is not None:
                     page_start, page_end = cached["page_start"], cached["page_end"]
@@ -1120,10 +1121,11 @@ def step_material_check(run_id):
                     )
                     try:
                         conn.execute(
-                            "INSERT INTO book_topic_pages (book_id, program_id, month, week, page_start, page_end) "
-                            "VALUES (?, ?, ?, ?, ?, ?)",
+                            "INSERT INTO book_topic_pages "
+                            "(book_id, program_id, month, week, topic_index, page_start, page_end) "
+                            "VALUES (?, ?, ?, ?, ?, ?, ?)",
                             (bid, material["program_id"], run["target_month"], run["target_week"],
-                             page_start, page_end),
+                             run["target_topic_index"], page_start, page_end),
                         )
                         conn.commit()
                     except Exception:

@@ -231,11 +231,12 @@ CREATE TABLE IF NOT EXISTS book_topic_pages (
     program_id INTEGER REFERENCES programs(id) ON DELETE CASCADE,
     month INTEGER NOT NULL,
     week INTEGER NOT NULL,
+    topic_index INTEGER NOT NULL DEFAULT 0,
     page_start INTEGER,
     page_end INTEGER,
     lookup_error TEXT,
     created_at TIMESTAMPTZ DEFAULT now(),
-    UNIQUE(book_id, program_id, month, week)
+    UNIQUE(book_id, program_id, month, week, topic_index)
 );
 
 CREATE TABLE IF NOT EXISTS material_check_runs (
@@ -246,6 +247,7 @@ CREATE TABLE IF NOT EXISTS material_check_runs (
     mode TEXT NOT NULL DEFAULT 'full',
     target_month INTEGER,
     target_week INTEGER,
+    target_topic_index INTEGER,
     target_topic TEXT,
     target_page_start INTEGER,
     target_page_end INTEGER,
@@ -408,11 +410,12 @@ CREATE TABLE IF NOT EXISTS book_topic_pages (
     program_id INTEGER REFERENCES programs(id) ON DELETE CASCADE,
     month INTEGER NOT NULL,
     week INTEGER NOT NULL,
+    topic_index INTEGER NOT NULL DEFAULT 0,
     page_start INTEGER,
     page_end INTEGER,
     lookup_error TEXT,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(book_id, program_id, month, week)
+    UNIQUE(book_id, program_id, month, week, topic_index)
 );
 
 CREATE TABLE IF NOT EXISTS material_check_runs (
@@ -423,6 +426,7 @@ CREATE TABLE IF NOT EXISTS material_check_runs (
     mode TEXT NOT NULL DEFAULT 'full',
     target_month INTEGER,
     target_week INTEGER,
+    target_topic_index INTEGER,
     target_topic TEXT,
     target_page_start INTEGER,
     target_page_end INTEGER,
@@ -516,6 +520,55 @@ def _column_exists(conn, table, column):
         return row is not None
     row = conn.execute(f"PRAGMA table_info({table})").fetchall()
     return any(r["name"] == column for r in row)
+
+
+def _migrate_book_topic_pages_topic_index(conn):
+    """book_topic_pages кестесіне topic_index бағанын қосады (бір аптада
+    бірнеше тақырып болуы мүмкін болғандықтан, бірегейлік енді
+    (book_id, program_id, month, week, topic_index) бойынша). Кесте таза
+    кэш болғандықтан (пайдаланушы деректері емес), ескі нұсқасы болса,
+    қауіпсіз түрде алып тастап, дұрыс схемамен қайта құрамыз."""
+    if _column_exists(conn, "book_topic_pages", "topic_index"):
+        return
+    conn.execute("DROP TABLE IF EXISTS book_topic_pages")
+    conn.commit()
+    if getattr(conn, "backend", None) == "postgres":
+        conn.execute(
+            """
+            CREATE TABLE book_topic_pages (
+                id SERIAL PRIMARY KEY,
+                book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+                program_id INTEGER REFERENCES programs(id) ON DELETE CASCADE,
+                month INTEGER NOT NULL,
+                week INTEGER NOT NULL,
+                topic_index INTEGER NOT NULL DEFAULT 0,
+                page_start INTEGER,
+                page_end INTEGER,
+                lookup_error TEXT,
+                created_at TIMESTAMPTZ DEFAULT now(),
+                UNIQUE(book_id, program_id, month, week, topic_index)
+            )
+            """
+        )
+    else:
+        conn.execute(
+            """
+            CREATE TABLE book_topic_pages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+                program_id INTEGER REFERENCES programs(id) ON DELETE CASCADE,
+                month INTEGER NOT NULL,
+                week INTEGER NOT NULL,
+                topic_index INTEGER NOT NULL DEFAULT 0,
+                page_start INTEGER,
+                page_end INTEGER,
+                lookup_error TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(book_id, program_id, month, week, topic_index)
+            )
+            """
+        )
+    conn.commit()
 
 
 def _migrate(conn):
@@ -637,6 +690,10 @@ def _migrate(conn):
     if not _column_exists(conn, "material_check_runs", "book_page_ranges_json"):
         conn.execute("ALTER TABLE material_check_runs ADD COLUMN book_page_ranges_json TEXT")
         conn.commit()
+    if not _column_exists(conn, "material_check_runs", "target_topic_index"):
+        conn.execute("ALTER TABLE material_check_runs ADD COLUMN target_topic_index INTEGER")
+        conn.commit()
+    _migrate_book_topic_pages_topic_index(conn)
     if not _column_exists(conn, "streams", "category"):
         _migrate_stream_categories(conn)
     _migrate_stream_code_rename(conn)
