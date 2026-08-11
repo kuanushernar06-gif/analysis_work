@@ -38,7 +38,7 @@
       {% if run['status'] == 'error' %}
       <p class="muted" style="color: var(--critical); margin:0;">Қате: {{ run['error_text'] }}</p>
       {% elif run['status'] == 'running' %}
-      <p class="muted" style="margin:0;">Тексерісте… ({{ run['processed_pages'] }}/{{ run['total_pages'] }} бет)</p>
+      <p class="muted" style="margin:0;">Тексерісте… ({{ run['processed_pages'] }}/{{ run['total_pages'] }}{% if run['mode'] == 'targeted' %} бөлік{% else %} бет{% endif %})</p>
       {% elif run['status'] == 'done' %}
         {% set results = item['latest_run_results'] %}
         {% if results %}

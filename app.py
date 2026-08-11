@@ -1169,7 +1169,12 @@ def step_material_check(run_id):
                     "Бұл аптаның тақырыптарын таңдалған кітап(тар)дың мазмұнынан таба алмадым."
                 )
 
-            new_total = sum(r["page_end"] - r["page_start"] + 1 for r in ranges)
+            # total_pages targeted режимде ЭНДІ "нақты бет саны" емес,
+            # "book_page_ranges_json-дағы жазба саны" дегенді білдіреді —
+            # себебі бір апта ондаған тақырыпты қамтуы мүмкін, барлығын бір
+            # Claude сұранысына сыйдыру мүмкін емес (413 қатесі), сол
+            # себепті RANGES_PER_BATCH-тан партиялап өңдейміз.
+            new_total = len(ranges)
             conn.execute(
                 "UPDATE material_check_runs SET book_page_ranges_json = ?, total_pages = ? WHERE id = ?",
                 (json.dumps(ranges, ensure_ascii=False), new_total, run_id),
@@ -1207,9 +1212,10 @@ def step_material_check(run_id):
 
         if run["mode"] == "targeted":
             ranges = json.loads(run["book_page_ranges_json"])
+            batch = ranges[processed:processed + material_check.RANGES_PER_BATCH]
             book_pdf_cache = {}
             book_pdf_items = []
-            for r in ranges:
+            for r in batch:
                 bid = r["book_id"]
                 if bid not in book_pdf_cache:
                     book = conn.execute("SELECT * FROM books WHERE id = ?", (bid,)).fetchone()
@@ -1237,10 +1243,11 @@ def step_material_check(run_id):
                 kind, content, book_segment, page_start, page_end, criteria, api_key
             )
 
-        # targeted режимде бүкіл ауқым бір қадамда өтеді, сол себепті
-        # processed_pages-ты (қатысты санауыш, 0..total_pages) толық деп
-        # белгілейміз — page_end (кітаптағы абсолютті бет нөмірі) емес.
-        new_processed = total_pages if run["mode"] == "targeted" else page_end
+        # targeted режимде processed_pages енді "өңделген ranges саны"
+        # дегенді білдіреді (RANGES_PER_BATCH-тан партиялап өседі), full
+        # режимде — нақты бет нөмірі (page_end).
+        new_processed = min(processed + material_check.RANGES_PER_BATCH, total_pages) \
+            if run["mode"] == "targeted" else page_end
 
         existing = json.loads(run["findings_json"] or "[]")
         existing.extend(batch_findings)
