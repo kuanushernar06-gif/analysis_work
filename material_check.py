@@ -249,7 +249,11 @@ def _call_claude_with_key(content_blocks, api_key, thinking_disabled=True, expec
                 wait_seconds = _extract_retry_delay(e.headers) or DEFAULT_RETRY_SECONDS
                 time.sleep(min(wait_seconds, 65) + 1)
                 continue
-            raise MaterialCheckError(f"Claude API қатесі (HTTP {e.code}): {detail[:300]}") from e
+            try:
+                detail_msg = json.loads(detail).get("error", {}).get("message", "") or detail[:200]
+            except (json.JSONDecodeError, AttributeError):
+                detail_msg = detail[:200]
+            raise MaterialCheckError(f"Claude API қатесі (HTTP {e.code}): {detail_msg}") from e
         except urllib.error.URLError as e:
             raise MaterialCheckError(f"Claude API-ге қосыла алмадым: {e.reason}") from e
     else:

@@ -13,7 +13,7 @@
     {% elif run['status'] == 'running' %}
     <span class="pill pill-muted">Тексерісте…</span>
     {% elif run['status'] == 'error' %}
-    <span class="pill pill-bad">Қате</span>
+    <span class="pill pill-bad" title="{{ run['error_text'] }}">Қате</span>
     {% else %}
     <span class="pill pill-good">✓ Тексерілді</span>
     {% endif %}
