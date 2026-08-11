@@ -169,15 +169,20 @@
         {% endfor %}
       </div>
     </details>
-    <label class="col-span-2">
-      Тақырып
-      <select name="week_key" required>
-        <option value="" disabled selected>Таңдаңыз</option>
+    <details class="col-span-2 book-picker">
+      <summary>Тақырып — таңдау үшін ашыңыз</summary>
+      <div class="book-checkbox-list topic-checkbox-list">
         {% for w in plan_weeks %}
-        <option value="{{ w.month }}-{{ w.week }}-{{ w.topic_index }}">{{ w.month }}-ай {{ w.week }}-апта — {{ w.topic }}</option>
+        <div class="topic-week-heading">{{ w.month }}-ай {{ w.week }}-апта</div>
+        {% for t in w.topics %}
+        <label class="book-checkbox-item">
+          <input type="radio" name="week_key" value="{{ w.month }}-{{ w.week }}-{{ t.index }}" required>
+          {{ t.text }}
+        </label>
         {% endfor %}
-      </select>
-    </label>
+        {% endfor %}
+      </div>
+    </details>
     <div class="col-span-2">
       <button type="submit" class="btn btn-primary">Тексеру</button>
     </div>
@@ -234,14 +239,25 @@
       }
     });
 
-    // Кітап(тар) ашылмалы тізімінің тақырыбында нешеуі таңдалғанын көрсетіп
-    // тұрамыз — жабық күйде де таңдауды ұмытпау үшін.
+    // Кітап(тар)/Тақырып ашылмалы тізімдерінің тақырыбында не таңдалғанын
+    // көрсетіп тұрамыз — жабық күйде де таңдауды ұмытпау үшін. Чекбокс
+    // болса — санын, радио (жалғыз таңдау) болса — таңдалған мәтінді көрсетеді.
     document.querySelectorAll('.book-picker').forEach(function (picker) {
       var summary = picker.querySelector('summary');
       var defaultText = summary.textContent;
       function updateSummary() {
-        var n = picker.querySelectorAll('input[name="book_ids"]:checked').length;
-        summary.textContent = n ? n + ' кітап таңдалды' : defaultText;
+        var checked = picker.querySelectorAll('input:checked');
+        if (!checked.length) {
+          summary.textContent = defaultText;
+          return;
+        }
+        if (checked[0].type === 'radio') {
+          var label = checked[0].closest('label');
+          var text = label ? label.textContent.trim() : '';
+          summary.textContent = text.length > 70 ? text.slice(0, 70) + '…' : text;
+        } else {
+          summary.textContent = checked.length + ' кітап таңдалды';
+        }
       }
       picker.addEventListener('change', updateSummary);
     });

@@ -876,8 +876,11 @@ def materials_program_page(slug):
     if program["material_plan_text"]:
         parsed = material_check.parse_plan_weeks(program["material_plan_text"])
         for (m, w), info in sorted(parsed.items()):
-            for i, topic in enumerate(info["topics"]):
-                plan_weeks.append({"month": m, "week": w, "topic_index": i, "topic": topic})
+            plan_weeks.append({
+                "month": m,
+                "week": w,
+                "topics": [{"index": i, "text": t} for i, t in enumerate(info["topics"])],
+            })
 
     return render_template(
         "materials.html",

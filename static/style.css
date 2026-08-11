@@ -759,7 +759,19 @@ label {
   font-size: 0.9rem;
   color: var(--text-primary);
 }
-.book-checkbox-item input[type="checkbox"] { width: auto; margin: 0; }
+.book-checkbox-item input[type="checkbox"],
+.book-checkbox-item input[type="radio"] { width: auto; margin: 0; flex-shrink: 0; }
+
+.topic-checkbox-list { max-height: 320px; }
+.topic-week-heading {
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--text-muted);
+  margin: 10px 0 2px;
+}
+.topic-week-heading:first-child { margin-top: 0; }
 
 input, select, textarea {
   font: inherit;
