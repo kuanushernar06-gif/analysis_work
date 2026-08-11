@@ -1134,6 +1134,10 @@ def step_material_check(run_id):
                     raise material_check.MaterialCheckError("Кітап табылмады немесе сілтемесі жоқ.")
                 pdf_bytes = download_drive_file(book["link"])
                 page_start, page_end = material_check.find_topic_pages(pdf_bytes, topics[ti], api_key)
+                if page_start is not None and page_end is not None:
+                    max_end = page_start + material_check.MAX_TOPIC_PAGE_SPAN - 1
+                    if page_end > max_end:
+                        page_end = max_end
                 try:
                     conn.execute(
                         "INSERT INTO book_topic_pages "
@@ -1159,9 +1163,13 @@ def step_material_check(run_id):
                         (bid, material["program_id"], run["target_month"], run["target_week"], ti),
                     ).fetchone()
                     if cached and cached["page_start"] is not None:
+                        page_start, page_end = cached["page_start"], cached["page_end"]
+                        max_end = page_start + material_check.MAX_TOPIC_PAGE_SPAN - 1
+                        if page_end > max_end:
+                            page_end = max_end
                         ranges.append({
                             "book_id": bid, "title": book["title"], "topic": topic_text,
-                            "page_start": cached["page_start"], "page_end": cached["page_end"],
+                            "page_start": page_start, "page_end": page_end,
                         })
 
             if not ranges:
