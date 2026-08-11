@@ -20,9 +20,11 @@
   </td>
   <td class="no-print">
     <div class="teacher-actions">
+      {% if run and run['status'] == 'done' %}
       <button type="button" class="btn btn-outline btn-small material-expand-btn" aria-expanded="false">
         <span class="expand-arrow" aria-hidden="true">▸</span><span class="expand-label">Ашу</span>
       </button>
+      {% endif %}
       <button type="button" class="btn btn-danger btn-small teacher-delete-btn">Өшіру</button>
       <form method="post" action="{{ url_for('delete_material', material_id=item['id']) }}" class="teacher-delete-confirm">
         <span class="muted">Шынымен өшіру керек пе?</span>
@@ -32,45 +34,37 @@
     </div>
   </td>
 </tr>
+{% if run and run['status'] == 'done' %}
 <tr class="material-expand-row" style="display:none">
   <td colspan="4">
-    {% if run %}
-      {% if run['status'] == 'error' %}
-      <p class="muted" style="color: var(--critical); margin:0;">Қате: {{ run['error_text'] }}</p>
-      {% elif run['status'] == 'running' %}
-      <p class="muted" style="margin:0;">Тексерісте… ({{ run['processed_pages'] }}/{{ run['total_pages'] }}{% if run['mode'] == 'targeted' %} бөлік{% else %} бет{% endif %})</p>
-      {% elif run['status'] == 'done' %}
-        {% set results = item['latest_run_results'] %}
-        {% if results %}
-        <div class="table-scroll">
-          <table class="table">
-            <thead>
-              <tr><th>№</th><th>Тесттегі нұсқа</th><th>Кітаптағы дұрысы</th><th>Қате түрі</th><th>Сенімділік</th></tr>
-            </thead>
-            <tbody>
-              {% for row in results %}
-              <tr>
-                <td>{{ row.get('question_number', '') }}</td>
-                <td>{{ row.get('test_variant', '') }}</td>
-                <td>{{ row.get('book_correct', '') }}</td>
-                <td>{{ row.get('error_type', '') }}</td>
-                <td>{{ row.get('confidence', '') }}</td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-        {% else %}
-        <p class="muted" style="margin:0;">Қате табылмады.</p>
-        {% endif %}
-        <a class="btn btn-outline btn-small" style="margin-top:10px;"
-           href="{{ url_for('material_check_report_pdf', run_id=run['id']) }}">PDF есепті жүктеп алу →</a>
-      {% endif %}
+    {% set results = item['latest_run_results'] %}
+    {% if results %}
+    <div class="table-scroll">
+      <table class="table">
+        <thead>
+          <tr><th>№</th><th>Тесттегі нұсқа</th><th>Кітаптағы дұрысы</th><th>Қате түрі</th><th>Сенімділік</th></tr>
+        </thead>
+        <tbody>
+          {% for row in results %}
+          <tr>
+            <td>{{ row.get('question_number', '') }}</td>
+            <td>{{ row.get('test_variant', '') }}</td>
+            <td>{{ row.get('book_correct', '') }}</td>
+            <td>{{ row.get('error_type', '') }}</td>
+            <td>{{ row.get('confidence', '') }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
     {% else %}
-    <p class="muted" style="margin:0;">Әзірге тексерілмеген.</p>
+    <p class="muted" style="margin:0;">Қате табылмады.</p>
     {% endif %}
+    <a class="btn btn-outline btn-small" style="margin-top:10px;"
+       href="{{ url_for('material_check_report_pdf', run_id=run['id']) }}">PDF есепті жүктеп алу →</a>
   </td>
 </tr>
+{% endif %}
 {% endmacro %}
 
 <div class="page-head">
