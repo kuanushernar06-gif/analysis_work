@@ -876,7 +876,7 @@ def materials_program_page(slug):
     if program["material_plan_text"]:
         parsed = material_check.parse_plan_weeks(program["material_plan_text"])
         plan_weeks = [
-            {"month": m, "week": w, "topic": info["topic"], "has_pages": info["page_start"] is not None}
+            {"month": m, "week": w, "topic": info["topic"]}
             for (m, w), info in sorted(parsed.items())
         ]
 
@@ -961,22 +961,19 @@ def _create_material_check_run(conn, material, mode, book_ids, month=None, week=
 
         plan_weeks = material_check.parse_plan_weeks(program["material_plan_text"])
         info = plan_weeks.get((month, week))
-        if not info or info["page_start"] is None:
-            return False, (
-                "Осы тақырып үшін жоспардан бет ауқымын таба алмадым "
-                "('Оқулық бет' жолын тексеріңіз)."
-            )
+        if not info:
+            return False, "Осы ай/апта жоспардан табылмады."
 
+        # Бет ауқымы жоспарда көрсетілмейді — тексеру басталған кезде
+        # (step_material_check) әр кітаптың өз мазмұнынан осы тақырыпты
+        # іздеп табады. total_pages=1 — "бет іздеу" фазасының орынбасары,
+        # нақты мән беттер табылған соң қайта есептеледі.
         conn.execute(
             "INSERT INTO material_check_runs "
             "(material_id, book_id, book_ids_json, status, mode, target_month, target_week, target_topic, "
-            "target_page_start, target_page_end, total_pages) "
-            "VALUES (?, ?, ?, 'running', 'targeted', ?, ?, ?, ?, ?, ?)",
-            (
-                material["id"], book_ids[0], json.dumps(book_ids), month, week, info["topic"],
-                info["page_start"], info["page_end"],
-                info["page_end"] - info["page_start"] + 1,
-            ),
+            "total_pages) "
+            "VALUES (?, ?, ?, 'running', 'targeted', ?, ?, ?, 1)",
+            (material["id"], book_ids[0], json.dumps(book_ids), month, week, info["topic"]),
         )
     else:
         book = conn.execute(
@@ -1102,6 +1099,54 @@ def step_material_check(run_id):
         return jsonify({"status": "error", "error": err})
 
     try:
+        if run["mode"] == "targeted" and run["book_page_ranges_json"] is None:
+            book_ids = json.loads(run["book_ids_json"]) if run["book_ids_json"] else [run["book_id"]]
+            ranges = []
+            for bid in book_ids:
+                cached = conn.execute(
+                    "SELECT page_start, page_end FROM book_topic_pages "
+                    "WHERE book_id = ? AND program_id = ? AND month = ? AND week = ?",
+                    (bid, material["program_id"], run["target_month"], run["target_week"]),
+                ).fetchone()
+                if cached is not None:
+                    page_start, page_end = cached["page_start"], cached["page_end"]
+                else:
+                    book = conn.execute("SELECT * FROM books WHERE id = ?", (bid,)).fetchone()
+                    if book is None or not book["link"]:
+                        raise material_check.MaterialCheckError("Кітап табылмады немесе сілтемесі жоқ.")
+                    pdf_bytes = download_drive_file(book["link"])
+                    page_start, page_end = material_check.find_topic_pages(
+                        pdf_bytes, run["target_topic"], api_key
+                    )
+                    try:
+                        conn.execute(
+                            "INSERT INTO book_topic_pages (book_id, program_id, month, week, page_start, page_end) "
+                            "VALUES (?, ?, ?, ?, ?, ?)",
+                            (bid, material["program_id"], run["target_month"], run["target_week"],
+                             page_start, page_end),
+                        )
+                        conn.commit()
+                    except Exception:
+                        conn.rollback()
+                if page_start is not None and page_end is not None:
+                    book = conn.execute("SELECT title FROM books WHERE id = ?", (bid,)).fetchone()
+                    ranges.append({
+                        "book_id": bid, "title": book["title"], "page_start": page_start, "page_end": page_end,
+                    })
+
+            if not ranges:
+                raise material_check.MaterialCheckError(
+                    "Бұл тақырыпты таңдалған кітап(тар)дың мазмұнынан таба алмадым."
+                )
+
+            new_total = max(r["page_end"] for r in ranges) - min(r["page_start"] for r in ranges) + 1
+            conn.execute(
+                "UPDATE material_check_runs SET book_page_ranges_json = ?, total_pages = ? WHERE id = ?",
+                (json.dumps(ranges, ensure_ascii=False), new_total, run_id),
+            )
+            conn.commit()
+            return jsonify({"status": "running", "processed_pages": 0, "total_pages": new_total})
+
         if run["material_content"] is None:
             kind, content = material_check.fetch_material_content(material["link"])
             content_to_store = base64.standard_b64encode(content).decode("ascii") if kind == "pdf" else content
@@ -1131,18 +1176,19 @@ def step_material_check(run_id):
             )
 
         if run["mode"] == "targeted":
-            book_ids = json.loads(run["book_ids_json"]) if run["book_ids_json"] else [run["book_id"]]
-            page_start = run["target_page_start"]
-            page_end = run["target_page_end"]
+            ranges = json.loads(run["book_page_ranges_json"])
             book_pdf_items = []
-            for bid in book_ids:
-                book = conn.execute("SELECT * FROM books WHERE id = ?", (bid,)).fetchone()
+            for r in ranges:
+                book = conn.execute("SELECT * FROM books WHERE id = ?", (r["book_id"],)).fetchone()
                 if book is None or not book["link"]:
                     raise material_check.MaterialCheckError("Кітап табылмады немесе сілтемесі жоқ.")
                 pdf_bytes = download_drive_file(book["link"])
-                book_pdf_items.append((book["title"], extract_chunk_pdf_bytes(pdf_bytes, page_start, page_end)))
+                book_pdf_items.append((
+                    book["title"], r["page_start"], r["page_end"],
+                    extract_chunk_pdf_bytes(pdf_bytes, r["page_start"], r["page_end"]),
+                ))
             batch_findings = material_check.check_targeted(
-                kind, content, book_pdf_items, page_start, page_end, run["target_topic"], criteria, api_key
+                kind, content, book_pdf_items, run["target_topic"], criteria, api_key
             )
         else:
             page_start = processed + 1

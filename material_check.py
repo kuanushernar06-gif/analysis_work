@@ -302,6 +302,41 @@ def _material_content_block(material_kind, material_content):
     return {"type": "text", "text": f"Тексерілетін материал мәтіні:\n---\n{material_content}\n---"}
 
 
+FIND_TOPIC_PROMPT = """Сен оқулықпен жұмыс істейтін көмекшісің. Төменде толық
+оқулықтың PDF файлы тіркелген. Осы оқулықтан мына тақырыпты тап:
+
+«{topic}»
+
+Тақырыпты § нөмірі, атауы немесе мазмұны бойынша тап (жоспар құжатында бет
+нөмірі көрсетілмеген, сол себепті кітаптың өз мазмұны/мәтіні бойынша іздеу
+керек). Тақырып қай беттен басталып, қай бетте аяқталатынын анықта (кіріспе
+бет пен тапсырмалар/сұрақтар бөлімін қоса алғанда, тиесілі толық ауқымды).
+
+Жауапты ТЕК осы JSON схемасына сәйкес таза JSON объект түрінде қайтар —
+түсіндірме, markdown белгісі (```), қосымша мәтін қоспа:
+{{"page_start": (сан) немесе null, "page_end": (сан) немесе null}}
+
+Тақырыпты кітаптан таба алмасаң, {{"page_start": null, "page_end": null}} қайтар."""
+
+
+def find_topic_pages(book_pdf_bytes, topic_text, api_key):
+    """Жоспарда бет нөмірі көрсетілмеген жағдайда, берілген тақырыпты кітаптың
+    өз мазмұны бойынша іздеп, қай беттерде орналасқанын табады. Кітаптың
+    толық PDF-ін жібереді (алдын ала бет-бетімен оқудың қажеті жоқ)."""
+    prompt = FIND_TOPIC_PROMPT.format(topic=topic_text or "белгісіз")
+    book_block = {
+        "type": "document",
+        "source": {
+            "type": "base64",
+            "media_type": "application/pdf",
+            "data": base64.standard_b64encode(book_pdf_bytes).decode("ascii"),
+        },
+    }
+    content_blocks = [book_block, {"type": "text", "text": prompt}]
+    result = _call_claude_with_key(content_blocks, api_key, thinking_disabled=True, expect=dict)
+    return result.get("page_start"), result.get("page_end")
+
+
 def check_batch(material_kind, material_content, book_segment_text, page_start, page_end, criteria, api_key):
     prompt = BATCH_PROMPT.format(
         criteria=criteria, page_start=page_start, page_end=page_end,
@@ -315,8 +350,10 @@ TARGETED_PROMPT = """Сен білім беру материалдарын те�
 
 {criteria}
 
-Тексерілетін материал мен эталон кітап(тар)дың {page_start}-{page_end} беттері
-(жоспар бойынша тақырыбы: «{topic}») төменде құжат түрінде тіркелген.{books_note}
+Тексерілетін материал мен эталон кітап(тар)дың тиісті беттері (жоспар
+бойынша тақырыбы: «{topic}») төменде құжат түрінде тіркелген. Әр эталон
+кітаптың қай беттері тіркелгені:
+{books_note}
 Материалдағы осы тақырыпқа қатысты әр сұрақ/тапсырманы кітап(тар) мазмұнымен
 салыстырып тексер. Бірнеше эталон кітап тіркелген болса, әрқайсысын жеке
 ескеріп, сол кітапқа сай нұсқа/жауапты сол кітаппен салыстыр. Материалда осы
@@ -331,20 +368,18 @@ JSON схемасы:
 """
 
 
-def check_targeted(material_kind, material_content, book_pdf_items, page_start, page_end, topic, criteria, api_key):
-    """Толық кітапты алдын ала оқымай-ақ, жоспардан табылған нақты бет
-    ауқымын кітап(тар)дың Drive сілтемесінен сол сәтте жүктеп алып, материалмен
-    бір-ақ сұраныста салыстырады — books_ingest.py-дың бет-бетімен алдын ала
-    оқу процесіне тәуелді емес. book_pdf_items: [(кітап атауы, PDF байттары), ...]
-    — бір немесе бірнеше эталон кітап, барлығы бір біріктірілген нәтижеге
-    салыстырылады."""
-    books_note = ""
-    if len(book_pdf_items) > 1:
-        titles = ", ".join(title for title, _ in book_pdf_items)
-        books_note = f" Төменде {len(book_pdf_items)} эталон кітап тіркелген: {titles}."
+def check_targeted(material_kind, material_content, book_pdf_items, topic, criteria, api_key):
+    """Толық кітапты алдын ала оқымай-ақ, тақырыпқа сай табылған бет ауқымын
+    кітап(тар)дың Drive сілтемесінен сол сәтте жүктеп алып, материалмен бір-ақ
+    сұраныста салыстырады. book_pdf_items: [(кітап атауы, page_start, page_end,
+    PDF байттары), ...] — бір немесе бірнеше эталон кітап (әрқайсысының өз бет
+    ауқымы болуы мүмкін, өйткені баспалар әртүрлі беттерге орналастырады),
+    барлығы бір біріктірілген нәтижеге салыстырылады."""
+    books_note = "\n".join(
+        f"- {title}: {page_start}-{page_end} беттер" for title, page_start, page_end, _pdf in book_pdf_items
+    )
     prompt = TARGETED_PROMPT.format(
-        criteria=criteria, page_start=page_start, page_end=page_end,
-        topic=topic or "белгісіз", schema=FINDING_SCHEMA_HINT, books_note=books_note,
+        criteria=criteria, topic=topic or "белгісіз", schema=FINDING_SCHEMA_HINT, books_note=books_note,
     )
     book_blocks = [
         {
@@ -355,7 +390,7 @@ def check_targeted(material_kind, material_content, book_pdf_items, page_start, 
                 "data": base64.standard_b64encode(pdf_bytes).decode("ascii"),
             },
         }
-        for _title, pdf_bytes in book_pdf_items
+        for _title, _page_start, _page_end, pdf_bytes in book_pdf_items
     ]
     content_blocks = [_material_content_block(material_kind, material_content), *book_blocks, {"type": "text", "text": prompt}]
     return _call_claude_with_key(content_blocks, api_key, thinking_disabled=True)

@@ -174,9 +174,7 @@
       <select name="week_key" required>
         <option value="" disabled selected>Таңдаңыз</option>
         {% for w in plan_weeks %}
-        <option value="{{ w.month }}-{{ w.week }}" {% if not w.has_pages %}disabled{% endif %}>
-          {{ w.month }}-ай {{ w.week }}-апта — {{ w.topic }}{% if not w.has_pages %} (бет ауқымы табылмады){% endif %}
-        </option>
+        <option value="{{ w.month }}-{{ w.week }}">{{ w.month }}-ай {{ w.week }}-апта — {{ w.topic }}</option>
         {% endfor %}
       </select>
     </label>

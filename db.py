@@ -225,6 +225,19 @@ CREATE TABLE IF NOT EXISTS book_chunks (
     UNIQUE(book_id, chunk_index)
 );
 
+CREATE TABLE IF NOT EXISTS book_topic_pages (
+    id SERIAL PRIMARY KEY,
+    book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+    program_id INTEGER REFERENCES programs(id) ON DELETE CASCADE,
+    month INTEGER NOT NULL,
+    week INTEGER NOT NULL,
+    page_start INTEGER,
+    page_end INTEGER,
+    lookup_error TEXT,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    UNIQUE(book_id, program_id, month, week)
+);
+
 CREATE TABLE IF NOT EXISTS material_check_runs (
     id SERIAL PRIMARY KEY,
     material_id INTEGER NOT NULL REFERENCES material_checks(id) ON DELETE CASCADE,
@@ -244,6 +257,7 @@ CREATE TABLE IF NOT EXISTS material_check_runs (
     findings_json TEXT,
     result_json TEXT,
     report_json TEXT,
+    book_page_ranges_json TEXT,
     error_text TEXT,
     created_at TIMESTAMPTZ DEFAULT now()
 );
@@ -388,6 +402,19 @@ CREATE TABLE IF NOT EXISTS book_chunks (
     UNIQUE(book_id, chunk_index)
 );
 
+CREATE TABLE IF NOT EXISTS book_topic_pages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+    program_id INTEGER REFERENCES programs(id) ON DELETE CASCADE,
+    month INTEGER NOT NULL,
+    week INTEGER NOT NULL,
+    page_start INTEGER,
+    page_end INTEGER,
+    lookup_error TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(book_id, program_id, month, week)
+);
+
 CREATE TABLE IF NOT EXISTS material_check_runs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     material_id INTEGER NOT NULL REFERENCES material_checks(id) ON DELETE CASCADE,
@@ -407,6 +434,7 @@ CREATE TABLE IF NOT EXISTS material_check_runs (
     findings_json TEXT,
     result_json TEXT,
     report_json TEXT,
+    book_page_ranges_json TEXT,
     error_text TEXT,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
@@ -605,6 +633,9 @@ def _migrate(conn):
         conn.commit()
     if not _column_exists(conn, "material_check_runs", "report_json"):
         conn.execute("ALTER TABLE material_check_runs ADD COLUMN report_json TEXT")
+        conn.commit()
+    if not _column_exists(conn, "material_check_runs", "book_page_ranges_json"):
+        conn.execute("ALTER TABLE material_check_runs ADD COLUMN book_page_ranges_json TEXT")
         conn.commit()
     if not _column_exists(conn, "streams", "category"):
         _migrate_stream_categories(conn)
