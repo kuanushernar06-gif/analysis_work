@@ -2,6 +2,7 @@ import base64
 import json
 import os
 import re
+import secrets
 from datetime import datetime, timedelta
 
 from dotenv import load_dotenv
@@ -78,7 +79,11 @@ def inject_category_label():
 
 @app.before_request
 def require_login():
-    if request.endpoint in ("login", "static", "favicon") or request.endpoint is None:
+    # step_material_check өз бетінше run-токен арқылы тексереді (қар.
+    # сол функцияны) — куратор тексеру барысында сайттан шығып кетсе де
+    # (сессия аяқталса да) браузердегі бет ашық тұрса, polling үзілмей
+    # жалғаса береді.
+    if request.endpoint in ("login", "static", "favicon", "step_material_check") or request.endpoint is None:
         return
     if not session.get("logged_in"):
         return redirect(url_for("login", next=request.path))
@@ -969,12 +974,13 @@ def _create_material_check_run(conn, material, mode, book_ids, month=None, week=
         # (step_material_check) осы аптаның әр тақырыбын әр кітаптың өз
         # мазмұнынан іздеп табады. total_pages=1 — "бет іздеу" фазасының
         # орынбасары, нақты мән беттер табылған соң қайта есептеледі.
+        run_token = secrets.token_urlsafe(24)
         conn.execute(
             "INSERT INTO material_check_runs "
             "(material_id, book_id, book_ids_json, status, mode, target_month, target_week, "
-            "target_topic, total_pages) "
-            "VALUES (?, ?, ?, 'running', 'targeted', ?, ?, ?, 1)",
-            (material["id"], book_ids[0], json.dumps(book_ids), month, week, topic_summary),
+            "target_topic, total_pages, run_token) "
+            "VALUES (?, ?, ?, 'running', 'targeted', ?, ?, ?, 1, ?)",
+            (material["id"], book_ids[0], json.dumps(book_ids), month, week, topic_summary, run_token),
         )
     else:
         book = conn.execute(
@@ -983,10 +989,12 @@ def _create_material_check_run(conn, material, mode, book_ids, month=None, week=
         if book is None:
             return False, "Кітапты таңдаңыз (толық оқылған болу керек)."
 
+        run_token = secrets.token_urlsafe(24)
         conn.execute(
-            "INSERT INTO material_check_runs (material_id, book_id, book_ids_json, status, mode, total_pages) "
-            "VALUES (?, ?, ?, 'running', 'full', ?)",
-            (material["id"], book_ids[0], json.dumps([book_ids[0]]), book["total_pages"]),
+            "INSERT INTO material_check_runs "
+            "(material_id, book_id, book_ids_json, status, mode, total_pages, run_token) "
+            "VALUES (?, ?, ?, 'running', 'full', ?, ?)",
+            (material["id"], book_ids[0], json.dumps([book_ids[0]]), book["total_pages"], run_token),
         )
 
     conn.commit()
@@ -1077,6 +1085,18 @@ def step_material_check(run_id):
     run = conn.execute("SELECT * FROM material_check_runs WHERE id = ?", (run_id,)).fetchone()
     if run is None:
         return jsonify({"status": "error", "error": "Тексеру табылмады."}), 404
+
+    # Бұл маршрут require_login-нан босатылған (куратор сайттан шығып
+    # кетсе де, бет ашық тұрса polling жалғасуы үшін) — сол орнына әр
+    # тексеру жазбасына бекітілген жеке токенмен тексереміз. Токенсіз
+    # (ескі, миграциядан бұрын басталған) жазбалар үшін сессияға түсеміз.
+    token = request.headers.get("X-Run-Token") or (request.get_json(silent=True) or {}).get("token")
+    if run["run_token"]:
+        if token != run["run_token"]:
+            return jsonify({"status": "error", "error": "Рұқсат жоқ."}), 403
+    elif not session.get("logged_in"):
+        return jsonify({"status": "error", "error": "Рұқсат жоқ."}), 403
+
     if run["status"] in ("done", "error"):
         return jsonify(
             {"status": run["status"], "processed_pages": run["processed_pages"], "total_pages": run["total_pages"]}

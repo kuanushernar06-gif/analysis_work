@@ -261,6 +261,7 @@ CREATE TABLE IF NOT EXISTS material_check_runs (
     report_json TEXT,
     book_page_ranges_json TEXT,
     error_text TEXT,
+    run_token TEXT,
     created_at TIMESTAMPTZ DEFAULT now()
 );
 
@@ -440,6 +441,7 @@ CREATE TABLE IF NOT EXISTS material_check_runs (
     report_json TEXT,
     book_page_ranges_json TEXT,
     error_text TEXT,
+    run_token TEXT,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -692,6 +694,9 @@ def _migrate(conn):
         conn.commit()
     if not _column_exists(conn, "material_check_runs", "target_topic_index"):
         conn.execute("ALTER TABLE material_check_runs ADD COLUMN target_topic_index INTEGER")
+
+    if not _column_exists(conn, "material_check_runs", "run_token"):
+        conn.execute("ALTER TABLE material_check_runs ADD COLUMN run_token TEXT")
         conn.commit()
     _migrate_book_topic_pages_topic_index(conn)
     if not _column_exists(conn, "streams", "category"):

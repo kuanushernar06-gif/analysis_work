@@ -48,6 +48,14 @@ RANGES_PER_BATCH = 1
 # беттерді осы санмен шектейміз, сұраныс көлемі бақылаудан шықпас үшін.
 MAX_TOPIC_PAGE_SPAN = 12
 
+# Claude API сұраныстың жалпы көлемін ~32MB-пен шектейді. Тексерілетін
+# материалдың өзі (PDF) әр Claude сұранысына ТОЛЫҚ күйінде қоса жіберіледі
+# (кітап үзіндісі қанша шектелсе де, бұл бөлік кішіре­юмейді) — сол себепті
+# материал файлы өте үлкен (мыс. сканерленген) болса, кітап жағын қанша
+# кішірейтсек те HTTP 413 қайталана береді. Мұны кітап үзіндісінен ертерек,
+# нақты себебін көрсетіп хабарлау үшін шектейміз.
+MAX_MATERIAL_PDF_BYTES = 18_000_000
+
 CRITERIA_BY_TYPE = {
     "uy_zhumysy": """Үй жұмысындағы әр сұрақ пен жауапты кітаптағы сәйкес тұсымен салыстыр.
 Тексеру келесі санаттар бойынша болсын:
@@ -203,6 +211,15 @@ def fetch_material_content(link: str):
         except BookIngestError as e:
             raise MaterialCheckError(str(e)) from e
         if data[:5] == b"%PDF-":
+            if len(data) > MAX_MATERIAL_PDF_BYTES:
+                raise MaterialCheckError(
+                    "Тексерілетін материалдың файлы тым үлкен "
+                    f"({len(data) / 1_000_000:.1f}MB) — Claude API мұндай "
+                    "көлемдегі сұранысты қабылдамайды. Бұл әдетте файл "
+                    "сканерленген суреттерден тұрғанда болады. Файлды "
+                    "сығып (PDF compress) немесе Google Docs форматында "
+                    "қайта жүктеп көріңіз."
+                )
             return "pdf", data
         raise MaterialCheckError(
             "Бұл Drive файлы PDF емес сияқты — қазірше тек Google Docs "
@@ -234,9 +251,17 @@ def _call_claude_with_key(content_blocks, api_key, thinking_disabled=True, expec
     if thinking_disabled:
         payload["thinking"] = {"type": "disabled"}
 
+    body_bytes = json.dumps(payload).encode("utf-8")
+    # 413 болғанда нақты қай бөлік (материал ма, кітап үзіндісі ме) үлкен
+    # екенін бірден көру үшін — диагностика.
+    block_sizes = ", ".join(
+        f"{b.get('type', '?')}:{len(b.get('source', {}).get('data', '')) or len(b.get('text', ''))}b"
+        for b in content_blocks
+    )
+
     req = urllib.request.Request(
         CHECK_API_URL,
-        data=json.dumps(payload).encode("utf-8"),
+        data=body_bytes,
         method="POST",
         headers={
             "content-type": "application/json",
@@ -261,6 +286,11 @@ def _call_claude_with_key(content_blocks, api_key, thinking_disabled=True, expec
                 detail_msg = json.loads(detail).get("error", {}).get("message", "") or detail[:200]
             except (json.JSONDecodeError, AttributeError):
                 detail_msg = detail[:200]
+            if e.code == 413:
+                detail_msg += (
+                    f" [сұраныс көлемі: {len(body_bytes) / 1_000_000:.1f}MB, "
+                    f"бөліктер: {block_sizes}]"
+                )
             raise MaterialCheckError(f"Claude API қатесі (HTTP {e.code}): {detail_msg}") from e
         except urllib.error.URLError as e:
             raise MaterialCheckError(f"Claude API-ге қосыла алмадым: {e.reason}") from e

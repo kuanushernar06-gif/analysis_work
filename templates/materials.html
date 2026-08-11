@@ -4,7 +4,7 @@
 
 {% macro material_row(item) %}
 {% set run = item['latest_run'] %}
-<tr {% if run and run['status'] == 'running' %}data-run-row data-run-id="{{ run['id'] }}"{% endif %}>
+<tr {% if run and run['status'] == 'running' %}data-run-row data-run-id="{{ run['id'] }}" data-run-token="{{ run['run_token'] or '' }}"{% endif %}>
   <td>{{ item['label'] }}</td>
   <td>{% if item['link'] %}<a href="{{ item['link'] }}" target="_blank" rel="noopener">Ашу →</a>{% else %}—{% endif %}</td>
   <td class="run-status-cell">
@@ -264,9 +264,13 @@
     // "Тексерілген материалдар" тізімі де дереу жаңарады.
     document.querySelectorAll('tr[data-run-row]').forEach(function (row) {
       var runId = row.getAttribute('data-run-id');
+      var runToken = row.getAttribute('data-run-token') || '';
       var cell = row.querySelector('.run-status-cell');
       function poll() {
-        fetch('/materials/check_runs/' + runId + '/step', { method: 'POST' })
+        fetch('/materials/check_runs/' + runId + '/step', {
+          method: 'POST',
+          headers: { 'X-Run-Token': runToken },
+        })
           .then(function (r) { return r.json(); })
           .then(function (data) {
             if (data.status === 'done' || data.status === 'error') {
