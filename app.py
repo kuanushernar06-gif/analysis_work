@@ -1259,42 +1259,83 @@ def step_material_check(run_id):
                 raise material_check.MaterialCheckError("Бұл ай/апта жоспардан табылмады.")
 
             # Осы аптаның әр тақырыбын әр таңдалған кітаптан іздейміз —
-            # bір step-те тек БІР (кітап, тақырып) жұбын өңдейміз (әр
-            # тақырыпты толық кітап PDF-інен іздеу баяу болуы мүмкін,
-            # сол себепті бір сұранысқа бәрін сыйдырмаймыз).
-            pending = None
+            # bір step-те тек БІР (кітап, тақырып) жұбын өңдейміз. Кітаптың
+            # өзі де (әсіресе сканерленген) ондаған МБ тартуы мүмкін —
+            # бүкіл кітапты бір сұранысқа жіберу Claude API-дің 32MB
+            # шегінен оп-оңай асып кетеді, сол себепті кітапты
+            # TOPIC_SEARCH_CHUNK_PAGES бетінен тұратын бөліктерге бөліп,
+            # әр step-те тек БІР бөлікті ғана тексереміз (searched_through_page
+            # аралық прогресті сақтайды — табылмаса, келесі step келесі
+            # бөлікті жалғастырады).
+            pending = None  # (book_id, topic_index, іздеу қайдан жалғасады)
             for bid in book_ids:
                 for ti in range(len(topics)):
                     cached = conn.execute(
-                        "SELECT id FROM book_topic_pages "
+                        "SELECT page_start, searched_through_page FROM book_topic_pages "
                         "WHERE book_id = ? AND program_id = ? AND month = ? AND week = ? AND topic_index = ?",
                         (bid, material["program_id"], run["target_month"], run["target_week"], ti),
                     ).fetchone()
                     if cached is None:
-                        pending = (bid, ti)
+                        pending = (bid, ti, 0)
+                        break
+                    if cached["page_start"] is None and cached["searched_through_page"] != -1:
+                        pending = (bid, ti, cached["searched_through_page"] or 0)
                         break
                 if pending is not None:
                     break
 
             if pending is not None:
-                bid, ti = pending
+                bid, ti, searched_from = pending
                 book = conn.execute("SELECT * FROM books WHERE id = ?", (bid,)).fetchone()
                 if book is None or not book["link"]:
                     raise material_check.MaterialCheckError("Кітап табылмады немесе сілтемесі жоқ.")
                 pdf_bytes = download_drive_file(book["link"])
-                page_start, page_end = material_check.find_topic_pages(pdf_bytes, topics[ti], api_key)
-                if page_start is not None and page_end is not None:
-                    max_end = page_start + material_check.MAX_TOPIC_PAGE_SPAN - 1
-                    if page_end > max_end:
-                        page_end = max_end
+                total_book_pages = book["total_pages"] or get_pdf_page_count(pdf_bytes)
+                if not book["total_pages"]:
+                    conn.execute("UPDATE books SET total_pages = ? WHERE id = ?", (total_book_pages, bid))
+                    conn.commit()
+
+                existing_row = conn.execute(
+                    "SELECT id FROM book_topic_pages "
+                    "WHERE book_id = ? AND program_id = ? AND month = ? AND week = ? AND topic_index = ?",
+                    (bid, material["program_id"], run["target_month"], run["target_week"], ti),
+                ).fetchone()
+
+                if searched_from >= total_book_pages:
+                    # Бүкіл кітап қаралды, тақырып табылмады — тұрақты
+                    # "табылмады" деп белгілейміз (-1), әрі қарай қайталап
+                    # іздемеу үшін.
+                    page_start = page_end = None
+                    new_searched = -1
+                else:
+                    chunk_start = searched_from + 1
+                    chunk_end = min(chunk_start + material_check.TOPIC_SEARCH_CHUNK_PAGES - 1, total_book_pages)
+                    chunk_bytes, used_start, used_end = extract_chunk_pdf_bytes_capped(pdf_bytes, chunk_start, chunk_end)
+                    rel_start, rel_end = material_check.find_topic_pages(chunk_bytes, topics[ti], api_key)
+                    page_start = page_end = None
+                    if rel_start is not None and rel_end is not None:
+                        page_start = rel_start + used_start - 1
+                        page_end = rel_end + used_start - 1
+                        max_end = page_start + material_check.MAX_TOPIC_PAGE_SPAN - 1
+                        if page_end > max_end:
+                            page_end = max_end
+                    new_searched = used_end
+
                 try:
-                    conn.execute(
-                        "INSERT INTO book_topic_pages "
-                        "(book_id, program_id, month, week, topic_index, page_start, page_end) "
-                        "VALUES (?, ?, ?, ?, ?, ?, ?)",
-                        (bid, material["program_id"], run["target_month"], run["target_week"], ti,
-                         page_start, page_end),
-                    )
+                    if existing_row:
+                        conn.execute(
+                            "UPDATE book_topic_pages SET page_start = ?, page_end = ?, "
+                            "searched_through_page = ? WHERE id = ?",
+                            (page_start, page_end, new_searched, existing_row["id"]),
+                        )
+                    else:
+                        conn.execute(
+                            "INSERT INTO book_topic_pages "
+                            "(book_id, program_id, month, week, topic_index, page_start, page_end, "
+                            "searched_through_page) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                            (bid, material["program_id"], run["target_month"], run["target_week"], ti,
+                             page_start, page_end, new_searched),
+                        )
                     conn.commit()
                 except Exception:
                     conn.rollback()

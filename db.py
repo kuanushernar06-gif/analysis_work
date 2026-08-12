@@ -234,6 +234,7 @@ CREATE TABLE IF NOT EXISTS book_topic_pages (
     topic_index INTEGER NOT NULL DEFAULT 0,
     page_start INTEGER,
     page_end INTEGER,
+    searched_through_page INTEGER NOT NULL DEFAULT 0,
     lookup_error TEXT,
     created_at TIMESTAMPTZ DEFAULT now(),
     UNIQUE(book_id, program_id, month, week, topic_index)
@@ -414,6 +415,7 @@ CREATE TABLE IF NOT EXISTS book_topic_pages (
     topic_index INTEGER NOT NULL DEFAULT 0,
     page_start INTEGER,
     page_end INTEGER,
+    searched_through_page INTEGER NOT NULL DEFAULT 0,
     lookup_error TEXT,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(book_id, program_id, month, week, topic_index)
@@ -699,6 +701,11 @@ def _migrate(conn):
         conn.execute("ALTER TABLE material_check_runs ADD COLUMN run_token TEXT")
         conn.commit()
     _migrate_book_topic_pages_topic_index(conn)
+    if not _column_exists(conn, "book_topic_pages", "searched_through_page"):
+        conn.execute(
+            "ALTER TABLE book_topic_pages ADD COLUMN searched_through_page INTEGER NOT NULL DEFAULT 0"
+        )
+        conn.commit()
     if not _column_exists(conn, "streams", "category"):
         _migrate_stream_categories(conn)
     _migrate_stream_code_rename(conn)
