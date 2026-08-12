@@ -73,25 +73,9 @@
 <tr class="material-expand-row" style="display:none">
   <td colspan="4">
     <p class="muted material-error-text" style="color: var(--critical); margin:0;">{{ run['error_text'] }}</p>
-    {% if run['error_text'] and 'find_topic_pages' in run['error_text'] %}
-    {# Бұл — эталон КІТАПТЫҢ өз көлеміне байланысты қате, материалдың
-       сілтемесіне қатысы жоқ. Материал сілтемесін өзгерту өрісін көрсету
-       қате бағыт сілтегендіктен, мұнда тек жай қайта тексеру батырмасы. #}
-    <p class="muted" style="margin-top:8px;">
-      Бұл — эталон кітаптың өз көлеміне байланысты қате, тапсырма сілтемесіне қатысы жоқ.
-    </p>
-    <form method="post" action="{{ url_for('recheck_material', material_id=item['id']) }}" style="display:inline;">
+    <form method="post" action="{{ url_for('recheck_material', material_id=item['id']) }}" style="margin-top:10px; display:inline;">
       <button type="submit" class="btn btn-outline btn-small">Қайта тексеру</button>
     </form>
-    {% else %}
-    <form method="post" action="{{ url_for('recheck_material', material_id=item['id']) }}" class="recheck-form" style="margin-top:10px;">
-      <label class="col-span-2" style="display:block; margin-bottom:0;">
-        Материалдың сілтемесі (қажет болса өзгертіп, содан кейін қайта тексеруге болады)
-        <input type="text" name="link" value="{{ item['link'] or '' }}" autocomplete="off">
-      </label>
-      <button type="submit" class="btn btn-outline btn-small" style="margin-top:8px;">Осы сілтемемен қайта тексеру</button>
-    </form>
-    {% endif %}
   </td>
 </tr>
 {% endif %}
