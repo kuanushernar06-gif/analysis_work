@@ -1088,6 +1088,13 @@ def recheck_material(material_id):
     if material is None:
         flash("Материал табылмады.", "error")
         return target
+
+    new_link = request.form.get("link", "").strip()
+    if new_link and new_link != (material["link"] or ""):
+        conn.execute("UPDATE material_checks SET link = ? WHERE id = ?", (new_link, material_id))
+        conn.commit()
+        material = conn.execute("SELECT * FROM material_checks WHERE id = ?", (material_id,)).fetchone()
+
     last_run = conn.execute(
         "SELECT * FROM material_check_runs WHERE material_id = ? ORDER BY id DESC LIMIT 1", (material_id,)
     ).fetchone()

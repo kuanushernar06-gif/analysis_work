@@ -26,7 +26,9 @@
       </button>
       {% endif %}
       {% if run and run['status'] == 'error' %}
-      <form method="post" action="{{ url_for('recheck_material', material_id=item['id']) }}" style="display:inline;">
+      <form method="post" action="{{ url_for('recheck_material', material_id=item['id']) }}" class="recheck-form">
+        <input type="text" name="link" value="{{ item['link'] or '' }}"
+               placeholder="Сілтемені өзгерту (міндетті емес)" autocomplete="off">
         <button type="submit" class="btn btn-outline btn-small">Қайта тексеру</button>
       </form>
       {% endif %}
