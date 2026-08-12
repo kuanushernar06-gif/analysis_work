@@ -916,6 +916,17 @@ input[type="number"]::-webkit-outer-spin-button {
 
 .material-expand-btn .expand-arrow { display: inline-block; width: 0.8em; margin-right: 2px; }
 
+/* Ұзын диагностикалық қате мәтіні (мыс. find_topic_pages контекстімен)
+   бір жолға сыймай, кестенің table-scroll контейнерінде көлденең тыс
+   шығып, көрінбей қалатын. max-width осы элементтің өзіне тікелей
+   тіркеліп, кесте бағанының ені қандай болса да мәжбүрлеп бүктіреді. */
+.material-error-text {
+  max-width: 900px;
+  white-space: normal;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
 .recheck-form { margin: 0; max-width: 480px; }
 .recheck-form label { font-size: 0.82rem; }
 .recheck-form input[type="text"] {

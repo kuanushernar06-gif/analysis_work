@@ -72,7 +72,7 @@
 {% elif run and run['status'] == 'error' %}
 <tr class="material-expand-row" style="display:none">
   <td colspan="4">
-    <p class="muted" style="color: var(--critical); margin:0;">{{ run['error_text'] }}</p>
+    <p class="muted material-error-text" style="color: var(--critical); margin:0;">{{ run['error_text'] }}</p>
     {% if run['error_text'] and 'find_topic_pages' in run['error_text'] %}
     {# Бұл — эталон КІТАПТЫҢ өз көлеміне байланысты қате, материалдың
        сілтемесіне қатысы жоқ. Материал сілтемесін өзгерту өрісін көрсету

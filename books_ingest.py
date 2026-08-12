@@ -159,16 +159,58 @@ def extract_chunk_pdf_bytes(pdf_bytes: bytes, page_start: int, page_end: int) ->
 MAX_BOOK_CHUNK_BYTES = 9_000_000
 
 
+def compress_pdf_images(pdf_bytes: bytes, max_dimension: int = 1600, quality: int = 60) -> bytes:
+    """PDF-тегі әр беттің ендірілген суретін қайта өлшеп/сығып шығарады —
+    беттерді кетіру арқылы көлемін жеткілікті кішірейте алмағанда (тіпті
+    1 бет те шегінен асып тұрғанда) соңғы шара ретінде қолданылады.
+    Мәтін оқылымды болатындай ажыратымдылықты сақтайды (max_dimension),
+    тек артық ажыратымдылық/сапаны кемітеді — reportlab арқылы Pillow
+    қазірдің өзінде міндетті тәуелділік болғандықтан қосымша орнату
+    қажет емес."""
+    import io
+
+    writer = PdfWriter(clone_from=io.BytesIO(pdf_bytes))
+    for page in writer.pages:
+        for img in page.images:
+            pil_img = img.image
+            if pil_img is None:
+                continue
+            width, height = pil_img.size
+            longest = max(width, height)
+            if longest > max_dimension:
+                scale = max_dimension / longest
+                pil_img = pil_img.resize((max(1, int(width * scale)), max(1, int(height * scale))))
+            if pil_img.mode not in ("RGB", "L"):
+                pil_img = pil_img.convert("RGB")
+            try:
+                img.replace(pil_img, quality=quality)
+            except Exception:
+                continue
+    out = io.BytesIO()
+    writer.write(out)
+    return out.getvalue()
+
+
 def extract_chunk_pdf_bytes_capped(pdf_bytes: bytes, page_start: int, page_end: int, max_bytes: int = MAX_BOOK_CHUNK_BYTES):
     """extract_chunk_pdf_bytes сияқты, бірақ нәтиже max_bytes-тан үлкен болса,
     сыйғанша соңғы беттерден бастап аралықты қысқартады (сканерленген
-    беттер ауыр болғанда). (chunk_bytes, нақты_page_start, нақты_page_end)
-    үштігін қайтарады — нақты мән сұралған аралықтан тар болуы мүмкін."""
+    беттер ауыр болғанда). Тіпті 1 бетке дейін қысқартып та әлі сыймаса,
+    соңғы шара ретінде сол беттің суретін сығады (compress_pdf_images) —
+    бет санын одан әрі кемітудің орнына. (chunk_bytes, нақты_page_start,
+    нақты_page_end) үштігін қайтарады — нақты мән сұралған аралықтан тар
+    болуы мүмкін."""
     chunk = extract_chunk_pdf_bytes(pdf_bytes, page_start, page_end)
     end = page_end
     while len(chunk) > max_bytes and end > page_start:
         end -= 1
         chunk = extract_chunk_pdf_bytes(pdf_bytes, page_start, end)
+    if len(chunk) > max_bytes:
+        try:
+            compressed = compress_pdf_images(chunk)
+            if 0 < len(compressed) < len(chunk):
+                chunk = compressed
+        except Exception:
+            pass
     return chunk, page_start, end
 
 
