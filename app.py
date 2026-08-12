@@ -838,7 +838,7 @@ def materials_program_page(slug):
     ).fetchall()
 
     run_rows = conn.execute(
-        "SELECT id, material_id, status, processed_pages, total_pages, error_text, result_json "
+        "SELECT id, material_id, status, processed_pages, total_pages, error_text, result_json, run_token "
         "FROM material_check_runs ORDER BY id DESC"
     ).fetchall()
     latest_run_by_material = {}

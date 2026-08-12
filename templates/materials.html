@@ -119,7 +119,7 @@
 <h2 style="margin-top:28px;">Материалдар</h2>
 
 {% for section in sections %}
-<div class="card">
+<div class="card" id="material-section-{{ section.slug }}">
   <h2>{{ section.label }}</h2>
 
   {% if section.checked_entries %}
@@ -239,50 +239,76 @@
     // Кітап(тар)/Тақырып ашылмалы тізімдерінің тақырыбында не таңдалғанын
     // көрсетіп тұрамыз — жабық күйде де таңдауды ұмытпау үшін. Чекбокс
     // болса — санын, радио (жалғыз таңдау) болса — таңдалған мәтінді көрсетеді.
-    document.querySelectorAll('.book-picker').forEach(function (picker) {
-      var summary = picker.querySelector('summary');
-      var defaultText = summary.textContent;
-      function updateSummary() {
-        var checked = picker.querySelectorAll('input:checked');
-        if (!checked.length) {
-          summary.textContent = defaultText;
-          return;
+    function initBookPickers(root) {
+      root.querySelectorAll('.book-picker').forEach(function (picker) {
+        var summary = picker.querySelector('summary');
+        var defaultText = summary.textContent;
+        function updateSummary() {
+          var checked = picker.querySelectorAll('input:checked');
+          if (!checked.length) {
+            summary.textContent = defaultText;
+            return;
+          }
+          if (checked[0].type === 'radio') {
+            var label = checked[0].closest('label');
+            var text = label ? label.textContent.trim() : '';
+            summary.textContent = text.length > 70 ? text.slice(0, 70) + '…' : text;
+          } else {
+            summary.textContent = checked.length + ' кітап таңдалды';
+          }
         }
-        if (checked[0].type === 'radio') {
-          var label = checked[0].closest('label');
-          var text = label ? label.textContent.trim() : '';
-          summary.textContent = text.length > 70 ? text.slice(0, 70) + '…' : text;
-        } else {
-          summary.textContent = checked.length + ' кітап таңдалды';
-        }
-      }
-      picker.addEventListener('change', updateSummary);
-    });
+        picker.addEventListener('change', updateSummary);
+      });
+    }
 
     // Жаңа қосылған материалдардың тексеру статусын (Тексерісте…) тірі
-    // түрде бақылап, аяқталған/қателескен соң бетті жаңартамыз — сонда
-    // "Тексерілген материалдар" тізімі де дереу жаңарады.
-    document.querySelectorAll('tr[data-run-row]').forEach(function (row) {
-      var runId = row.getAttribute('data-run-id');
-      var runToken = row.getAttribute('data-run-token') || '';
-      var cell = row.querySelector('.run-status-cell');
-      function poll() {
-        fetch('/materials/check_runs/' + runId + '/step', {
-          method: 'POST',
-          headers: { 'X-Run-Token': runToken },
-        })
-          .then(function (r) { return r.json(); })
-          .then(function (data) {
-            if (data.status === 'done' || data.status === 'error') {
-              window.location.reload();
-              return;
-            }
-            setTimeout(poll, 400);
+    // түрде бақылап отырамыз. Бұрын аяқталған/қателескен соң БҮКІЛ бетті
+    // қайта жүктейтін (window.location.reload) — бірнеше материал қатар
+    // тексеріліп жатса, әрқайсысы аяқталған сайын бүкіл бет жыпылықтап,
+    // скролл жоғарыға секіріп отыратын. Енді тек сол материалдың өз
+    // бөлімін (карточкасын) fetch арқылы жаңа HTML-мен алмастырамыз —
+    // қалған бет тыныш қалады.
+    function initRunPollers(root) {
+      root.querySelectorAll('tr[data-run-row]').forEach(function (row) {
+        var runId = row.getAttribute('data-run-id');
+        var runToken = row.getAttribute('data-run-token') || '';
+        function poll() {
+          fetch('/materials/check_runs/' + runId + '/step', {
+            method: 'POST',
+            headers: { 'X-Run-Token': runToken },
           })
-          .catch(function () { setTimeout(poll, 1500); });
-      }
-      poll();
-    });
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+              if (data.status === 'done' || data.status === 'error') {
+                refreshSection(row);
+                return;
+              }
+              setTimeout(poll, 400);
+            })
+            .catch(function () { setTimeout(poll, 1500); });
+        }
+        poll();
+      });
+    }
+
+    function refreshSection(row) {
+      var section = row.closest('[id^="material-section-"]');
+      if (!section) { window.location.reload(); return; }
+      fetch(window.location.href)
+        .then(function (r) { return r.text(); })
+        .then(function (html) {
+          var doc = new DOMParser().parseFromString(html, 'text/html');
+          var freshSection = doc.getElementById(section.id);
+          if (!freshSection) { window.location.reload(); return; }
+          section.innerHTML = freshSection.innerHTML;
+          initBookPickers(section);
+          initRunPollers(section);
+        })
+        .catch(function () { window.location.reload(); });
+    }
+
+    initBookPickers(document);
+    initRunPollers(document);
   })();
 </script>
 {% endblock %}
