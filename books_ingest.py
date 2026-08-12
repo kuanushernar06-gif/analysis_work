@@ -159,55 +159,60 @@ def extract_chunk_pdf_bytes(pdf_bytes: bytes, page_start: int, page_end: int) ->
 MAX_BOOK_CHUNK_BYTES = 9_000_000
 
 
-def compress_pdf_images(pdf_bytes: bytes, max_dimension: int = 1600, quality: int = 60):
-    """PDF-тегі әр беттің ендірілген суретін қайта өлшеп/сығып шығарады —
-    беттерді кетіру арқылы көлемін жеткілікті кішірейте алмағанда (тіпті
-    1 бет те шегінен асып тұрғанда) соңғы шара ретінде қолданылады.
-    Мәтін оқылымды болатындай ажыратымдылықты сақтайды (max_dimension),
-    тек артық ажыратымдылық/сапаны кемітеді — reportlab арқылы Pillow
-    қазірдің өзінде міндетті тәуелділік болғандықтан қосымша орнату
-    қажет емес. Бір суреттің сәтсіздігі басқаларына кедергі жасамауы
-    үшін әр сурет жеке try/except-пен қоршалған. (pdf_bytes, found,
-    compressed) үштігін қайтарады — found/compressed диагностика үшін:
-    неше сурет табылды, соның нешеуі нақты сәтті сығылды."""
+def rasterize_pdf_compressed(pdf_bytes: bytes, dpi: int = 150, quality: int = 55) -> bytes:
+    """Әр бетті сурет ретінде қайта РЕНДЕРЛЕП (PDF-тің ішкі құрылымына —
+    XObject суреттер ме, inline суреттер ме, векторлық графика ма, ауыр
+    қаріп пе — мүлдем қарамай), содан кейін сол суреттерден жаңа, ықшам
+    PDF құрастырады. compress_pdf_images-тің орнын басады: ол тек
+    XObject суреттерді ғана көретін (беттің салмағы inline суретте немесе
+    басқа объектіде жатса көмектеспей қалатын), ал бұл — беттің нақты
+    КӨРІНІСІН түсіріп алатындықтан, себебіне қарамай әрқашан жұмыс
+    істейді. PyMuPDF (fitz) арқылы рендерленеді."""
     import io
+    import fitz
+    from reportlab.pdfgen import canvas as rl_canvas
+    from reportlab.lib.utils import ImageReader
+    from PIL import Image
 
-    writer = PdfWriter(clone_from=io.BytesIO(pdf_bytes))
-    found = 0
-    compressed_count = 0
-    for page in writer.pages:
-        for img in page.images:
-            found += 1
-            try:
-                pil_img = img.image
-                if pil_img is None:
-                    continue
-                width, height = pil_img.size
-                longest = max(width, height)
-                if longest > max_dimension:
-                    scale = max_dimension / longest
-                    pil_img = pil_img.resize((max(1, int(width * scale)), max(1, int(height * scale))))
-                if pil_img.mode not in ("RGB", "L"):
-                    pil_img = pil_img.convert("RGB")
-                img.replace(pil_img, quality=quality)
-                compressed_count += 1
-            except Exception:
-                continue
+    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
     out = io.BytesIO()
-    writer.write(out)
-    return out.getvalue(), found, compressed_count
+    c = None
+    try:
+        for page in doc:
+            rect = page.rect
+            pix = page.get_pixmap(dpi=dpi)
+            img = Image.frombytes(
+                "RGB" if pix.n < 4 else "RGBA", (pix.width, pix.height), pix.samples
+            )
+            if img.mode != "RGB":
+                img = img.convert("RGB")
+            img_buf = io.BytesIO()
+            img.save(img_buf, format="JPEG", quality=quality)
+            img_buf.seek(0)
+            if c is None:
+                c = rl_canvas.Canvas(out, pagesize=(rect.width, rect.height))
+            else:
+                c.setPageSize((rect.width, rect.height))
+            c.drawImage(ImageReader(img_buf), 0, 0, width=rect.width, height=rect.height)
+            c.showPage()
+    finally:
+        doc.close()
+    if c is not None:
+        c.save()
+    return out.getvalue()
 
 
 def extract_chunk_pdf_bytes_capped(pdf_bytes: bytes, page_start: int, page_end: int, max_bytes: int = MAX_BOOK_CHUNK_BYTES):
     """extract_chunk_pdf_bytes сияқты, бірақ нәтиже max_bytes-тан үлкен болса,
     сыйғанша соңғы беттерден бастап аралықты қысқартады (сканерленген
     беттер ауыр болғанда). Тіпті 1 бетке дейін қысқартып та әлі сыймаса,
-    соңғы шара ретінде сол беттің суретін сатылап сыжады (алдымен жұмсақ,
-    сыймаса — қаттырақ) — бет санын одан әрі кемітудің орнына.
-    (chunk_bytes, нақты_page_start, нақты_page_end, compress_note)
-    төрттігін қайтарады — compress_note бос жол ('') болса, сығу
-    қолданылмаған, әйтпесе не болғанын сипаттайды (диагностика үшін,
-    сығу көмектеспеген жағдайда себебін бірден көру үшін)."""
+    соңғы шара ретінде беттерді сатылап (алдымен жұмсақ, сыймаса —
+    қаттырақ) РЕНДЕРЛЕП қайта сығады (rasterize_pdf_compressed) — бет
+    санын одан әрі кемітудің орнына. (chunk_bytes, нақты_page_start,
+    нақты_page_end, compress_note) төрттігін қайтарады — compress_note
+    бос жол ('') болса, сығу қолданылмаған, әйтпесе не болғанын
+    сипаттайды (диагностика үшін, сығу көмектеспеген жағдайда себебін
+    бірден көру үшін)."""
     chunk = extract_chunk_pdf_bytes(pdf_bytes, page_start, page_end)
     end = page_end
     while len(chunk) > max_bytes and end > page_start:
@@ -217,22 +222,19 @@ def extract_chunk_pdf_bytes_capped(pdf_bytes: bytes, page_start: int, page_end: 
     compress_note = ""
     if len(chunk) > max_bytes:
         before = len(chunk)
-        for max_dimension, quality in ((1600, 60), (1100, 35), (700, 18)):
+        for dpi, quality in ((150, 55), (110, 40), (85, 28)):
             try:
-                compressed, found, done = compress_pdf_images(chunk, max_dimension=max_dimension, quality=quality)
+                rasterized = rasterize_pdf_compressed(chunk, dpi=dpi, quality=quality)
             except Exception as e:
-                compress_note = f"compress tier {max_dimension}px/{quality}q failed: {type(e).__name__}: {e}"
+                compress_note = f"rasterize {dpi}dpi/{quality}q failed: {type(e).__name__}: {e}"
                 break
-            if found == 0:
-                compress_note = "no embedded images found to compress"
+            if not rasterized:
+                compress_note = f"rasterize {dpi}dpi/{quality}q produced empty output"
                 break
-            if 0 < len(compressed) < before:
-                chunk = compressed
-                compress_note = f"compressed {done}/{found} images @ {max_dimension}px/{quality}q: {before}b -> {len(chunk)}b"
-                if len(chunk) <= max_bytes:
-                    break
-            else:
-                compress_note = f"compress tier {max_dimension}px/{quality}q: {found} images found, {done} compressed, no size reduction"
+            chunk = rasterized
+            compress_note = f"rasterized @ {dpi}dpi/{quality}q: {before}b -> {len(chunk)}b"
+            if len(chunk) <= max_bytes:
+                break
 
     return chunk, page_start, end, compress_note
 
