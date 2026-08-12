@@ -26,9 +26,7 @@
       </button>
       {% endif %}
       {% if run and run['status'] == 'error' %}
-      <form method="post" action="{{ url_for('recheck_material', material_id=item['id']) }}" class="recheck-form">
-        <input type="text" name="link" value="{{ item['link'] or '' }}"
-               placeholder="Сілтемені өзгерту (міндетті емес)" autocomplete="off">
+      <form method="post" action="{{ url_for('recheck_material', material_id=item['id']) }}" style="display:inline;">
         <button type="submit" class="btn btn-outline btn-small">Қайта тексеру</button>
       </form>
       {% endif %}
@@ -75,6 +73,13 @@
 <tr class="material-expand-row" style="display:none">
   <td colspan="4">
     <p class="muted" style="color: var(--critical); margin:0;">{{ run['error_text'] }}</p>
+    <form method="post" action="{{ url_for('recheck_material', material_id=item['id']) }}" class="recheck-form" style="margin-top:10px;">
+      <label class="col-span-2" style="display:block; margin-bottom:0;">
+        Материалдың сілтемесі (қажет болса өзгертіп, содан кейін қайта тексеруге болады)
+        <input type="text" name="link" value="{{ item['link'] or '' }}" autocomplete="off">
+      </label>
+      <button type="submit" class="btn btn-outline btn-small" style="margin-top:8px;">Осы сілтемемен қайта тексеру</button>
+    </form>
   </td>
 </tr>
 {% endif %}

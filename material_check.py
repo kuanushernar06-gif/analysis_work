@@ -59,6 +59,13 @@ MAX_TOPIC_PAGE_SPAN = 12
 # ықшамдалған.
 MAX_MATERIAL_PDF_BYTES = 11_000_000
 
+# Claude API-ге ЖІБЕРМЕЙ ТҰРЫП тексеретін соңғы қорғаныс — жоғарыдағы екі
+# шек (материал + кітап) дұрыс жұмыс істесе, қосынды бұған ешқашан
+# жетпеуі керек. Дегенмен бір бөлік бірнеше рет қосылып кетсе немесе
+# болашақта шектер өзгертілсе, желіге бекер сұраныс жіберіп, түсініксіз
+# HTTP 413 алудың орнына осы жерде анық диагнозбен тоқтатамыз.
+MAX_REQUEST_BODY_BYTES = 30_000_000
+
 CRITERIA_BY_TYPE = {
     "uy_zhumysy": """Үй жұмысындағы әр сұрақ пен жауапты кітаптағы сәйкес тұсымен салыстыр.
 Тексеру келесі санаттар бойынша болсын:
@@ -261,6 +268,19 @@ def _call_claude_with_key(content_blocks, api_key, thinking_disabled=True, expec
         f"{b.get('type', '?')}:{len(b.get('source', {}).get('data', '')) or len(b.get('text', ''))}b"
         for b in content_blocks
     )
+
+    # MAX_MATERIAL_PDF_BYTES/MAX_BOOK_CHUNK_BYTES жоғарыда бет/файл деңгейінде
+    # шектейді, бірақ бірнеше құжат бір сұранысқа қосылса (немесе болашақта
+    # осы шектер өзгерсе), қосынды дегенмен Claude-тың ~32MB шегінен асып
+    # кетуі мүмкін. Сол жағдайда желіге сұраныс жібермей-ақ, дәл осы жерде,
+    # анық себебін көрсетіп тоқтатамыз — расталмаған HTTP 413-тен гөрі
+    # бірден нақты диагноз беру үшін.
+    if len(body_bytes) > MAX_REQUEST_BODY_BYTES:
+        raise MaterialCheckError(
+            f"Сұраныс көлемі тым үлкен ({len(body_bytes) / 1_000_000:.1f}MB, "
+            f"шегі {MAX_REQUEST_BODY_BYTES / 1_000_000:.0f}MB) — Claude API-ге "
+            f"жібермей тұрып тоқтатылды. Бөліктер: {block_sizes}"
+        )
 
     req = urllib.request.Request(
         CHECK_API_URL,

@@ -916,15 +916,19 @@ input[type="number"]::-webkit-outer-spin-button {
 
 .material-expand-btn .expand-arrow { display: inline-block; width: 0.8em; margin-right: 2px; }
 
-.recheck-form { display: flex; align-items: center; gap: 6px; margin: 0; }
+.recheck-form { margin: 0; max-width: 480px; }
+.recheck-form label { font-size: 0.82rem; }
 .recheck-form input[type="text"] {
-  width: 160px;
-  padding: 5px 8px;
-  font-size: 0.82rem;
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  padding: 6px 10px;
+  font-size: 0.85rem;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--surface);
   color: inherit;
+  box-sizing: border-box;
 }
 
 /* ---------- Flash ---------- */
