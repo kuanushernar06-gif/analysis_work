@@ -152,6 +152,26 @@ def extract_chunk_pdf_bytes(pdf_bytes: bytes, page_start: int, page_end: int) ->
     return out.getvalue()
 
 
+# Бет саны (MAX_TOPIC_PAGE_SPAN) шектелсе де, жоғары ажыратымдылықпен
+# сканерленген оқулықтарда 12 бет өзі ондаған МБ тартуы мүмкін — Claude
+# API-дің жалпы сұраныс шегінен (32МБ) оңай асып кетеді. Сол себепті бет
+# санымен қатар нақты байт көлемін де шектейміз.
+MAX_BOOK_CHUNK_BYTES = 9_000_000
+
+
+def extract_chunk_pdf_bytes_capped(pdf_bytes: bytes, page_start: int, page_end: int, max_bytes: int = MAX_BOOK_CHUNK_BYTES):
+    """extract_chunk_pdf_bytes сияқты, бірақ нәтиже max_bytes-тан үлкен болса,
+    сыйғанша соңғы беттерден бастап аралықты қысқартады (сканерленген
+    беттер ауыр болғанда). (chunk_bytes, нақты_page_start, нақты_page_end)
+    үштігін қайтарады — нақты мән сұралған аралықтан тар болуы мүмкін."""
+    chunk = extract_chunk_pdf_bytes(pdf_bytes, page_start, page_end)
+    end = page_end
+    while len(chunk) > max_bytes and end > page_start:
+        end -= 1
+        chunk = extract_chunk_pdf_bytes(pdf_bytes, page_start, end)
+    return chunk, page_start, end
+
+
 def _extract_retry_delay(headers):
     value = headers.get("retry-after") if headers else None
     if value:

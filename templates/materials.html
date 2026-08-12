@@ -25,6 +25,11 @@
         <span class="expand-arrow" aria-hidden="true">▸</span><span class="expand-label">Ашу</span>
       </button>
       {% endif %}
+      {% if run and run['status'] == 'error' %}
+      <form method="post" action="{{ url_for('recheck_material', material_id=item['id']) }}" style="display:inline;">
+        <button type="submit" class="btn btn-outline btn-small">Қайта тексеру</button>
+      </form>
+      {% endif %}
       <button type="button" class="btn btn-danger btn-small teacher-delete-btn">Өшіру</button>
       <form method="post" action="{{ url_for('delete_material', material_id=item['id']) }}" class="teacher-delete-confirm">
         <span class="muted">Шынымен өшіру керек пе?</span>

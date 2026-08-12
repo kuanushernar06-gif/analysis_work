@@ -34,9 +34,11 @@ from books_ingest import (
     download_drive_file,
     get_pdf_page_count,
     extract_chunk_pdf_bytes,
+    extract_chunk_pdf_bytes_capped,
     read_chunk_with_claude,
     BookIngestError,
     PAGES_PER_CHUNK,
+    MAX_BOOK_CHUNK_BYTES,
 )
 import material_check
 import report_pdf
@@ -1074,6 +1076,38 @@ def delete_material(material_id):
     return target
 
 
+@app.route("/materials/<int:material_id>/recheck", methods=["POST"])
+def recheck_material(material_id):
+    """Соңғы тексеру қате болса, куратор жазбаны өшіріп-қайта қоспай-ақ,
+    сол баяғы кітап/апта таңдауымен тексеруді қайта бастай алады —
+    негізінен түбегейлі себебі (мыс. файл көлемі) түзетілген кезде
+    пайдалы."""
+    conn = get_db()
+    target = _material_redirect_target(conn, material_id)
+    material = conn.execute("SELECT * FROM material_checks WHERE id = ?", (material_id,)).fetchone()
+    if material is None:
+        flash("Материал табылмады.", "error")
+        return target
+    last_run = conn.execute(
+        "SELECT * FROM material_check_runs WHERE material_id = ? ORDER BY id DESC LIMIT 1", (material_id,)
+    ).fetchone()
+    if last_run is None:
+        flash("Тексеру тарихы табылмады.", "error")
+        return target
+    book_ids = (
+        json.loads(last_run["book_ids_json"]) if last_run["book_ids_json"]
+        else ([last_run["book_id"]] if last_run["book_id"] else [])
+    )
+    ok, result = _create_material_check_run(
+        conn, material, last_run["mode"], book_ids, last_run["target_month"], last_run["target_week"]
+    )
+    if not ok:
+        flash(f"Қайта тексеру басталмады: {result}", "error")
+    else:
+        flash("Қайта тексеру басталды.", "ok")
+    return target
+
+
 @app.route("/materials/check_runs/<int:run_id>/step", methods=["POST"])
 def step_material_check(run_id):
     """Материалды кітаппен салыстыру процесінің БІР қадамы: кезектегі бет
@@ -1251,10 +1285,18 @@ def step_material_check(run_id):
                         raise material_check.MaterialCheckError("Кітап табылмады немесе сілтемесі жоқ.")
                     book_pdf_cache[bid] = download_drive_file(book["link"])
                 label = f"{r['title']} — {r['topic']}" if r.get("topic") else r["title"]
-                book_pdf_items.append((
-                    label, r["page_start"], r["page_end"],
-                    extract_chunk_pdf_bytes(book_pdf_cache[bid], r["page_start"], r["page_end"]),
-                ))
+                chunk_bytes, used_start, used_end = extract_chunk_pdf_bytes_capped(
+                    book_pdf_cache[bid], r["page_start"], r["page_end"]
+                )
+                if len(chunk_bytes) > MAX_BOOK_CHUNK_BYTES and used_start == used_end:
+                    raise material_check.MaterialCheckError(
+                        f"«{r['title']}» кітабының {used_start}-беті тым ауыр "
+                        "(жоғары ажыратымдылықпен сканерленген болуы мүмкін) — "
+                        "Claude API-ге тіпті бір бет ретінде де сыймайды. Бұл "
+                        "кітапты кішірек көлеммен (төмен ажыратымдылықпен) "
+                        "қайта сканерлеп жүктеп көріңіз."
+                    )
+                book_pdf_items.append((label, used_start, used_end, chunk_bytes))
             batch_findings = material_check.check_targeted(
                 kind, content, book_pdf_items, run["target_topic"], criteria, api_key
             )
