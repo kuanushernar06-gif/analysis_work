@@ -17,6 +17,7 @@ from analysis import (
     compute_curator_extremes,
     compare_reports,
     compute_teacher_stats,
+    compute_teacher_stats_for_week,
     compute_teacher_stream_detail,
     find_teacher_home_stream,
 )
@@ -480,7 +481,8 @@ def stream_detail(stream_id):
         )
     months_sorted = sorted(months.items(), key=lambda item: (item[0] is None, item[0]))
 
-    return render_template("stream.html", stream=stream, program=program, months=months_sorted)
+    mode = request.args.get("mode")
+    return render_template("stream.html", stream=stream, program=program, months=months_sorted, mode=mode)
 
 
 @app.route("/streams/<int:stream_id>/teachers")
@@ -506,6 +508,71 @@ def stream_teachers(stream_id):
         stream=stream,
         program=program,
         teachers=teachers,
+        stream_stats_categories=stream_stats_categories,
+    )
+
+
+@app.route("/weeks/<int:week_id>/teachers")
+def week_teachers(week_id):
+    """Мұғалімдер шолуының соңғы қадамы: ай/апта таңдалған соң, осы
+    аптаның/айдың нәтижелері бойынша есептелген мұғалім балдарын және
+    осы потоктың (код бойынша, санатқа қарамастан) тіркелген мұғалімдер
+    тізімін көрсетеді. Тіркелмеген/жаңа мұғалім осы жерден тікелей
+    қосылады — Бөлім/Поток қайта таңдаудың қажеті жоқ, өйткені навигация
+    арқылы бұрын шешілген."""
+    conn = get_db()
+    week, stream, program = get_week_context(conn, week_id)
+    if week is None or stream is None:
+        flash("Апта табылмады.", "error")
+        return redirect(url_for("teachers_browse"))
+
+    week_scores = {t["id"]: t for t in compute_teacher_stats_for_week(conn, week_id)}
+
+    all_teachers = conn.execute(
+        "SELECT t.id, t.name FROM teachers t JOIN streams s ON s.id = t.stream_id "
+        "WHERE s.program_id = ? AND s.code = ? ORDER BY t.name",
+        (stream["program_id"], stream["code"]),
+    ).fetchall()
+    teachers = [
+        {
+            "id": t["id"],
+            "name": t["name"],
+            "avg_score": week_scores.get(t["id"], {}).get("avg_score"),
+            "curator_count": week_scores.get(t["id"], {}).get("curator_count", 0),
+            "total_curators": week_scores.get(t["id"], {}).get(
+                "total_curators",
+                conn.execute(
+                    "SELECT COUNT(*) AS c FROM teacher_curators WHERE teacher_id = ?", (t["id"],)
+                ).fetchone()["c"],
+            ),
+        }
+        for t in all_teachers
+    ]
+
+    default_stream = conn.execute(
+        "SELECT id FROM streams WHERE program_id = ? AND code = ? AND category = ?",
+        (stream["program_id"], stream["code"], db.DEFAULT_CATEGORY),
+    ).fetchone()
+    add_stream_id = default_stream["id"] if default_stream else stream["id"]
+
+    stream_stats_categories = {
+        row["category"]: row["id"]
+        for row in conn.execute(
+            "SELECT id, category FROM streams WHERE program_id = ? AND code = ?",
+            (stream["program_id"], stream["code"]),
+        ).fetchall()
+    }
+
+    # base.html сайдбары "week" контекст айнымалысы болса, осы аптаның
+    # Жоспар/Импорт/Ортақ анализ сілтемелерін көрсетеді — бұл мұғалімдер
+    # бетінде орынсыз, сол себепті "current_week" деп бөлек атаумен береміз.
+    return render_template(
+        "week_teachers.html",
+        current_week=week,
+        stream=stream,
+        program=program,
+        teachers=teachers,
+        add_stream_id=add_stream_id,
         stream_stats_categories=stream_stats_categories,
     )
 
@@ -560,6 +627,17 @@ def _teacher_stream_picker_data(conn):
     for r in rows:
         streams_by_program.setdefault(r["program_slug"], []).append({"id": r["id"], "code": r["code"]})
     return programs, streams_by_program
+
+
+@app.route("/teachers/browse")
+def teachers_browse():
+    """Мұғалімдер статистикасына шолу: бөлімді таңдаудан бастап (одан әрі
+    /programs/<slug>?mode=stats арқылы санат+поток, содан кейін
+    /streams/<id>?mode=stats арқылы ай/апта, соңында /weeks/<id>/teachers
+    бетіне жеткізеді)."""
+    conn = get_db()
+    programs = conn.execute("SELECT * FROM programs ORDER BY sort_order, id").fetchall()
+    return render_template("teachers_browse.html", programs=programs)
 
 
 @app.route("/teachers")
@@ -746,6 +824,16 @@ def edit_teacher(teacher_id):
     )
 
 
+def _teacher_redirect_target():
+    """/weeks/<id>/teachers сияқты жерлерден келген add/delete әрекеттері
+    сол бетке қайта оралу үшін — қауіпсіздік үшін тек сайт ішіндегі
+    салыстырмалы жолдарды ғана қабылдайды (ашық-редирект болмас үшін)."""
+    next_url = request.form.get("next", "").strip()
+    if next_url.startswith("/") and not next_url.startswith("//"):
+        return redirect(next_url)
+    return redirect(url_for("teachers_list"))
+
+
 @app.route("/teachers/add", methods=["POST"])
 def add_teacher():
     conn = get_db()
@@ -756,15 +844,15 @@ def add_teacher():
 
     if not name:
         flash("Мұғалімнің атын енгізіңіз.", "error")
-        return redirect(url_for("teachers_list"))
+        return _teacher_redirect_target()
 
     if not stream_id_raw.isdigit():
         flash("Потокты таңдаңыз.", "error")
-        return redirect(url_for("teachers_list"))
+        return _teacher_redirect_target()
     stream_id = int(stream_id_raw)
     if conn.execute("SELECT id FROM streams WHERE id = ?", (stream_id,)).fetchone() is None:
         flash("Таңдалған поток табылмады.", "error")
-        return redirect(url_for("teachers_list"))
+        return _teacher_redirect_target()
 
     # Кураторлар атауы UNIQUE болғандықтан, INSERT-ті орындамас бұрын бар-жоғын
     # тексереміз — Postgres-те бір INSERT қатесі бүкіл транзакцияны "бұзып",
@@ -801,7 +889,7 @@ def add_teacher():
         )
     else:
         flash("Мұғалім қосылды.", "ok")
-    return redirect(url_for("teachers_list"))
+    return _teacher_redirect_target()
 
 
 @app.route("/teachers/<int:teacher_id>/delete", methods=["POST"])
@@ -810,7 +898,7 @@ def delete_teacher(teacher_id):
     conn.execute("DELETE FROM teachers WHERE id = ?", (teacher_id,))
     conn.commit()
     flash("Мұғалім жойылды.", "ok")
-    return redirect(url_for("teachers_list"))
+    return _teacher_redirect_target()
 
 
 @app.route("/materials")

@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}{{ stream['code'] }} · {{ current_week['title'] }} — Мұғалімдер{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <a class="back-link" href="{{ url_for('stream_detail', stream_id=stream['id'], mode='stats') }}">← {{ stream['code'] }}</a>
+    <h1>{{ program['name'] }} · {{ category_stats_label(stream['category']) }} · {{ stream['code'] }} · {{ current_week['title'] }}</h1>
+    <p class="muted">
+      Әр мұғалімнің ортақ балы — осы аптаның/айдың нәтижелері бойынша, өз
+      кураторларының ортақ балдарының орташасы.
+    </p>
+  </div>
+</div>
+
+<div class="card" id="add-teacher-form">
+  <h2>Жаңа мұғалім қосу</h2>
+  <form method="post" action="{{ url_for('add_teacher') }}" class="form-grid">
+    <input type="hidden" name="stream_id" value="{{ add_stream_id }}">
+    <input type="hidden" name="next" value="{{ request.path }}">
+    <label class="col-span-2">
+      Мұғалімнің аты-жөні
+      <input type="text" name="name" required autocomplete="off" placeholder="Мысалы: Асанова Гүлнара">
+    </label>
+    <label class="col-span-2">
+      Кураторлар (әр жолда біреу)
+      <textarea name="curator_names" rows="4" placeholder="НҰРАЙ&#10;АЙГЕРІМ&#10;БЕКЗАТ"></textarea>
+    </label>
+    <div class="col-span-2">
+      <button type="submit" class="btn btn-primary">Қосу</button>
+    </div>
+  </form>
+</div>
+
+<div class="card">
+  <h2>Мұғалімдер — {{ current_week['title'] }}</h2>
+  {% if teachers %}
+  <div class="table-scroll">
+    <table class="table">
+      <thead><tr><th>Мұғалім</th><th>Ортақ балл (осы апта/ай)</th><th>Кураторлар</th><th></th></tr></thead>
+      <tbody>
+        {% for t in teachers %}
+        <tr>
+          <td>{{ t.name }}</td>
+          <td>{% if t.avg_score is not none %}{{ '%.2f'|format(t.avg_score) }}{% else %}<span class="muted">нәтиже жоқ</span>{% endif %}</td>
+          <td>{{ t.curator_count }}/{{ t.total_curators }}</td>
+          <td class="no-print">
+            <div class="teacher-actions">
+              <a class="btn btn-outline btn-small" href="{{ url_for('edit_teacher', teacher_id=t.id) }}">Өзгерту</a>
+              <button type="button" class="btn btn-danger btn-small teacher-delete-btn">Өшіру</button>
+              <form method="post" action="{{ url_for('delete_teacher', teacher_id=t.id) }}" class="teacher-delete-confirm">
+                <input type="hidden" name="next" value="{{ request.path }}">
+                <span class="muted">Шынымен өшіру керек пе?</span>
+                <button type="submit" class="btn btn-danger btn-small">Иә, өшіру</button>
+                <button type="button" class="btn btn-outline btn-small teacher-delete-cancel">Болдырмау</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="muted">Бұл потокта әзірге мұғалім тіркелмеген.</p>
+  {% endif %}
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+  (function () {
+    var table = document.querySelector(".table");
+    if (!table) return;
+    table.addEventListener("click", function (e) {
+      var delBtn = e.target.closest(".teacher-delete-btn");
+      if (delBtn) {
+        delBtn.closest(".teacher-actions").classList.add("is-confirming");
+        return;
+      }
+      var cancelBtn = e.target.closest(".teacher-delete-cancel");
+      if (cancelBtn) {
+        cancelBtn.closest(".teacher-actions").classList.remove("is-confirming");
+      }
+    });
+  })();
+</script>
+{% endblock %}

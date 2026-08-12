@@ -464,6 +464,64 @@ def compute_teacher_stats(conn, stream_id):
     return teachers
 
 
+def compute_teacher_stats_for_week(conn, week_id):
+    """compute_teacher_stats-пен бірдей сәйкестендіру логикасы, бірақ бүкіл
+    ағын бойынша орташа емес, ТЕК осы бір аптаның/айдың нәтижелерін алады —
+    мұғалімдер бетінде ай/апта таңдалғанда сол кезеңдегі нақты нәтижені
+    көрсету үшін керек. 1-айда куратор аттары дұрыс жазылмағандықтан, ол
+    үшін бос тізім қайтарады."""
+    week = conn.execute("SELECT month_number FROM weeks WHERE id = ?", (week_id,)).fetchone()
+    if week is None or week["month_number"] == 1:
+        return []
+
+    rows = conn.execute(
+        "SELECT curator, score FROM results "
+        "WHERE week_id = ? AND score IS NOT NULL AND curator IS NOT NULL AND curator != ''",
+        (week_id,),
+    ).fetchall()
+
+    curator_scores = {}
+    for r in rows:
+        curator_scores.setdefault(r["curator"].strip(), []).append(float(r["score"]))
+    curator_avg = {name: sum(vals) / len(vals) for name, vals in curator_scores.items() if vals}
+
+    teacher_rows = conn.execute(
+        "SELECT t.id, t.name, tc.curator_name FROM teacher_curators tc "
+        "JOIN teachers t ON t.id = tc.teacher_id"
+    ).fetchall()
+
+    by_teacher = {}
+    for r in teacher_rows:
+        by_teacher.setdefault((r["id"], r["name"]), []).append(r["curator_name"])
+
+    teachers = []
+    for (teacher_id, name), curator_names in by_teacher.items():
+        matched_scores = []
+        used_curators = set()
+        for cname in curator_names:
+            cname_tokens = _curator_name_tokens(cname)
+            for actual_name, avg in curator_avg.items():
+                if actual_name in used_curators:
+                    continue
+                if _teacher_name_matches(cname_tokens, actual_name):
+                    matched_scores.append(avg)
+                    used_curators.add(actual_name)
+                    break
+        if not matched_scores:
+            continue
+        teachers.append(
+            {
+                "id": teacher_id,
+                "name": name,
+                "avg_score": round(sum(matched_scores) / len(matched_scores), 2),
+                "curator_count": len(matched_scores),
+                "total_curators": len(curator_names),
+            }
+        )
+    teachers.sort(key=lambda t: t["avg_score"], reverse=True)
+    return teachers
+
+
 def compute_teacher_stream_detail(conn, teacher_id, category_streams):
     """Мұғалімнің осы ағын кодындағы (СТ/АТ екеуінде де болуы мүмкін) өз
     кураторларының нәтижелерін санат бойынша бөлек қайтарады: жалпы ортақ

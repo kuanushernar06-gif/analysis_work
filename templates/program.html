@@ -59,7 +59,7 @@
     <div class="board-col-cards">
       {% for item in col.streams %}
       <a class="nav-card nav-card-gradient nav-card-gradient-{{ col_index }}{% if program['slug'] == 'smart' %} nav-card-tarih{% endif %}"
-         href="{{ url_for('stream_teachers', stream_id=item.stream['id']) if mode == 'stats' else url_for('stream_detail', stream_id=item.stream['id']) }}">
+         href="{{ url_for('stream_detail', stream_id=item.stream['id'], mode=mode) }}">
         <div class="nav-card-title">{{ item.stream['code'] }}</div>
       </a>
       {% endfor %}
