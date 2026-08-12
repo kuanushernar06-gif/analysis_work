@@ -260,7 +260,7 @@ def _extract_retry_delay(headers):
     return None
 
 
-def _call_claude_with_key(content_blocks, api_key, thinking_disabled=True, expect=list):
+def _call_claude_with_key(content_blocks, api_key, thinking_disabled=True, expect=list, context="?"):
     payload = {
         "model": CHECK_MODEL,
         "max_tokens": MAX_COMPLETION_TOKENS,
@@ -287,7 +287,7 @@ def _call_claude_with_key(content_blocks, api_key, thinking_disabled=True, expec
         raise MaterialCheckError(
             f"Сұраныс көлемі тым үлкен ({len(body_bytes) / 1_000_000:.1f}MB, "
             f"шегі {MAX_REQUEST_BODY_BYTES / 1_000_000:.0f}MB) — Claude API-ге "
-            f"жібермей тұрып тоқтатылды. Бөліктер: {block_sizes}"
+            f"жібермей тұрып тоқтатылды. [{context}] Бөліктер: {block_sizes}"
         )
 
     req = urllib.request.Request(
@@ -392,7 +392,7 @@ def find_topic_pages(book_pdf_bytes, topic_text, api_key):
         },
     }
     content_blocks = [book_block, {"type": "text", "text": prompt}]
-    result = _call_claude_with_key(content_blocks, api_key, thinking_disabled=True, expect=dict)
+    result = _call_claude_with_key(content_blocks, api_key, thinking_disabled=True, expect=dict, context="find_topic_pages")
     return result.get("page_start"), result.get("page_end")
 
 
@@ -402,7 +402,7 @@ def check_batch(material_kind, material_content, book_segment_text, page_start, 
         book_segment=book_segment_text, schema=FINDING_SCHEMA_HINT,
     )
     content_blocks = [_material_content_block(material_kind, material_content), {"type": "text", "text": prompt}]
-    return _call_claude_with_key(content_blocks, api_key, thinking_disabled=True)
+    return _call_claude_with_key(content_blocks, api_key, thinking_disabled=True, context="check_batch")
 
 
 TARGETED_PROMPT = """Сен білім беру материалдарын тексеретін сарапшысың.
@@ -452,7 +452,7 @@ def check_targeted(material_kind, material_content, book_pdf_items, topic, crite
         for _title, _page_start, _page_end, pdf_bytes in book_pdf_items
     ]
     content_blocks = [_material_content_block(material_kind, material_content), *book_blocks, {"type": "text", "text": prompt}]
-    return _call_claude_with_key(content_blocks, api_key, thinking_disabled=True)
+    return _call_claude_with_key(content_blocks, api_key, thinking_disabled=True, context="check_targeted")
 
 
 def final_review(findings, criteria, api_key):
@@ -462,7 +462,7 @@ def final_review(findings, criteria, api_key):
         criteria=criteria, findings=json.dumps(findings, ensure_ascii=False, indent=2), schema=FINDING_SCHEMA_HINT,
     )
     content_blocks = [{"type": "text", "text": prompt}]
-    return _call_claude_with_key(content_blocks, api_key, thinking_disabled=False)
+    return _call_claude_with_key(content_blocks, api_key, thinking_disabled=False, context="final_review")
 
 
 REPORT_SCHEMA_HINT = """{
@@ -528,4 +528,4 @@ def compile_report(material_kind, material_content, findings, criteria, api_key)
         criteria=criteria, findings=json.dumps(findings, ensure_ascii=False, indent=2), schema=REPORT_SCHEMA_HINT,
     )
     content_blocks = [_material_content_block(material_kind, material_content), {"type": "text", "text": prompt}]
-    return _call_claude_with_key(content_blocks, api_key, thinking_disabled=False, expect=dict)
+    return _call_claude_with_key(content_blocks, api_key, thinking_disabled=False, expect=dict, context="compile_report")
