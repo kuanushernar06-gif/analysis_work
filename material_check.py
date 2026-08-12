@@ -378,7 +378,7 @@ FIND_TOPIC_PROMPT = """Сен оқулықпен жұмыс істейтін к�
 Тақырыпты кітаптан таба алмасаң, {{"page_start": null, "page_end": null}} қайтар."""
 
 
-def find_topic_pages(book_pdf_bytes, topic_text, api_key):
+def find_topic_pages(book_pdf_bytes, topic_text, api_key, context_note=""):
     """Жоспарда бет нөмірі көрсетілмеген жағдайда, берілген тақырыпты кітаптың
     өз мазмұны бойынша іздеп, қай беттерде орналасқанын табады. Кітаптың
     толық PDF-ін жібереді (алдын ала бет-бетімен оқудың қажеті жоқ)."""
@@ -392,7 +392,8 @@ def find_topic_pages(book_pdf_bytes, topic_text, api_key):
         },
     }
     content_blocks = [book_block, {"type": "text", "text": prompt}]
-    result = _call_claude_with_key(content_blocks, api_key, thinking_disabled=True, expect=dict, context="find_topic_pages")
+    context = f"find_topic_pages {context_note}".strip()
+    result = _call_claude_with_key(content_blocks, api_key, thinking_disabled=True, expect=dict, context=context)
     return result.get("page_start"), result.get("page_end")
 
 

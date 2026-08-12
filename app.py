@@ -1311,7 +1311,14 @@ def step_material_check(run_id):
                     chunk_start = searched_from + 1
                     chunk_end = min(chunk_start + material_check.TOPIC_SEARCH_CHUNK_PAGES - 1, total_book_pages)
                     chunk_bytes, used_start, used_end = extract_chunk_pdf_bytes_capped(pdf_bytes, chunk_start, chunk_end)
-                    rel_start, rel_end = material_check.find_topic_pages(chunk_bytes, topics[ti], api_key)
+                    context_note = (
+                        f"book={book['title']!r} bookRawBytes={len(pdf_bytes)} "
+                        f"totalPages={total_book_pages} requestedRange={chunk_start}-{chunk_end} "
+                        f"usedRange={used_start}-{used_end} chunkRawBytes={len(chunk_bytes)}"
+                    )
+                    rel_start, rel_end = material_check.find_topic_pages(
+                        chunk_bytes, topics[ti], api_key, context_note=context_note
+                    )
                     page_start = page_end = None
                     if rel_start is not None and rel_end is not None:
                         page_start = rel_start + used_start - 1
