@@ -1310,11 +1310,14 @@ def step_material_check(run_id):
                 else:
                     chunk_start = searched_from + 1
                     chunk_end = min(chunk_start + material_check.TOPIC_SEARCH_CHUNK_PAGES - 1, total_book_pages)
-                    chunk_bytes, used_start, used_end = extract_chunk_pdf_bytes_capped(pdf_bytes, chunk_start, chunk_end)
+                    chunk_bytes, used_start, used_end, compress_note = extract_chunk_pdf_bytes_capped(
+                        pdf_bytes, chunk_start, chunk_end
+                    )
                     context_note = (
                         f"book={book['title']!r} bookRawBytes={len(pdf_bytes)} "
                         f"totalPages={total_book_pages} requestedRange={chunk_start}-{chunk_end} "
                         f"usedRange={used_start}-{used_end} chunkRawBytes={len(chunk_bytes)}"
+                        + (f" compress=[{compress_note}]" if compress_note else "")
                     )
                     rel_start, rel_end = material_check.find_topic_pages(
                         chunk_bytes, topics[ti], api_key, context_note=context_note
@@ -1428,16 +1431,17 @@ def step_material_check(run_id):
                         raise material_check.MaterialCheckError("Кітап табылмады немесе сілтемесі жоқ.")
                     book_pdf_cache[bid] = download_drive_file(book["link"])
                 label = f"{r['title']} — {r['topic']}" if r.get("topic") else r["title"]
-                chunk_bytes, used_start, used_end = extract_chunk_pdf_bytes_capped(
+                chunk_bytes, used_start, used_end, compress_note = extract_chunk_pdf_bytes_capped(
                     book_pdf_cache[bid], r["page_start"], r["page_end"]
                 )
                 if len(chunk_bytes) > MAX_BOOK_CHUNK_BYTES and used_start == used_end:
+                    detail = f" [{compress_note}]" if compress_note else ""
                     raise material_check.MaterialCheckError(
                         f"«{r['title']}» кітабының {used_start}-беті тым ауыр "
                         "(жоғары ажыратымдылықпен сканерленген болуы мүмкін) — "
-                        "Claude API-ге тіпті бір бет ретінде де сыймайды. Бұл "
-                        "кітапты кішірек көлеммен (төмен ажыратымдылықпен) "
-                        "қайта сканерлеп жүктеп көріңіз."
+                        "Claude API-ге тіпті бір бет ретінде де, сығылған соң да "
+                        f"сыймайды.{detail} Бұл кітапты кішірек көлеммен (төмен "
+                        "ажыратымдылықпен) қайта сканерлеп жүктеп көріңіз."
                     )
                 book_pdf_items.append((label, used_start, used_end, chunk_bytes))
             batch_findings = material_check.check_targeted(

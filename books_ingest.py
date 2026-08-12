@@ -159,59 +159,82 @@ def extract_chunk_pdf_bytes(pdf_bytes: bytes, page_start: int, page_end: int) ->
 MAX_BOOK_CHUNK_BYTES = 9_000_000
 
 
-def compress_pdf_images(pdf_bytes: bytes, max_dimension: int = 1600, quality: int = 60) -> bytes:
+def compress_pdf_images(pdf_bytes: bytes, max_dimension: int = 1600, quality: int = 60):
     """PDF-тегі әр беттің ендірілген суретін қайта өлшеп/сығып шығарады —
     беттерді кетіру арқылы көлемін жеткілікті кішірейте алмағанда (тіпті
     1 бет те шегінен асып тұрғанда) соңғы шара ретінде қолданылады.
     Мәтін оқылымды болатындай ажыратымдылықты сақтайды (max_dimension),
     тек артық ажыратымдылық/сапаны кемітеді — reportlab арқылы Pillow
     қазірдің өзінде міндетті тәуелділік болғандықтан қосымша орнату
-    қажет емес."""
+    қажет емес. Бір суреттің сәтсіздігі басқаларына кедергі жасамауы
+    үшін әр сурет жеке try/except-пен қоршалған. (pdf_bytes, found,
+    compressed) үштігін қайтарады — found/compressed диагностика үшін:
+    неше сурет табылды, соның нешеуі нақты сәтті сығылды."""
     import io
 
     writer = PdfWriter(clone_from=io.BytesIO(pdf_bytes))
+    found = 0
+    compressed_count = 0
     for page in writer.pages:
         for img in page.images:
-            pil_img = img.image
-            if pil_img is None:
-                continue
-            width, height = pil_img.size
-            longest = max(width, height)
-            if longest > max_dimension:
-                scale = max_dimension / longest
-                pil_img = pil_img.resize((max(1, int(width * scale)), max(1, int(height * scale))))
-            if pil_img.mode not in ("RGB", "L"):
-                pil_img = pil_img.convert("RGB")
+            found += 1
             try:
+                pil_img = img.image
+                if pil_img is None:
+                    continue
+                width, height = pil_img.size
+                longest = max(width, height)
+                if longest > max_dimension:
+                    scale = max_dimension / longest
+                    pil_img = pil_img.resize((max(1, int(width * scale)), max(1, int(height * scale))))
+                if pil_img.mode not in ("RGB", "L"):
+                    pil_img = pil_img.convert("RGB")
                 img.replace(pil_img, quality=quality)
+                compressed_count += 1
             except Exception:
                 continue
     out = io.BytesIO()
     writer.write(out)
-    return out.getvalue()
+    return out.getvalue(), found, compressed_count
 
 
 def extract_chunk_pdf_bytes_capped(pdf_bytes: bytes, page_start: int, page_end: int, max_bytes: int = MAX_BOOK_CHUNK_BYTES):
     """extract_chunk_pdf_bytes сияқты, бірақ нәтиже max_bytes-тан үлкен болса,
     сыйғанша соңғы беттерден бастап аралықты қысқартады (сканерленген
     беттер ауыр болғанда). Тіпті 1 бетке дейін қысқартып та әлі сыймаса,
-    соңғы шара ретінде сол беттің суретін сығады (compress_pdf_images) —
-    бет санын одан әрі кемітудің орнына. (chunk_bytes, нақты_page_start,
-    нақты_page_end) үштігін қайтарады — нақты мән сұралған аралықтан тар
-    болуы мүмкін."""
+    соңғы шара ретінде сол беттің суретін сатылап сыжады (алдымен жұмсақ,
+    сыймаса — қаттырақ) — бет санын одан әрі кемітудің орнына.
+    (chunk_bytes, нақты_page_start, нақты_page_end, compress_note)
+    төрттігін қайтарады — compress_note бос жол ('') болса, сығу
+    қолданылмаған, әйтпесе не болғанын сипаттайды (диагностика үшін,
+    сығу көмектеспеген жағдайда себебін бірден көру үшін)."""
     chunk = extract_chunk_pdf_bytes(pdf_bytes, page_start, page_end)
     end = page_end
     while len(chunk) > max_bytes and end > page_start:
         end -= 1
         chunk = extract_chunk_pdf_bytes(pdf_bytes, page_start, end)
+
+    compress_note = ""
     if len(chunk) > max_bytes:
-        try:
-            compressed = compress_pdf_images(chunk)
-            if 0 < len(compressed) < len(chunk):
+        before = len(chunk)
+        for max_dimension, quality in ((1600, 60), (1100, 35), (700, 18)):
+            try:
+                compressed, found, done = compress_pdf_images(chunk, max_dimension=max_dimension, quality=quality)
+            except Exception as e:
+                compress_note = f"compress tier {max_dimension}px/{quality}q failed: {type(e).__name__}: {e}"
+                break
+            if found == 0:
+                compress_note = "no embedded images found to compress"
+                break
+            if 0 < len(compressed) < before:
                 chunk = compressed
-        except Exception:
-            pass
-    return chunk, page_start, end
+                compress_note = f"compressed {done}/{found} images @ {max_dimension}px/{quality}q: {before}b -> {len(chunk)}b"
+                if len(chunk) <= max_bytes:
+                    break
+            else:
+                compress_note = f"compress tier {max_dimension}px/{quality}q: {found} images found, {done} compressed, no size reduction"
+
+    return chunk, page_start, end, compress_note
 
 
 def _extract_retry_delay(headers):
