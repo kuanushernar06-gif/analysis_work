@@ -85,18 +85,6 @@ CATEGORY_STATS_LABELS = {
     "baiqau_test": "ДЕҢГЕЙЛІК/БАЙҚАУ ТЕСТ МҰҒАЛІМДЕРІ",
 }
 
-# МАТЕРИАЛ ТЕКСЕРУ — балл/апта/ай құрылымына тәуелсіз, жай тізім түріндегі
-# бөлім: әр материал түрінің өз жазбалары (атауы, сілтемесі, тексерілді/
-# тексерілмеді белгісі) болады.
-MATERIAL_TYPES = [
-    ("uy_zhumysy", "ҮЙ ЖҰМЫСЫ"),
-    ("quiz_test", "QUIZ ТЕСТ"),
-    ("baza", "БАЗА"),
-    ("sabaq_tapsyru_material", "САБАҚ ТАПСЫРУ"),
-    ("taqyryptyq_test", "ТАҚЫРЫПТЫҚ ТЕСТ"),
-]
-MATERIAL_TYPE_LABELS = {slug: label for slug, label in MATERIAL_TYPES}
-
 # Постгрес (Neon/Vercel) диалектісі
 SCHEMA_PG = """
 CREATE TABLE IF NOT EXISTS programs (
@@ -193,87 +181,11 @@ CREATE TABLE IF NOT EXISTS teacher_curators (
     UNIQUE(curator_name)
 );
 
-CREATE TABLE IF NOT EXISTS material_checks (
-    id SERIAL PRIMARY KEY,
-    program_id INTEGER REFERENCES programs(id) ON DELETE CASCADE,
-    material_type TEXT NOT NULL,
-    label TEXT NOT NULL,
-    link TEXT,
-    is_checked BOOLEAN NOT NULL DEFAULT false,
-    created_at TIMESTAMPTZ DEFAULT now()
-);
-
-CREATE TABLE IF NOT EXISTS books (
-    id SERIAL PRIMARY KEY,
-    title TEXT NOT NULL,
-    link TEXT,
-    total_pages INTEGER,
-    ingest_status TEXT NOT NULL DEFAULT 'pending',
-    ingest_error TEXT,
-    raw_pdf_data BYTEA,
-    created_at TIMESTAMPTZ DEFAULT now()
-);
-
-CREATE TABLE IF NOT EXISTS book_chunks (
-    id SERIAL PRIMARY KEY,
-    book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE,
-    chunk_index INTEGER NOT NULL,
-    page_start INTEGER NOT NULL,
-    page_end INTEGER NOT NULL,
-    content_text TEXT NOT NULL,
-    created_at TIMESTAMPTZ DEFAULT now(),
-    UNIQUE(book_id, chunk_index)
-);
-
-CREATE TABLE IF NOT EXISTS book_topic_pages (
-    id SERIAL PRIMARY KEY,
-    book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE,
-    program_id INTEGER REFERENCES programs(id) ON DELETE CASCADE,
-    month INTEGER NOT NULL,
-    week INTEGER NOT NULL,
-    topic_index INTEGER NOT NULL DEFAULT 0,
-    page_start INTEGER,
-    page_end INTEGER,
-    searched_through_page INTEGER NOT NULL DEFAULT 0,
-    lookup_error TEXT,
-    created_at TIMESTAMPTZ DEFAULT now(),
-    UNIQUE(book_id, program_id, month, week, topic_index)
-);
-
-CREATE TABLE IF NOT EXISTS material_check_runs (
-    id SERIAL PRIMARY KEY,
-    material_id INTEGER NOT NULL REFERENCES material_checks(id) ON DELETE CASCADE,
-    book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE,
-    status TEXT NOT NULL DEFAULT 'running',
-    mode TEXT NOT NULL DEFAULT 'full',
-    target_month INTEGER,
-    target_week INTEGER,
-    target_topic_index INTEGER,
-    target_topic TEXT,
-    target_page_start INTEGER,
-    target_page_end INTEGER,
-    book_ids_json TEXT,
-    material_content TEXT,
-    material_content_kind TEXT,
-    processed_pages INTEGER NOT NULL DEFAULT 0,
-    total_pages INTEGER,
-    findings_json TEXT,
-    result_json TEXT,
-    report_json TEXT,
-    book_page_ranges_json TEXT,
-    error_text TEXT,
-    run_token TEXT,
-    created_at TIMESTAMPTZ DEFAULT now()
-);
-
 CREATE INDEX IF NOT EXISTS idx_streams_program ON streams(program_id);
-CREATE INDEX IF NOT EXISTS idx_book_chunks_book ON book_chunks(book_id);
-CREATE INDEX IF NOT EXISTS idx_material_check_runs_material ON material_check_runs(material_id);
 CREATE INDEX IF NOT EXISTS idx_results_week ON results(week_id);
 CREATE INDEX IF NOT EXISTS idx_notes_week ON curator_notes(week_id);
 CREATE INDEX IF NOT EXISTS idx_imports_week ON imports(week_id);
 CREATE INDEX IF NOT EXISTS idx_teacher_curators_teacher ON teacher_curators(teacher_id);
-CREATE INDEX IF NOT EXISTS idx_material_checks_type ON material_checks(material_type);
 """
 
 # SQLite диалектісі — DATABASE_URL қойылмаған кезде локальді дамыту үшін
@@ -374,87 +286,11 @@ CREATE TABLE IF NOT EXISTS teacher_curators (
     UNIQUE(curator_name)
 );
 
-CREATE TABLE IF NOT EXISTS material_checks (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    program_id INTEGER REFERENCES programs(id) ON DELETE CASCADE,
-    material_type TEXT NOT NULL,
-    label TEXT NOT NULL,
-    link TEXT,
-    is_checked INTEGER NOT NULL DEFAULT 0,
-    created_at TEXT DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS books (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    title TEXT NOT NULL,
-    link TEXT,
-    total_pages INTEGER,
-    ingest_status TEXT NOT NULL DEFAULT 'pending',
-    ingest_error TEXT,
-    raw_pdf_data BLOB,
-    created_at TEXT DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS book_chunks (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE,
-    chunk_index INTEGER NOT NULL,
-    page_start INTEGER NOT NULL,
-    page_end INTEGER NOT NULL,
-    content_text TEXT NOT NULL,
-    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(book_id, chunk_index)
-);
-
-CREATE TABLE IF NOT EXISTS book_topic_pages (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE,
-    program_id INTEGER REFERENCES programs(id) ON DELETE CASCADE,
-    month INTEGER NOT NULL,
-    week INTEGER NOT NULL,
-    topic_index INTEGER NOT NULL DEFAULT 0,
-    page_start INTEGER,
-    page_end INTEGER,
-    searched_through_page INTEGER NOT NULL DEFAULT 0,
-    lookup_error TEXT,
-    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(book_id, program_id, month, week, topic_index)
-);
-
-CREATE TABLE IF NOT EXISTS material_check_runs (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    material_id INTEGER NOT NULL REFERENCES material_checks(id) ON DELETE CASCADE,
-    book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE,
-    status TEXT NOT NULL DEFAULT 'running',
-    mode TEXT NOT NULL DEFAULT 'full',
-    target_month INTEGER,
-    target_week INTEGER,
-    target_topic_index INTEGER,
-    target_topic TEXT,
-    target_page_start INTEGER,
-    target_page_end INTEGER,
-    book_ids_json TEXT,
-    material_content TEXT,
-    material_content_kind TEXT,
-    processed_pages INTEGER NOT NULL DEFAULT 0,
-    total_pages INTEGER,
-    findings_json TEXT,
-    result_json TEXT,
-    report_json TEXT,
-    book_page_ranges_json TEXT,
-    error_text TEXT,
-    run_token TEXT,
-    created_at TEXT DEFAULT CURRENT_TIMESTAMP
-);
-
 CREATE INDEX IF NOT EXISTS idx_streams_program ON streams(program_id);
-CREATE INDEX IF NOT EXISTS idx_material_check_runs_material ON material_check_runs(material_id);
 CREATE INDEX IF NOT EXISTS idx_results_week ON results(week_id);
 CREATE INDEX IF NOT EXISTS idx_notes_week ON curator_notes(week_id);
 CREATE INDEX IF NOT EXISTS idx_imports_week ON imports(week_id);
 CREATE INDEX IF NOT EXISTS idx_teacher_curators_teacher ON teacher_curators(teacher_id);
-CREATE INDEX IF NOT EXISTS idx_material_checks_type ON material_checks(material_type);
-CREATE INDEX IF NOT EXISTS idx_book_chunks_book ON book_chunks(book_id);
 """
 
 
@@ -526,52 +362,13 @@ def _column_exists(conn, table, column):
     return any(r["name"] == column for r in row)
 
 
-def _migrate_book_topic_pages_topic_index(conn):
-    """book_topic_pages кестесіне topic_index бағанын қосады (бір аптада
-    бірнеше тақырып болуы мүмкін болғандықтан, бірегейлік енді
-    (book_id, program_id, month, week, topic_index) бойынша). Кесте таза
-    кэш болғандықтан (пайдаланушы деректері емес), ескі нұсқасы болса,
-    қауіпсіз түрде алып тастап, дұрыс схемамен қайта құрамыз."""
-    if _column_exists(conn, "book_topic_pages", "topic_index"):
-        return
-    conn.execute("DROP TABLE IF EXISTS book_topic_pages")
-    conn.commit()
-    if getattr(conn, "backend", None) == "postgres":
-        conn.execute(
-            """
-            CREATE TABLE book_topic_pages (
-                id SERIAL PRIMARY KEY,
-                book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE,
-                program_id INTEGER REFERENCES programs(id) ON DELETE CASCADE,
-                month INTEGER NOT NULL,
-                week INTEGER NOT NULL,
-                topic_index INTEGER NOT NULL DEFAULT 0,
-                page_start INTEGER,
-                page_end INTEGER,
-                lookup_error TEXT,
-                created_at TIMESTAMPTZ DEFAULT now(),
-                UNIQUE(book_id, program_id, month, week, topic_index)
-            )
-            """
-        )
-    else:
-        conn.execute(
-            """
-            CREATE TABLE book_topic_pages (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE,
-                program_id INTEGER REFERENCES programs(id) ON DELETE CASCADE,
-                month INTEGER NOT NULL,
-                week INTEGER NOT NULL,
-                topic_index INTEGER NOT NULL DEFAULT 0,
-                page_start INTEGER,
-                page_end INTEGER,
-                lookup_error TEXT,
-                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(book_id, program_id, month, week, topic_index)
-            )
-            """
-        )
+def _migrate_drop_material_check_tables(conn):
+    """Материал тексеру функциясы толығымен алып тасталды — оның бес
+    кестесін (тәуелділік ретімен, FK бұзылмас үшін) ескі дерекқорлардан
+    да іс жүзінде өшіреді. Кестелер жоқ болса, IF EXISTS арқасында
+    қауіпсіз ешнәрсе жасамайды — бірнеше рет қайталап іске қосу қауіпсіз."""
+    for table in ("material_check_runs", "book_chunks", "book_topic_pages", "books", "material_checks"):
+        conn.execute(f"DROP TABLE IF EXISTS {table}")
     conn.commit()
 
 
@@ -633,28 +430,6 @@ def _migrate(conn):
     if not _column_exists(conn, "teachers", "stream_id"):
         conn.execute("ALTER TABLE teachers ADD COLUMN stream_id INTEGER REFERENCES streams(id)")
         conn.commit()
-    blob_type = "BYTEA" if getattr(conn, "backend", None) == "postgres" else "BLOB"
-    if not _column_exists(conn, "material_checks", "file_data"):
-        conn.execute(f"ALTER TABLE material_checks ADD COLUMN file_data {blob_type}")
-        conn.commit()
-    if not _column_exists(conn, "material_checks", "file_name"):
-        conn.execute("ALTER TABLE material_checks ADD COLUMN file_name TEXT")
-        conn.commit()
-    if not _column_exists(conn, "material_checks", "file_mimetype"):
-        conn.execute("ALTER TABLE material_checks ADD COLUMN file_mimetype TEXT")
-        conn.commit()
-    if not _column_exists(conn, "books", "total_pages"):
-        conn.execute("ALTER TABLE books ADD COLUMN total_pages INTEGER")
-        conn.commit()
-    if not _column_exists(conn, "books", "ingest_status"):
-        conn.execute("ALTER TABLE books ADD COLUMN ingest_status TEXT NOT NULL DEFAULT 'pending'")
-        conn.commit()
-    if not _column_exists(conn, "books", "ingest_error"):
-        conn.execute("ALTER TABLE books ADD COLUMN ingest_error TEXT")
-        conn.commit()
-    if not _column_exists(conn, "books", "raw_pdf_data"):
-        conn.execute(f"ALTER TABLE books ADD COLUMN raw_pdf_data {blob_type}")
-        conn.commit()
     if not _column_exists(conn, "programs", "material_plan_url"):
         conn.execute("ALTER TABLE programs ADD COLUMN material_plan_url TEXT")
         conn.commit()
@@ -664,48 +439,7 @@ def _migrate(conn):
     if not _column_exists(conn, "programs", "material_plan_fetch_error"):
         conn.execute("ALTER TABLE programs ADD COLUMN material_plan_fetch_error TEXT")
         conn.commit()
-    if not _column_exists(conn, "material_checks", "program_id"):
-        conn.execute("ALTER TABLE material_checks ADD COLUMN program_id INTEGER REFERENCES programs(id)")
-        conn.commit()
-    if not _column_exists(conn, "material_check_runs", "mode"):
-        conn.execute("ALTER TABLE material_check_runs ADD COLUMN mode TEXT NOT NULL DEFAULT 'full'")
-        conn.commit()
-    if not _column_exists(conn, "material_check_runs", "target_month"):
-        conn.execute("ALTER TABLE material_check_runs ADD COLUMN target_month INTEGER")
-        conn.commit()
-    if not _column_exists(conn, "material_check_runs", "target_week"):
-        conn.execute("ALTER TABLE material_check_runs ADD COLUMN target_week INTEGER")
-        conn.commit()
-    if not _column_exists(conn, "material_check_runs", "target_topic"):
-        conn.execute("ALTER TABLE material_check_runs ADD COLUMN target_topic TEXT")
-        conn.commit()
-    if not _column_exists(conn, "material_check_runs", "target_page_start"):
-        conn.execute("ALTER TABLE material_check_runs ADD COLUMN target_page_start INTEGER")
-        conn.commit()
-    if not _column_exists(conn, "material_check_runs", "target_page_end"):
-        conn.execute("ALTER TABLE material_check_runs ADD COLUMN target_page_end INTEGER")
-        conn.commit()
-    if not _column_exists(conn, "material_check_runs", "book_ids_json"):
-        conn.execute("ALTER TABLE material_check_runs ADD COLUMN book_ids_json TEXT")
-        conn.commit()
-    if not _column_exists(conn, "material_check_runs", "report_json"):
-        conn.execute("ALTER TABLE material_check_runs ADD COLUMN report_json TEXT")
-        conn.commit()
-    if not _column_exists(conn, "material_check_runs", "book_page_ranges_json"):
-        conn.execute("ALTER TABLE material_check_runs ADD COLUMN book_page_ranges_json TEXT")
-        conn.commit()
-    if not _column_exists(conn, "material_check_runs", "target_topic_index"):
-        conn.execute("ALTER TABLE material_check_runs ADD COLUMN target_topic_index INTEGER")
-
-    if not _column_exists(conn, "material_check_runs", "run_token"):
-        conn.execute("ALTER TABLE material_check_runs ADD COLUMN run_token TEXT")
-        conn.commit()
-    _migrate_book_topic_pages_topic_index(conn)
-    if not _column_exists(conn, "book_topic_pages", "searched_through_page"):
-        conn.execute(
-            "ALTER TABLE book_topic_pages ADD COLUMN searched_through_page INTEGER NOT NULL DEFAULT 0"
-        )
-        conn.commit()
+    _migrate_drop_material_check_tables(conn)
     if not _column_exists(conn, "streams", "category"):
         _migrate_stream_categories(conn)
     _migrate_stream_code_rename(conn)
