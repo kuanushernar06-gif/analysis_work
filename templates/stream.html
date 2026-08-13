@@ -4,8 +4,8 @@
 
 <div class="page-head">
   <div>
-    <a class="back-link" href="{{ url_for('program_detail', slug=program['slug'], category=stream['category'], mode=mode) }}">← {{ program['name'] }}{% if mode == 'stats' %} · Мұғалімдер{% endif %}</a>
-    <h1>{{ program['name'] }} · {{ category_stats_label(stream['category']) if mode == 'stats' else category_label(stream['category']) }} · {{ stream['code'] }}</h1>
+    <a class="back-link" href="{{ url_for('program_detail', slug=program['slug'], category=stream['category']) }}">← {{ program['name'] }}</a>
+    <h1>{{ program['name'] }} · {{ category_label(stream['category']) }} · {{ stream['code'] }}</h1>
     <p class="muted">Айды, содан кейін аптаны таңдаңыз.</p>
   </div>
 </div>
@@ -16,14 +16,12 @@
   <div class="nav-cards">
     {% for item in weeks %}
     <a class="nav-card{% if 'ОРТАҚ' in item.week['title'] %} week-card-summary{% endif %}"
-       href="{{ url_for('week_teachers', week_id=item.week['id']) if mode == 'stats' else url_for('week_import', week_id=item.week['id']) }}">
+       href="{{ url_for('week_import', week_id=item.week['id']) }}">
       <div class="nav-card-title">{{ item.week['title'] }}</div>
-      {% if mode != 'stats' %}
       <div class="pill-row">
         <span class="pill {{ 'pill-good' if item.result_count else 'pill-muted' }}">{{ item.result_count }} нәтиже</span>
         <span class="pill {{ 'pill-good' if item.note_count else 'pill-muted' }}">{{ '✓ Куратор анализі' if item.note_count else 'Анализ жоқ' }}</span>
       </div>
-      {% endif %}
     </a>
     {% endfor %}
   </div>
