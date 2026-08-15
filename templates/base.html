@@ -70,6 +70,9 @@
             {% endif %}
           {% endfor %}
         {% endif %}
+        {% if not (all_teachers is defined) and not stream_stats_categories %}
+        <a href="{{ url_for('teachers_browse') }}" class="sidebar-teachers-link{{ ' active' if request.endpoint in ('teachers_browse', 'teachers_list', 'teacher_home', 'edit_teacher') else '' }}"><span class="ic ic-group"></span> Мұғалімдер</a>
+        {% endif %}
       </nav>
       <div class="site-sidebar-footer">
         <form method="post" action="{{ url_for('logout') }}" class="site-sidebar-logout">
@@ -85,6 +88,7 @@
     {% else %}
       <div class="top-right-actions no-print">
         {% if request.endpoint != 'index' %}
+        <a class="top-right-chip" href="{{ url_for('teachers_browse') }}">МҰҒАЛІМДЕР</a>
         <a class="top-right-chip" href="{{ url_for('index') }}">БАСТЫ БЕТКЕ ӨТУ</a>
         {% endif %}
         {% if request.endpoint == 'index' %}

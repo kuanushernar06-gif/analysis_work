@@ -378,6 +378,11 @@ html[data-sidebar-pinned="true"] .site-sidebar-footer {
   color: var(--sidebar-text-muted);
 }
 .site-sidebar-nav a.sidebar-add-teacher:hover { color: var(--sidebar-text); }
+.site-sidebar-nav a.sidebar-teachers-link {
+  margin-top: 8px;
+  border-top: 1px solid var(--sidebar-border);
+  padding-top: 16px;
+}
 
 .site-sidebar-footer { display: flex; flex-direction: column; gap: 8px; }
 
