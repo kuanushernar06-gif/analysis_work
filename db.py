@@ -77,6 +77,14 @@ CATEGORY_NAV_LABELS = {
 }
 SIDEBAR_CATEGORIES = [(slug, CATEGORY_NAV_LABELS[slug]) for slug, _label, _order in CATEGORIES]
 
+# Мұғалімдер режимінде санат атаулары "АНАЛИЗ" емес "МҰҒАЛІМДЕРІ" деп
+# аталады (бағдарлама/ағын таңдау экрандарында және мұғалімдер сайдбарында).
+CATEGORY_STATS_LABELS = {
+    "sabaq_tapsyru": "САБАҚ ТАПСЫРУ МҰҒАЛІМДЕРІ",
+    "aylyq_test": "АЙЛЫҚ ТЕСТ МҰҒАЛІМДЕРІ",
+    "baiqau_test": "ДЕҢГЕЙЛІК/БАЙҚАУ ТЕСТ МҰҒАЛІМДЕРІ",
+}
+
 # Постгрес (Neon/Vercel) диалектісі
 SCHEMA_PG = """
 CREATE TABLE IF NOT EXISTS programs (
@@ -160,10 +168,24 @@ CREATE TABLE IF NOT EXISTS curator_notes (
     updated_at TIMESTAMPTZ DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS teachers (
+    id SERIAL PRIMARY KEY,
+    name TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS teacher_curators (
+    id SERIAL PRIMARY KEY,
+    teacher_id INTEGER NOT NULL REFERENCES teachers(id) ON DELETE CASCADE,
+    curator_name TEXT NOT NULL,
+    UNIQUE(curator_name)
+);
+
 CREATE INDEX IF NOT EXISTS idx_streams_program ON streams(program_id);
 CREATE INDEX IF NOT EXISTS idx_results_week ON results(week_id);
 CREATE INDEX IF NOT EXISTS idx_notes_week ON curator_notes(week_id);
 CREATE INDEX IF NOT EXISTS idx_imports_week ON imports(week_id);
+CREATE INDEX IF NOT EXISTS idx_teacher_curators_teacher ON teacher_curators(teacher_id);
 """
 
 # SQLite диалектісі — DATABASE_URL қойылмаған кезде локальді дамыту үшін
@@ -251,10 +273,24 @@ CREATE TABLE IF NOT EXISTS curator_notes (
     updated_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS teachers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS teacher_curators (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    teacher_id INTEGER NOT NULL REFERENCES teachers(id) ON DELETE CASCADE,
+    curator_name TEXT NOT NULL,
+    UNIQUE(curator_name)
+);
+
 CREATE INDEX IF NOT EXISTS idx_streams_program ON streams(program_id);
 CREATE INDEX IF NOT EXISTS idx_results_week ON results(week_id);
 CREATE INDEX IF NOT EXISTS idx_notes_week ON curator_notes(week_id);
 CREATE INDEX IF NOT EXISTS idx_imports_week ON imports(week_id);
+CREATE INDEX IF NOT EXISTS idx_teacher_curators_teacher ON teacher_curators(teacher_id);
 """
 
 
@@ -326,16 +362,12 @@ def _column_exists(conn, table, column):
     return any(r["name"] == column for r in row)
 
 
-def _migrate_drop_removed_feature_tables(conn):
-    """Материал тексеру және мұғалімдер функциялары толығымен алып
-    тасталды — олардың кестелерін (тәуелділік ретімен, FK бұзылмас
-    үшін) ескі дерекқорлардан да іс жүзінде өшіреді. Кестелер жоқ
-    болса, IF EXISTS арқасында қауіпсіз ешнәрсе жасамайды — бірнеше
-    рет қайталап іске қосу қауіпсіз."""
-    for table in (
-        "material_check_runs", "book_chunks", "book_topic_pages", "books", "material_checks",
-        "teacher_curators", "teachers",
-    ):
+def _migrate_drop_material_check_tables(conn):
+    """Материал тексеру функциясы толығымен алып тасталды — оның бес
+    кестесін (тәуелділік ретімен, FK бұзылмас үшін) ескі дерекқорлардан
+    да іс жүзінде өшіреді. Кестелер жоқ болса, IF EXISTS арқасында
+    қауіпсіз ешнәрсе жасамайды — бірнеше рет қайталап іске қосу қауіпсіз."""
+    for table in ("material_check_runs", "book_chunks", "book_topic_pages", "books", "material_checks"):
         conn.execute(f"DROP TABLE IF EXISTS {table}")
     conn.commit()
 
@@ -395,6 +427,9 @@ def _migrate(conn):
     if not _column_exists(conn, "programs", "plan_doc_fetch_error"):
         conn.execute("ALTER TABLE programs ADD COLUMN plan_doc_fetch_error TEXT")
         conn.commit()
+    if not _column_exists(conn, "teachers", "stream_id"):
+        conn.execute("ALTER TABLE teachers ADD COLUMN stream_id INTEGER REFERENCES streams(id)")
+        conn.commit()
     if not _column_exists(conn, "programs", "material_plan_url"):
         conn.execute("ALTER TABLE programs ADD COLUMN material_plan_url TEXT")
         conn.commit()
@@ -404,7 +439,7 @@ def _migrate(conn):
     if not _column_exists(conn, "programs", "material_plan_fetch_error"):
         conn.execute("ALTER TABLE programs ADD COLUMN material_plan_fetch_error TEXT")
         conn.commit()
-    _migrate_drop_removed_feature_tables(conn)
+    _migrate_drop_material_check_tables(conn)
     if not _column_exists(conn, "streams", "category"):
         _migrate_stream_categories(conn)
     _migrate_stream_code_rename(conn)

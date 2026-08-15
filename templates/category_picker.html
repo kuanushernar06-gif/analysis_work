@@ -12,7 +12,7 @@
 
 <div class="nav-cards">
   {% for program in programs %}
-  <a class="nav-card nav-card-tarih-bg" href="{{ url_for('program_detail', slug=program['slug'], category=category_slug) }}">
+  <a class="nav-card nav-card-tarih-bg" href="{{ url_for('program_detail', slug=program['slug'], category=category_slug, mode=mode) }}">
     <div class="nav-card-title nav-card-title-big">{{ program['name'] }}</div>
   </a>
   {% endfor %}

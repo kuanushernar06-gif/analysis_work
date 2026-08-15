@@ -16,6 +16,10 @@ from analysis import (
     compute_report,
     compute_curator_extremes,
     compare_reports,
+    compute_teacher_stats,
+    compute_teacher_stats_for_week,
+    compute_teacher_stream_detail,
+    find_teacher_home_stream,
 )
 from sheets import fetch_workbook, rows_to_dicts, guess_columns, is_summary_row, is_template_sheet, SheetFetchError
 from gdocs import (
@@ -59,6 +63,7 @@ def format_summary_html(text):
 def inject_category_label():
     return {
         "category_label": lambda slug: db.CATEGORY_LABELS.get(slug, slug),
+        "category_stats_label": lambda slug: db.CATEGORY_STATS_LABELS.get(slug, slug),
         "sidebar_categories": db.SIDEBAR_CATEGORIES,
     }
 
@@ -259,13 +264,15 @@ def category_picker(category_slug):
         flash("Санат табылмады.", "error")
         return redirect(url_for("index"))
 
-    category_name = db.CATEGORY_LABELS[category_slug]
+    mode = request.args.get("mode")
+    category_name = db.CATEGORY_STATS_LABELS[category_slug] if mode == "stats" else db.CATEGORY_LABELS[category_slug]
     programs = conn.execute("SELECT * FROM programs ORDER BY sort_order, id").fetchall()
     return render_template(
         "category_picker.html",
         category_slug=category_slug,
         category_name=category_name,
         programs=programs,
+        mode=mode,
     )
 
 
@@ -308,12 +315,14 @@ def program_detail(slug):
         {"slug": cslug, "label": label, "streams": by_category.get(cslug, [])}
         for cslug, label, _order in categories_to_show
     ]
+    mode = request.args.get("mode")
     return render_template(
         "program.html",
         program=program,
         columns=columns,
         current_category=category_slug,
-        show_plan_card=category_slug is None or category_slug == db.DEFAULT_CATEGORY,
+        show_plan_card=mode != "stats" and (category_slug is None or category_slug == db.DEFAULT_CATEGORY),
+        mode=mode,
     )
 
 
@@ -448,7 +457,424 @@ def stream_detail(stream_id):
         )
     months_sorted = sorted(months.items(), key=lambda item: (item[0] is None, item[0]))
 
-    return render_template("stream.html", stream=stream, program=program, months=months_sorted)
+    mode = request.args.get("mode")
+    return render_template("stream.html", stream=stream, program=program, months=months_sorted, mode=mode)
+
+
+@app.route("/streams/<int:stream_id>/teachers")
+def stream_teachers(stream_id):
+    conn = get_db()
+    stream = conn.execute("SELECT * FROM streams WHERE id = ?", (stream_id,)).fetchone()
+    if stream is None:
+        flash("Поток табылмады.", "error")
+        return redirect(url_for("index"))
+    program = conn.execute("SELECT * FROM programs WHERE id = ?", (stream["program_id"],)).fetchone()
+
+    teachers = compute_teacher_stats(conn, stream_id)
+    stream_stats_categories = {
+        row["category"]: row["id"]
+        for row in conn.execute(
+            "SELECT id, category FROM streams WHERE program_id = ? AND code = ?",
+            (stream["program_id"], stream["code"]),
+        ).fetchall()
+    }
+
+    return render_template(
+        "stream_teachers.html",
+        stream=stream,
+        program=program,
+        teachers=teachers,
+        stream_stats_categories=stream_stats_categories,
+    )
+
+
+@app.route("/weeks/<int:week_id>/teachers")
+def week_teachers(week_id):
+    """Мұғалімдер шолуының соңғы қадамы: ай/апта таңдалған соң, осы
+    аптаның/айдың нәтижелері бойынша есептелген мұғалім балдарын және
+    осы потоктың (код бойынша, санатқа қарамастан) тіркелген мұғалімдер
+    тізімін көрсетеді. Тіркелмеген/жаңа мұғалім осы жерден тікелей
+    қосылады — Бөлім/Поток қайта таңдаудың қажеті жоқ, өйткені навигация
+    арқылы бұрын шешілген."""
+    conn = get_db()
+    week, stream, program = get_week_context(conn, week_id)
+    if week is None or stream is None:
+        flash("Апта табылмады.", "error")
+        return redirect(url_for("teachers_browse"))
+
+    week_scores = {t["id"]: t for t in compute_teacher_stats_for_week(conn, week_id)}
+
+    all_teachers = conn.execute(
+        "SELECT t.id, t.name FROM teachers t JOIN streams s ON s.id = t.stream_id "
+        "WHERE s.program_id = ? AND s.code = ? ORDER BY t.name",
+        (stream["program_id"], stream["code"]),
+    ).fetchall()
+    teachers = [
+        {
+            "id": t["id"],
+            "name": t["name"],
+            "avg_score": week_scores.get(t["id"], {}).get("avg_score"),
+            "curator_count": week_scores.get(t["id"], {}).get("curator_count", 0),
+            "total_curators": week_scores.get(t["id"], {}).get(
+                "total_curators",
+                conn.execute(
+                    "SELECT COUNT(*) AS c FROM teacher_curators WHERE teacher_id = ?", (t["id"],)
+                ).fetchone()["c"],
+            ),
+        }
+        for t in all_teachers
+    ]
+
+    default_stream = conn.execute(
+        "SELECT id FROM streams WHERE program_id = ? AND code = ? AND category = ?",
+        (stream["program_id"], stream["code"], db.DEFAULT_CATEGORY),
+    ).fetchone()
+    add_stream_id = default_stream["id"] if default_stream else stream["id"]
+
+    stream_stats_categories = {
+        row["category"]: row["id"]
+        for row in conn.execute(
+            "SELECT id, category FROM streams WHERE program_id = ? AND code = ?",
+            (stream["program_id"], stream["code"]),
+        ).fetchall()
+    }
+
+    # base.html сайдбары "week" контекст айнымалысы болса, осы аптаның
+    # Жоспар/Импорт/Ортақ анализ сілтемелерін көрсетеді — бұл мұғалімдер
+    # бетінде орынсыз, сол себепті "current_week" деп бөлек атаумен береміз.
+    return render_template(
+        "week_teachers.html",
+        current_week=week,
+        stream=stream,
+        program=program,
+        teachers=teachers,
+        add_stream_id=add_stream_id,
+        stream_stats_categories=stream_stats_categories,
+    )
+
+
+@app.route("/streams/<int:stream_id>/teachers/<int:teacher_id>")
+def teacher_detail(stream_id, teacher_id):
+    conn = get_db()
+    stream = conn.execute("SELECT * FROM streams WHERE id = ?", (stream_id,)).fetchone()
+    if stream is None:
+        flash("Поток табылмады.", "error")
+        return redirect(url_for("index"))
+    program = conn.execute("SELECT * FROM programs WHERE id = ?", (stream["program_id"],)).fetchone()
+
+    sibling_streams = conn.execute(
+        "SELECT id, category FROM streams WHERE program_id = ? AND code = ?",
+        (stream["program_id"], stream["code"]),
+    ).fetchall()
+
+    category_streams = {}
+    for row in sibling_streams:
+        max_score, _target_score = db.score_defaults_for(program["slug"], row["category"])
+        category_streams[row["category"]] = {"stream_id": row["id"], "max_score": max_score}
+
+    detail = compute_teacher_stream_detail(conn, teacher_id, category_streams)
+    if detail["teacher"] is None:
+        flash("Мұғалім табылмады.", "error")
+        return redirect(url_for("stream_teachers", stream_id=stream_id))
+
+    stream_stats_categories = {row["category"]: row["id"] for row in sibling_streams}
+
+    return render_template(
+        "teacher_detail.html",
+        stream=stream,
+        program=program,
+        detail=detail,
+        stream_stats_categories=stream_stats_categories,
+    )
+
+
+def _teacher_stream_picker_data(conn):
+    """Мұғалім қосу пішініндегі 'Бағдарлама → Поток' таңдауы үшін деректер:
+    әр бағдарламаның потоктарын (СТ/АТ жұбының СТ жағы жеткілікті — кодтары
+    ортақ) сол бағдарламаның слагы бойынша топтастырып қайтарады."""
+    rows = conn.execute(
+        "SELECT s.id, s.code, p.slug AS program_slug, p.name AS program_name "
+        "FROM streams s JOIN programs p ON p.id = s.program_id "
+        "WHERE s.category = ? ORDER BY p.sort_order, p.id, s.sort_order, s.id",
+        (db.DEFAULT_CATEGORY,),
+    ).fetchall()
+    programs = conn.execute("SELECT slug, name FROM programs ORDER BY sort_order, id").fetchall()
+    streams_by_program = {}
+    for r in rows:
+        streams_by_program.setdefault(r["program_slug"], []).append({"id": r["id"], "code": r["code"]})
+    return programs, streams_by_program
+
+
+@app.route("/teachers/browse")
+def teachers_browse():
+    """Мұғалімдер статистикасына шолу: бөлімді таңдаудан бастап (одан әрі
+    /programs/<slug>?mode=stats арқылы санат+поток, содан кейін
+    /streams/<id>?mode=stats арқылы ай/апта, соңында /weeks/<id>/teachers
+    бетіне жеткізеді)."""
+    conn = get_db()
+    programs = conn.execute("SELECT * FROM programs ORDER BY sort_order, id").fetchall()
+    return render_template("teachers_browse.html", programs=programs)
+
+
+@app.route("/teachers")
+def teachers_list():
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT t.id, t.name, t.stream_id, "
+        "array_agg(tc.curator_name) AS curator_names "
+        "FROM teachers t LEFT JOIN teacher_curators tc ON tc.teacher_id = t.id "
+        "GROUP BY t.id, t.name, t.stream_id ORDER BY t.name"
+        if getattr(conn, "backend", None) == "postgres"
+        else "SELECT id, name, stream_id FROM teachers ORDER BY name"
+    ).fetchall()
+
+    stream_labels = {
+        r["id"]: f"{r['program_name']} | {r['code']}"
+        for r in conn.execute(
+            "SELECT s.id, s.code, p.name AS program_name FROM streams s JOIN programs p ON p.id = s.program_id"
+        ).fetchall()
+    }
+
+    if getattr(conn, "backend", None) == "postgres":
+        teachers = [
+            {
+                "id": r["id"],
+                "name": r["name"],
+                "curator_names": [c for c in (r["curator_names"] or []) if c],
+                "stream_label": stream_labels.get(r["stream_id"]),
+            }
+            for r in rows
+        ]
+    else:
+        teachers = []
+        for r in rows:
+            curator_rows = conn.execute(
+                "SELECT curator_name FROM teacher_curators WHERE teacher_id = ? ORDER BY curator_name",
+                (r["id"],),
+            ).fetchall()
+            teachers.append(
+                {
+                    "id": r["id"],
+                    "name": r["name"],
+                    "curator_names": [c["curator_name"] for c in curator_rows],
+                    "stream_label": stream_labels.get(r["stream_id"]),
+                }
+            )
+
+    programs, streams_by_program = _teacher_stream_picker_data(conn)
+
+    return render_template(
+        "teachers.html",
+        teachers=teachers,
+        all_teachers=teachers,
+        active_teacher_id=None,
+        programs=programs,
+        streams_by_program=streams_by_program,
+    )
+
+
+@app.route("/teachers/<int:teacher_id>")
+def teacher_home(teacher_id):
+    conn = get_db()
+    teacher = conn.execute("SELECT * FROM teachers WHERE id = ?", (teacher_id,)).fetchone()
+    if teacher is None:
+        flash("Мұғалім табылмады.", "error")
+        return redirect(url_for("teachers_list"))
+
+    stream_id = teacher["stream_id"] or find_teacher_home_stream(conn, teacher_id)
+    if stream_id is None:
+        flash("Бұл мұғалімнің кураторларының нәтижесі әлі табылған жоқ.", "error")
+        return redirect(url_for("teachers_list"))
+
+    stream = conn.execute("SELECT * FROM streams WHERE id = ?", (stream_id,)).fetchone()
+    program = conn.execute("SELECT * FROM programs WHERE id = ?", (stream["program_id"],)).fetchone()
+
+    sibling_streams = conn.execute(
+        "SELECT id, category FROM streams WHERE program_id = ? AND code = ?",
+        (stream["program_id"], stream["code"]),
+    ).fetchall()
+    category_streams = {}
+    for row in sibling_streams:
+        max_score, _target_score = db.score_defaults_for(program["slug"], row["category"])
+        category_streams[row["category"]] = {"stream_id": row["id"], "max_score": max_score}
+
+    detail = compute_teacher_stream_detail(conn, teacher_id, category_streams)
+
+    all_teachers = conn.execute("SELECT id, name FROM teachers ORDER BY name").fetchall()
+
+    return render_template(
+        "teacher_detail.html",
+        stream=stream,
+        program=program,
+        detail=detail,
+        all_teachers=all_teachers,
+        active_teacher_id=teacher_id,
+    )
+
+
+@app.route("/teachers/<int:teacher_id>/edit", methods=["GET", "POST"])
+def edit_teacher(teacher_id):
+    conn = get_db()
+    teacher = conn.execute("SELECT * FROM teachers WHERE id = ?", (teacher_id,)).fetchone()
+    if teacher is None:
+        flash("Мұғалім табылмады.", "error")
+        return redirect(url_for("teachers_list"))
+
+    if request.method == "POST":
+        name = request.form.get("name", "").strip()
+        curator_names_raw = request.form.get("curator_names", "")
+        curator_names = list(dict.fromkeys(c.strip() for c in curator_names_raw.split("\n") if c.strip()))
+        stream_id_raw = request.form.get("stream_id", "").strip()
+
+        if not name:
+            flash("Мұғалімнің атын енгізіңіз.", "error")
+            return redirect(url_for("edit_teacher", teacher_id=teacher_id))
+        if not stream_id_raw.isdigit():
+            flash("Потокты таңдаңыз.", "error")
+            return redirect(url_for("edit_teacher", teacher_id=teacher_id))
+        stream_id = int(stream_id_raw)
+        if conn.execute("SELECT id FROM streams WHERE id = ?", (stream_id,)).fetchone() is None:
+            flash("Таңдалған поток табылмады.", "error")
+            return redirect(url_for("edit_teacher", teacher_id=teacher_id))
+
+        # add_teacher-дегідей: UNIQUE қатесінен транзакцияны қорғау үшін
+        # алдымен осы мұғалімнің ескі кураторларын өшіріп, содан кейін ғана
+        # жаңа тізімнің басқа мұғалімге тіркелмегенін тексереміз.
+        conn.execute("DELETE FROM teacher_curators WHERE teacher_id = ?", (teacher_id,))
+        existing = set()
+        if curator_names:
+            placeholders = ",".join("?" * len(curator_names))
+            existing = {
+                row["curator_name"]
+                for row in conn.execute(
+                    f"SELECT curator_name FROM teacher_curators WHERE curator_name IN ({placeholders})",
+                    curator_names,
+                ).fetchall()
+            }
+        to_insert = [c for c in curator_names if c not in existing]
+        skipped = [c for c in curator_names if c in existing]
+
+        conn.execute("UPDATE teachers SET name = ?, stream_id = ? WHERE id = ?", (name, stream_id, teacher_id))
+        for curator_name in to_insert:
+            conn.execute(
+                "INSERT INTO teacher_curators (teacher_id, curator_name) VALUES (?, ?)",
+                (teacher_id, curator_name),
+            )
+        conn.commit()
+
+        if skipped:
+            flash(
+                "Мұғалім жаңартылды, бірақ мына кураторлар басқа мұғалімге тіркелген болғандықтан қосылмады: "
+                + ", ".join(skipped),
+                "error",
+            )
+        else:
+            flash("Мұғалім жаңартылды.", "ok")
+        return redirect(url_for("teachers_list"))
+
+    curator_rows = conn.execute(
+        "SELECT curator_name FROM teacher_curators WHERE teacher_id = ? ORDER BY curator_name", (teacher_id,)
+    ).fetchall()
+    curator_names_text = "\n".join(r["curator_name"] for r in curator_rows)
+
+    current_program_slug = None
+    if teacher["stream_id"] is not None:
+        row = conn.execute(
+            "SELECT p.slug FROM streams s JOIN programs p ON p.id = s.program_id WHERE s.id = ?",
+            (teacher["stream_id"],),
+        ).fetchone()
+        current_program_slug = row["slug"] if row else None
+
+    programs, streams_by_program = _teacher_stream_picker_data(conn)
+    all_teachers = conn.execute("SELECT id, name FROM teachers ORDER BY name").fetchall()
+
+    return render_template(
+        "teacher_edit.html",
+        teacher=teacher,
+        curator_names_text=curator_names_text,
+        programs=programs,
+        streams_by_program=streams_by_program,
+        current_program_slug=current_program_slug,
+        all_teachers=all_teachers,
+        active_teacher_id=teacher_id,
+    )
+
+
+def _teacher_redirect_target():
+    """/weeks/<id>/teachers сияқты жерлерден келген add/delete әрекеттері
+    сол бетке қайта оралу үшін — қауіпсіздік үшін тек сайт ішіндегі
+    салыстырмалы жолдарды ғана қабылдайды (ашық-редирект болмас үшін)."""
+    next_url = request.form.get("next", "").strip()
+    if next_url.startswith("/") and not next_url.startswith("//"):
+        return redirect(next_url)
+    return redirect(url_for("teachers_list"))
+
+
+@app.route("/teachers/add", methods=["POST"])
+def add_teacher():
+    conn = get_db()
+    name = request.form.get("name", "").strip()
+    curator_names_raw = request.form.get("curator_names", "")
+    curator_names = [c.strip() for c in curator_names_raw.split("\n") if c.strip()]
+    stream_id_raw = request.form.get("stream_id", "").strip()
+
+    if not name:
+        flash("Мұғалімнің атын енгізіңіз.", "error")
+        return _teacher_redirect_target()
+
+    if not stream_id_raw.isdigit():
+        flash("Потокты таңдаңыз.", "error")
+        return _teacher_redirect_target()
+    stream_id = int(stream_id_raw)
+    if conn.execute("SELECT id FROM streams WHERE id = ?", (stream_id,)).fetchone() is None:
+        flash("Таңдалған поток табылмады.", "error")
+        return _teacher_redirect_target()
+
+    # Кураторлар атауы UNIQUE болғандықтан, INSERT-ті орындамас бұрын бар-жоғын
+    # тексереміз — Postgres-те бір INSERT қатесі бүкіл транзакцияны "бұзып",
+    # содан кейінгі барлық сұранысты іске асырмай қалдырар еді.
+    curator_names = list(dict.fromkeys(curator_names))
+    existing = set()
+    if curator_names:
+        placeholders = ",".join("?" * len(curator_names))
+        existing = {
+            row["curator_name"]
+            for row in conn.execute(
+                f"SELECT curator_name FROM teacher_curators WHERE curator_name IN ({placeholders})",
+                curator_names,
+            ).fetchall()
+        }
+    to_insert = [c for c in curator_names if c not in existing]
+    skipped = [c for c in curator_names if c in existing]
+
+    teacher_id = conn.execute(
+        "INSERT INTO teachers (name, stream_id) VALUES (?, ?) RETURNING id", (name, stream_id)
+    ).fetchone()["id"]
+    for curator_name in to_insert:
+        conn.execute(
+            "INSERT INTO teacher_curators (teacher_id, curator_name) VALUES (?, ?)",
+            (teacher_id, curator_name),
+        )
+    conn.commit()
+
+    if skipped:
+        flash(
+            "Мұғалім қосылды, бірақ мына кураторлар басқа мұғалімге тіркелген болғандықтан қосылмады: "
+            + ", ".join(skipped),
+            "error",
+        )
+    else:
+        flash("Мұғалім қосылды.", "ok")
+    return _teacher_redirect_target()
+
+
+@app.route("/teachers/<int:teacher_id>/delete", methods=["POST"])
+def delete_teacher(teacher_id):
+    conn = get_db()
+    conn.execute("DELETE FROM teachers WHERE id = ?", (teacher_id,))
+    conn.commit()
+    flash("Мұғалім жойылды.", "ok")
+    return _teacher_redirect_target()
 
 
 

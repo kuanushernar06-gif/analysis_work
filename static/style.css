@@ -370,6 +370,14 @@ html[data-sidebar-pinned="true"] .site-sidebar-footer {
   font-weight: 600;
 }
 .site-sidebar-nav a.active .badge { background: var(--sidebar-text); color: var(--sidebar-bg); }
+.sidebar-empty-note { color: var(--sidebar-text-muted); font-size: 0.82rem; padding: 8px 14px; }
+.site-sidebar-nav a.sidebar-add-teacher {
+  margin-top: 8px;
+  border-top: 1px solid var(--sidebar-border);
+  padding-top: 16px;
+  color: var(--sidebar-text-muted);
+}
+.site-sidebar-nav a.sidebar-add-teacher:hover { color: var(--sidebar-text); }
 
 .site-sidebar-footer { display: flex; flex-direction: column; gap: 8px; }
 
@@ -529,10 +537,12 @@ a.is-loading-link { opacity: 0.5; pointer-events: none; transition: opacity 0.15
 .ic-brain        { -webkit-mask-image: url('img/icons/brain.svg');        mask-image: url('img/icons/brain.svg'); }
 .ic-flipchart    { -webkit-mask-image: url('img/icons/flipchart.svg');    mask-image: url('img/icons/flipchart.svg'); }
 .ic-beaker       { -webkit-mask-image: url('img/icons/beaker.svg');       mask-image: url('img/icons/beaker.svg'); }
+.ic-teacher      { -webkit-mask-image: url('img/icons/teacher.svg');      mask-image: url('img/icons/teacher.svg'); }
 .ic-book         { -webkit-mask-image: url('img/icons/book.svg');         mask-image: url('img/icons/book.svg'); }
 .ic-timer        { -webkit-mask-image: url('img/icons/timer.svg');        mask-image: url('img/icons/timer.svg'); }
 .ic-presentation { -webkit-mask-image: url('img/icons/presentation.svg'); mask-image: url('img/icons/presentation.svg'); }
 .ic-test         { -webkit-mask-image: url('img/icons/test.svg');         mask-image: url('img/icons/test.svg'); }
+.ic-group        { -webkit-mask-image: url('img/icons/group.svg');        mask-image: url('img/icons/group.svg'); }
 .ic-week         { -webkit-mask-image: url('img/icons/week.svg');         mask-image: url('img/icons/week.svg'); }
 .ic-structure    { -webkit-mask-image: url('img/icons/structure.svg');    mask-image: url('img/icons/structure.svg'); }
 .ic-target       { -webkit-mask-image: url('img/icons/target.svg');       mask-image: url('img/icons/target.svg'); }
@@ -686,6 +696,23 @@ img.nav-card-ic { height: 32px; width: auto; border-radius: 8px; }
   margin-bottom: 0;
   text-transform: uppercase;
 }
+
+/* Мұғалім карточкасы (stream_teachers) — атын басқанда сол мұғалімнің
+   жеке статистика бетіне өтеді, сол себепті басқа nav-card-тардан
+   ерекшеленетін, "басуға тұрарлық" градиентті карточка стилі. */
+.teacher-card {
+  display: block;
+  padding: 20px 22px;
+  border-radius: var(--radius);
+  background: linear-gradient(135deg, var(--accent) 0%, #7a1d00 100%);
+  color: #fff;
+  text-decoration: none;
+  box-shadow: var(--shadow-glass);
+  transition: box-shadow .15s ease, transform .15s ease;
+}
+.teacher-card:hover { box-shadow: var(--shadow-hover); transform: translateY(-2px); }
+.teacher-card-name { font-size: 1.2rem; font-weight: 800; letter-spacing: -0.01em; }
+.teacher-card-sub { margin-top: 6px; font-size: 0.85rem; color: rgba(255, 255, 255, 0.85); }
 
 /* ---------- Forms ---------- */
 .form-grid {
@@ -878,6 +905,13 @@ input[type="number"]::-webkit-outer-spin-button {
 }
 .table tbody tr:nth-child(even) { background: var(--surface); }
 .table tbody tr:hover { background: var(--accent-soft); }
+
+.teacher-actions { display: flex; align-items: center; gap: 6px; }
+.teacher-actions .teacher-delete-confirm { display: none; align-items: center; gap: 6px; margin: 0; }
+.teacher-actions .teacher-delete-confirm .muted { font-size: 0.78rem; white-space: nowrap; }
+.teacher-actions.is-confirming > a,
+.teacher-actions.is-confirming > .teacher-delete-btn { display: none; }
+.teacher-actions.is-confirming .teacher-delete-confirm { display: flex; }
 
 .material-expand-btn .expand-arrow { display: inline-block; width: 0.8em; margin-right: 2px; }
 
