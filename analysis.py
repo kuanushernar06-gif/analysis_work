@@ -1,5 +1,6 @@
 """Апта нәтижелері бойынша ортақ анализ есептеу."""
 
+import re
 from collections import Counter
 
 DEFAULT_PASSING_PERCENT = 50.0
@@ -372,4 +373,91 @@ def compute_program_overview(conn, program_id):
         overview["bronze_share"] = round(bronze / total_students * 100, 1)
 
     return overview
+
+
+_NAME_SPLIT_RE = re.compile(r"[.\s]+")
+
+
+def _curator_name_tokens(name):
+    """Атты бас әріпке келтіріп, бос орын мен нүкте бойынша сөздерге бөледі
+    (мыс. 'І.Нұрайым' -> {'І', 'НҰРАЙЫМ'}, 'Ілияс Нұрайым Қайратқызы' ->
+    {'ІЛИЯС', 'НҰРАЙЫМ', 'ҚАЙРАТҚЫЗЫ'}) — рейтинг кестесіндегі куратор аты
+    (әдетте бір ғана есім) мен мұғалім тіркеген толық аты-жөнді салыстыру
+    үшін, дәл сәйкестікті емес, ортақ сөз бар-жоғын тексереміз."""
+    return {t for t in _NAME_SPLIT_RE.split((name or "").upper()) if len(t) > 1}
+
+
+def _teacher_name_matches(teacher_tokens, curator_raw):
+    """Мұғалімге тіркелген аттың кез келген сөзі осы куратордың нақты
+    атауының (рейтинг кестесіндегі парақ атауының) ІШІНДЕ жол ретінде
+    кездессе де сәйкес деп есептейді — тек екі жақ та бөлек сөзге бөлініп,
+    дәл сол сөз болуын емес. Бұл парақ атауы бөлгішсіз қосымша әріп/сан/
+    топ атымен жазылған жағдайда да (мыс. 'Нұрғазы2', 'НҰРҒАЗЫ-топ')
+    танылуы үшін керек; бас-кіші әріпке қарамайды."""
+    raw_upper = (curator_raw or "").upper()
+    return any(tok in raw_upper for tok in teacher_tokens)
+
+
+def compute_teacher_stats_for_week(conn, week_id, combine_week_ids=None):
+    """Осы аптаның (немесе, combine_week_ids берілсе, бірнеше аптаның
+    біріктірілген) нәтижелері бойынша, әр мұғалімнің өз кураторларының
+    (teacher_curators-та тіркелген) ортақ балдарының орташасын мұғалімнің
+    ортақ балы ретінде қайтарады. Куратор аты рейтинг кестесінде қысқа
+    (мыс. бір есім) жазылатындықтан, мұғалімге тіркелген толық аты-жөнмен
+    ДӘЛ сәйкес келуін емес, ортақ сөз (аты/тегі) бар-жоғын тексереміз. Осы
+    аптада бірде-бір куратор нәтижесі жоқ мұғалімдер тізімге кірмейді.
+    1-айдың нәтижелері есептелмейді — сол айда рейтинг кестелерінде куратор
+    аты-жөндері дұрыс жазылмаған болатын."""
+    week = conn.execute("SELECT month_number FROM weeks WHERE id = ?", (week_id,)).fetchone()
+    if week is None or week["month_number"] == 1:
+        return []
+
+    week_ids = combine_week_ids if combine_week_ids else [week_id]
+    placeholders = ",".join("?" * len(week_ids))
+    rows = conn.execute(
+        f"SELECT curator, score FROM results WHERE week_id IN ({placeholders}) "
+        "AND score IS NOT NULL AND curator IS NOT NULL AND curator != ''",
+        week_ids,
+    ).fetchall()
+
+    curator_scores = {}
+    for r in rows:
+        curator_scores.setdefault(r["curator"].strip(), []).append(float(r["score"]))
+    curator_avg = {name: sum(vals) / len(vals) for name, vals in curator_scores.items() if vals}
+
+    teacher_rows = conn.execute(
+        "SELECT t.id, t.name, tc.curator_name FROM teacher_curators tc "
+        "JOIN teachers t ON t.id = tc.teacher_id"
+    ).fetchall()
+
+    by_teacher = {}
+    for r in teacher_rows:
+        by_teacher.setdefault((r["id"], r["name"]), []).append(r["curator_name"])
+
+    teachers = []
+    for (teacher_id, name), curator_names in by_teacher.items():
+        matched_scores = []
+        used_curators = set()
+        for cname in curator_names:
+            cname_tokens = _curator_name_tokens(cname)
+            for actual_name, avg in curator_avg.items():
+                if actual_name in used_curators:
+                    continue
+                if _teacher_name_matches(cname_tokens, actual_name):
+                    matched_scores.append(avg)
+                    used_curators.add(actual_name)
+                    break
+        if not matched_scores:
+            continue
+        teachers.append(
+            {
+                "id": teacher_id,
+                "name": name,
+                "avg_score": round(sum(matched_scores) / len(matched_scores), 2),
+                "curator_count": len(matched_scores),
+                "total_curators": len(curator_names),
+            }
+        )
+    teachers.sort(key=lambda t: t["avg_score"], reverse=True)
+    return teachers
 

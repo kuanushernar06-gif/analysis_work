@@ -383,6 +383,19 @@ html[data-sidebar-pinned="true"] .site-sidebar-footer {
   border-top: 1px solid var(--sidebar-border);
   padding-top: 16px;
 }
+.sidebar-subnav { display: flex; flex-direction: column; gap: 2px; margin-bottom: 4px; }
+.sidebar-subnav a {
+  display: block;
+  padding: 8px 14px 8px 34px;
+  border-radius: var(--radius-sm);
+  color: var(--sidebar-text-muted);
+  text-decoration: none;
+  font-size: 0.78rem;
+  font-weight: 600;
+  transition: background-color .12s ease, color .12s ease;
+}
+.sidebar-subnav a:hover { background: var(--sidebar-link-hover-bg); color: var(--sidebar-text); }
+.sidebar-subnav .sidebar-empty-note { padding-left: 34px; }
 
 .site-sidebar-footer { display: flex; flex-direction: column; gap: 8px; }
 

@@ -17,6 +17,7 @@ from analysis import (
     compute_report,
     compute_curator_extremes,
     compare_reports,
+    compute_teacher_stats_for_week,
 )
 from sheets import fetch_workbook, rows_to_dicts, guess_columns, is_summary_row, is_template_sheet, SheetFetchError
 from gdocs import (
@@ -40,6 +41,11 @@ db.init_db()
 
 _SUMMARY_LABEL_RE = re.compile(r"^([^:\n]{1,80}):(.*)$")
 
+# Мұғалімдер статистикасы (апта бойынша, өз кураторларының ортақ балы) тек
+# осы екі санатта керек — САБАҚ ТАПСЫРУ мен АЙЛЫҚ ТЕСТ. ДЕҢГЕЙЛІК/БАЙҚАУ
+# ТЕСТ санатында бұл нәрсе қажет емес.
+TEACHER_STATS_CATEGORIES = ("sabaq_tapsyru", "aylyq_test")
+
 
 @app.template_filter("summary_html")
 def format_summary_html(text):
@@ -61,6 +67,7 @@ def inject_category_label():
     return {
         "category_label": lambda slug: db.CATEGORY_LABELS.get(slug, slug),
         "sidebar_categories": db.SIDEBAR_CATEGORIES,
+        "teacher_stats_categories": TEACHER_STATS_CATEGORIES,
     }
 
 
@@ -514,8 +521,6 @@ def teachers_list():
                 }
             )
 
-    programs, streams_by_program = _teacher_stream_picker_data(conn)
-
     back_url = url_for("index")
     referrer = request.referrer
     if referrer:
@@ -528,8 +533,6 @@ def teachers_list():
         teachers=teachers,
         all_teachers=teachers,
         active_teacher_id=None,
-        programs=programs,
-        streams_by_program=streams_by_program,
         back_url=back_url,
     )
 
@@ -828,6 +831,36 @@ def week_report(week_id):
         best_curator=best_curator,
         worst_curator=worst_curator,
         comparison=comparison,
+    )
+
+
+@app.route("/weeks/<int:week_id>/teachers")
+def week_teachers(week_id):
+    conn = get_db()
+    week, stream, program = get_week_context(conn, week_id)
+    if week is None:
+        flash("Апта табылмады.", "error")
+        return redirect(url_for("index"))
+    if stream is None or stream["category"] not in TEACHER_STATS_CATEGORIES:
+        flash("Бұл санатта мұғалімдер статистикасы жоқ.", "error")
+        return redirect(url_for("week_report", week_id=week_id))
+
+    is_summary = is_month_summary_week(week, stream)
+    if is_summary:
+        combine_ids = [w["id"] for w in get_month_component_weeks(conn, week)]
+        teachers = compute_teacher_stats_for_week(conn, week_id, combine_week_ids=combine_ids) if combine_ids else []
+    else:
+        teachers = compute_teacher_stats_for_week(conn, week_id)
+
+    return render_template(
+        "week_teachers.html",
+        week=week,
+        stream=stream,
+        program=program,
+        active_page="teachers",
+        is_month_summary=is_summary,
+        teachers=teachers,
+        all_teachers=teachers,
     )
 
 

@@ -56,15 +56,26 @@
           <a href="{{ url_for('week_import', week_id=week['id']) }}" class="{{ 'active' if active_page == 'import' else '' }}"><span class="ic ic-structure"></span> Кестені импорттау</a>
           {% endif %}
           <a href="{{ url_for('week_report', week_id=week['id']) }}" class="{{ 'active' if active_page == 'report' else '' }}"><span class="ic ic-target"></span> Ортақ анализ</a>
+          {% if stream and stream['category'] in teacher_stats_categories %}
+          <a href="{{ url_for('week_teachers', week_id=week['id']) }}" class="{{ 'active' if active_page == 'teachers' else '' }}"><span class="ic ic-group"></span> Мұғалімдер</a>
+          {% if active_page == 'teachers' and all_teachers is defined %}
+          <div class="sidebar-subnav">
+            {% for t in all_teachers %}
+            <a href="#teacher-{{ t['id'] }}">{{ t['name'] }}</a>
+            {% else %}
+            <p class="sidebar-empty-note">Нәтиже жоқ.</p>
+            {% endfor %}
+          </div>
+          {% endif %}
+          {% endif %}
         {% elif all_teachers is defined %}
           {% for t in all_teachers %}
           <a href="{{ url_for('edit_teacher', teacher_id=t['id']) }}" class="{{ 'active' if active_teacher_id == t['id'] else '' }}">{{ t['name'] }}</a>
           {% else %}
           <p class="sidebar-empty-note">Әзірге мұғалім қосылмаған.</p>
           {% endfor %}
-          <a class="sidebar-add-teacher" href="{{ url_for('teachers_list') }}">+ Мұғалім қосу</a>
         {% endif %}
-        {% if not (all_teachers is defined) %}
+        {% if not (all_teachers is defined) and not (week and stream and stream['category'] in teacher_stats_categories) %}
         <a href="{{ url_for('teachers_list') }}" class="sidebar-teachers-link{{ ' active' if request.endpoint in ('teachers_list', 'edit_teacher') else '' }}"><span class="ic ic-group"></span> Мұғалімдер</a>
         {% endif %}
       </nav>

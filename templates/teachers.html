@@ -7,44 +7,9 @@
     <a class="back-link" href="{{ back_url }}">← Артқа</a>
     <h1>Мұғалімдер</h1>
     <p class="muted">
-      Әр мұғалімнің атын және оған тіркелген кураторлардың тізімін қосыңыз
-      (әр куратор — жаңа жолда). Толық аты-жөнмен жазсаңыз да болады —
-      рейтинг кестесіндегі атымен ортақ сөзі (аты немесе тегі) бойынша
-      автоматты сәйкестендіріледі.
+      Тіркелген мұғалімдер мен оларға тіркелген кураторлар тізімі.
     </p>
   </div>
-</div>
-
-<div class="card" id="add-teacher-form">
-  <h2>Жаңа мұғалім қосу</h2>
-  <form method="post" action="{{ url_for('add_teacher') }}" class="form-grid">
-    <label class="col-span-2">
-      Мұғалімнің аты-жөні
-      <input type="text" name="name" required autocomplete="off" placeholder="Мысалы: Асанова Гүлнара">
-    </label>
-    <label>
-      Бөлім
-      <select id="add-teacher-program" required>
-        <option value="">— таңдаңыз —</option>
-        {% for p in programs %}
-        <option value="{{ p['slug'] }}">{{ p['name'] }}</option>
-        {% endfor %}
-      </select>
-    </label>
-    <label>
-      Поток
-      <select name="stream_id" id="add-teacher-stream" required disabled>
-        <option value="">— алдымен бөлімді таңдаңыз —</option>
-      </select>
-    </label>
-    <label class="col-span-2">
-      Кураторлар (әр жолда біреу)
-      <textarea name="curator_names" rows="5" placeholder="НҰРАЙ&#10;АЙГЕРІМ&#10;БЕКЗАТ"></textarea>
-    </label>
-    <div class="col-span-2">
-      <button type="submit" class="btn btn-primary">Қосу</button>
-    </div>
-  </form>
 </div>
 
 <div class="card">
@@ -83,28 +48,6 @@
 
 {% block scripts %}
 <script>
-  (function () {
-    var streamsByProgram = {{ streams_by_program | tojson }};
-    var programSelect = document.getElementById("add-teacher-program");
-    var streamSelect = document.getElementById("add-teacher-stream");
-    if (!programSelect || !streamSelect) return;
-
-    programSelect.addEventListener("change", function () {
-      var streams = streamsByProgram[programSelect.value] || [];
-      streamSelect.innerHTML = "";
-      if (!streams.length) {
-        streamSelect.disabled = true;
-        streamSelect.appendChild(new Option("— алдымен бөлімді таңдаңыз —", ""));
-        return;
-      }
-      streamSelect.disabled = false;
-      streamSelect.appendChild(new Option("— таңдаңыз —", ""));
-      streams.forEach(function (s) {
-        streamSelect.appendChild(new Option(s.code, s.id));
-      });
-    });
-  })();
-
   (function () {
     var table = document.querySelector(".table");
     if (!table) return;

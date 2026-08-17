@@ -1,0 +1,36 @@
+{% extends "week_base.html" %}
+{% block title %}{{ week['title'] }} — Мұғалімдер{% endblock %}
+
+{% block week_content %}
+<div class="page-head">
+  <div>
+    <h1>Мұғалімдер</h1>
+    <p class="muted">
+      Әр мұғалімнің ортақ балы — осы аптаның/айдың нәтижелері бойынша, өз
+      кураторларының ортақ балдарының орташасы.
+    </p>
+  </div>
+</div>
+
+<div class="card">
+  {% if teachers %}
+  <div class="table-scroll">
+    <table class="table">
+      <thead><tr><th>Мұғалім</th><th>Ортақ балл</th><th>Кураторлар</th></tr></thead>
+      <tbody>
+        {% for t in teachers %}
+        <tr id="teacher-{{ t.id }}">
+          <td>{{ t.name }}</td>
+          <td>{% if t.avg_score is not none %}{{ '%.2f'|format(t.avg_score) }}{% else %}<span class="muted">нәтиже жоқ</span>{% endif %}</td>
+          <td>{{ t.curator_count }}/{{ t.total_curators }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="muted">Бұл аптада мұғалімдердің куратор нәтижесі әлі жоқ.</p>
+  {% endif %}
+</div>
+
+{% endblock %}
