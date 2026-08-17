@@ -23,7 +23,7 @@
 <div class="card">
   <p class="muted">
     Сандық деректер әлі жоқ (кесте импортталмаған), сондықтан балл бойынша есеп көрсетілмейді.
-    Бірақ кураторлардың сапалы анализін төменде қоса аласыз.
+    {% if not (stream and stream['category'] == 'baiqau_test') %}Бірақ кураторлардың сапалы анализін төменде қоса аласыз.{% endif %}
   </p>
   <a class="btn btn-primary" href="{{ url_for('week_import', week_id=week['id']) }}">Кестені импорттау</a>
 </div>
@@ -132,6 +132,7 @@
 
 {% endif %}
 
+{% if not (stream and stream['category'] == 'baiqau_test') %}
 <div class="card">
   <h2>Кураторлардың жиынтық анализі</h2>
   {% if is_month_summary %}
@@ -147,6 +148,7 @@
     <p class="muted">Кураторлар анализі әлі қосылмаған. <a href="{{ url_for('week_import', week_id=week['id']) }}">Кестені импорттау бетіне өту →</a></p>
   {% endif %}
 </div>
+{% endif %}
 
 <div class="card" id="summary">
   <h2>Жалпы қорытынды</h2>
@@ -159,6 +161,36 @@
   <div class="summary-display">{{ summary_text_override | summary_html }}</div>
   {% else %}
   <p class="muted">Әзірге 1, 2, 3-аптаның ешқайсысында деректер/анализ жоқ.</p>
+  {% endif %}
+  {% elif stream and stream['category'] == 'baiqau_test' %}
+  <p class="muted">
+    Бұл қорытындыны жоғарыдағы сандық нәтижелер негізінде AI толық өзі жазады.
+  </p>
+  {% if report.has_data %}
+  <form method="post" action="{{ url_for('generate_results_summary', week_id=week['id']) }}" class="no-print">
+    <button type="submit" class="btn btn-outline btn-small">
+      {% if week['summary'] %}Қорытындыны қайта жасау{% else %}Қорытынды анализ шығару{% endif %}
+    </button>
+  </form>
+  {% else %}
+  <p class="muted">
+    Алдымен <a href="{{ url_for('week_import', week_id=week['id']) }}">Кестені импорттау</a> бетінде нәтижелерді қосыңыз.
+  </p>
+  {% endif %}
+  {% if week['summary'] %}
+  <div id="summary-view">
+    <div class="summary-display">{{ week['summary'] | summary_html }}</div>
+    <div class="import-submit-row no-print" style="margin-top:10px">
+      <button type="button" class="btn btn-danger btn-small" id="summary-delete-btn">Қорытындыны жою</button>
+    </div>
+    <div id="summary-delete-confirm" class="no-print" style="display:none; margin-top:10px">
+      <p class="muted">Жалпы қорытындыны толық өшіру керек пе? Бұл әрекетті қайтару мүмкін емес.</p>
+      <form method="post" action="{{ url_for('delete_summary', week_id=week['id']) }}" style="display:inline">
+        <button type="submit" class="btn btn-danger btn-small">Иә, толық өшіру</button>
+      </form>
+      <button type="button" class="btn btn-outline btn-small" id="summary-delete-cancel">Болдырмау</button>
+    </div>
+  </div>
   {% endif %}
   {% else %}
   <p class="muted">

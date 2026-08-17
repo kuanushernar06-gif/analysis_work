@@ -221,14 +221,14 @@ def _extract_retry_delay(error_body_text):
     return None
 
 
-def _call_gemini(prompt, api_key):
+def _call_gemini_raw(prompt, api_key, json_mode=True):
+    generation_config = {"maxOutputTokens": MAX_COMPLETION_TOKENS}
+    if json_mode:
+        generation_config["responseMimeType"] = "application/json"
     payload = json.dumps(
         {
             "contents": [{"parts": [{"text": prompt}]}],
-            "generationConfig": {
-                "responseMimeType": "application/json",
-                "maxOutputTokens": MAX_COMPLETION_TOKENS,
-            },
+            "generationConfig": generation_config,
         }
     ).encode("utf-8")
 
@@ -269,6 +269,9 @@ def _call_gemini(prompt, api_key):
         raise CuratorAnalysisError("Gemini API жауабының форматы күтпеген болды.") from e
 
     text = _strip_code_fence(text)
+    if not json_mode:
+        return text.strip()
+
     try:
         parsed = json.loads(text)
     except json.JSONDecodeError as e:
@@ -283,6 +286,14 @@ def _call_gemini(prompt, api_key):
             "Gemini API жауабы күтілген құрылымда (JSON объект) болмады — қайта жүктеп көріңіз."
         )
     return parsed
+
+
+def _call_gemini(prompt, api_key):
+    return _call_gemini_raw(prompt, api_key, json_mode=True)
+
+
+def _call_gemini_text(prompt, api_key):
+    return _call_gemini_raw(prompt, api_key, json_mode=False)
 
 
 def _analyze_chunk(chunk_text, stats_section, api_key):
@@ -345,6 +356,43 @@ def merge_analyses(chunk_analyses):
         "missing_analysis_curators": merge_unique("missing_analysis_curators"),
         "no_prevention_curators": merge_unique("no_prevention_curators"),
     }
+
+
+RESULTS_PROMPT_TEMPLATE = """Сен білім беру ұйымының деректер аналитигісің. Төменде оқушылардың
+{label} нәтижелері бойынша есептелген НАҚТЫ сандық статистика берілген (кураторлардың жеке
+жазбасы жоқ — тек балл кестесінен есептелген деректер).
+
+{stats_section}
+
+Осы деректерді мұқият талдап, оқушылардың нәтижесі бойынша қысқа, нақты қорытынды жаз: жалпы
+деңгей қандай, қай пән/тақырыптар ең әлсіз, бұл неге байланысты болуы мүмкін (жалпы болжам),
+келесі кезеңге қандай басымдық беру керек. 4-6 сөйлемнен аспасын. Жоғарыда берілмеген сандарды
+ойдан шығарма.
+
+Жауапты ТЕК қорытынды мәтін түрінде қайтар — JSON, markdown белгісі немесе қосымша тақырып қоспа.
+"""
+
+
+def generate_results_analysis(report, label: str = "ДТ/БТ") -> str:
+    """Кураторлардың жазбасынсыз, тек импортталған балл кестесінен есептелген
+    report статистикасы негізінде AI-ден оқушылардың нәтижесі бойынша қысқа
+    қорытынды сұрайды — ДЕҢГЕЙЛІК/БАЙҚАУ ТЕСТ санатында куратор құжаты
+    тұжырымдамасы жоқ болғандықтан керек."""
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if api_key:
+        api_key = "".join(ch for ch in api_key.strip() if ch.isascii() and ch.isprintable())
+    if not api_key:
+        raise CuratorAnalysisError(
+            "GEMINI_API_KEY орнатылмаған. .env файлына тегін Gemini API кілтін қосыңыз "
+            "(aistudio.google.com сайтынан алуға болады)."
+        )
+
+    stats_text = _format_report_stats(report)
+    if not stats_text:
+        raise CuratorAnalysisError("Алдымен кестені импорттаңыз — сандық деректер жоқ.")
+
+    prompt = RESULTS_PROMPT_TEMPLATE.format(label=label, stats_section=stats_text)
+    return _call_gemini_text(prompt, api_key)
 
 
 def generate_curator_analysis(doc_text: str, report=None) -> dict:

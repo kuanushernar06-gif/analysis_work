@@ -371,18 +371,6 @@ html[data-sidebar-pinned="true"] .site-sidebar-footer {
 }
 .site-sidebar-nav a.active .badge { background: var(--sidebar-text); color: var(--sidebar-bg); }
 .sidebar-empty-note { color: var(--sidebar-text-muted); font-size: 0.82rem; padding: 8px 14px; }
-.site-sidebar-nav a.sidebar-add-teacher {
-  margin-top: 8px;
-  border-top: 1px solid var(--sidebar-border);
-  padding-top: 16px;
-  color: var(--sidebar-text-muted);
-}
-.site-sidebar-nav a.sidebar-add-teacher:hover { color: var(--sidebar-text); }
-.site-sidebar-nav a.sidebar-teachers-link {
-  margin-top: 8px;
-  border-top: 1px solid var(--sidebar-border);
-  padding-top: 16px;
-}
 .sidebar-subnav { display: flex; flex-direction: column; gap: 2px; margin-bottom: 4px; }
 .sidebar-subnav a {
   display: block;

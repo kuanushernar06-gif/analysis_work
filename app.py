@@ -28,7 +28,13 @@ from gdocs import (
     classify_plan_sections,
     strip_template_entry,
 )
-from curator_analysis import generate_curator_analysis, build_summary_text, merge_analyses, CuratorAnalysisError
+from curator_analysis import (
+    generate_curator_analysis,
+    generate_results_analysis,
+    build_summary_text,
+    merge_analyses,
+    CuratorAnalysisError,
+)
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "juz40-local-dev-secret")
@@ -893,6 +899,31 @@ def generate_summary(week_id):
         "UPDATE weeks SET curators_analysis_json = ?, curators_analysis_error = NULL, summary = ? WHERE id = ?",
         (json.dumps(analysis, ensure_ascii=False), summary_text, week_id),
     )
+    conn.commit()
+    flash("Жалпы қорытынды AI арқылы жасалды.", "ok")
+    return redirect(url_for("week_report", week_id=week_id))
+
+
+@app.route("/weeks/<int:week_id>/summary/generate-from-results", methods=["POST"])
+def generate_results_summary(week_id):
+    conn = get_db()
+    week, _stream, _program = get_week_context(conn, week_id)
+    if week is None:
+        flash("Апта табылмады.", "error")
+        return redirect(url_for("index"))
+
+    report = compute_report(conn, week_id)
+    if not report or not report.get("has_data"):
+        flash("Алдымен кестені импорттаңыз.", "error")
+        return redirect(url_for("week_report", week_id=week_id))
+
+    try:
+        summary_text = generate_results_analysis(report)
+    except CuratorAnalysisError as e:
+        flash(f"Қорытынды анализ жасау сәтсіз аяқталды: {e}", "error")
+        return redirect(url_for("week_report", week_id=week_id))
+
+    conn.execute("UPDATE weeks SET summary = ? WHERE id = ?", (summary_text, week_id))
     conn.commit()
     flash("Жалпы қорытынды AI арқылы жасалды.", "ok")
     return redirect(url_for("week_report", week_id=week_id))

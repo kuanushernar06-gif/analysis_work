@@ -44,6 +44,7 @@
   </form>
 </div>
 
+{% if not (stream and stream['category'] == 'baiqau_test') %}
 <div class="card">
   <h2>Куратор анализін жүктеу</h2>
   <p class="section-intro">
@@ -105,6 +106,7 @@
     }
   })();
 </script>
+{% endif %}
 {% endif %}
 {% endblock %}
 

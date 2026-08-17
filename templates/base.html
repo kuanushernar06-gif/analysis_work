@@ -49,7 +49,7 @@
       </a>
       <nav class="site-sidebar-nav">
         {% if week %}
-          {% if (not stream or stream['category'] != 'aylyq_test') and not is_month_summary %}
+          {% if (not stream or stream['category'] not in ('aylyq_test', 'baiqau_test')) and not is_month_summary %}
           <a href="{{ url_for('week_plan', week_id=week['id']) }}" class="{{ 'active' if active_page == 'plan' else '' }}"><span class="ic ic-week"></span> Жоспар</a>
           {% endif %}
           {% if not is_month_summary %}
@@ -74,9 +74,6 @@
           {% else %}
           <p class="sidebar-empty-note">Әзірге мұғалім қосылмаған.</p>
           {% endfor %}
-        {% endif %}
-        {% if not (all_teachers is defined) and not (week and stream and stream['category'] in teacher_stats_categories) %}
-        <a href="{{ url_for('teachers_list') }}" class="sidebar-teachers-link{{ ' active' if request.endpoint in ('teachers_list', 'edit_teacher') else '' }}"><span class="ic ic-group"></span> Мұғалімдер</a>
         {% endif %}
       </nav>
       <div class="site-sidebar-footer">
