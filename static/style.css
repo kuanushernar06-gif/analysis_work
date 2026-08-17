@@ -869,6 +869,41 @@ input[type="number"]::-webkit-outer-spin-button {
   border-top: 1px solid var(--border);
 }
 
+.dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 48px 24px;
+  border: 2px dashed var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--page);
+  cursor: pointer;
+  text-align: center;
+  transition: border-color .15s ease, background-color .15s ease;
+  position: relative;
+}
+.dropzone:hover { border-color: var(--accent); }
+.dropzone.is-dragover { border-color: var(--accent); background: var(--accent-soft); }
+.dropzone.has-file { border-style: solid; border-color: var(--good); }
+.dropzone-icon { color: var(--text-muted); }
+.dropzone-icon svg { width: 40px; height: 40px; display: block; }
+.dropzone-text { color: var(--text-secondary); font-size: 0.95rem; line-height: 1.5; }
+.dropzone-link { color: var(--accent); font-weight: 700; text-decoration: underline; }
+.dropzone-filename { font-size: 0.85rem; font-weight: 700; color: var(--text-primary); }
+.dropzone-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* ---------- Tables ---------- */
 .table-scroll { overflow-x: auto; }
 .table {

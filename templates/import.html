@@ -41,12 +41,22 @@
 
 <div class="card">
   {% if stream and stream['category'] == 'baiqau_test' %}
-  <form method="post" action="{{ url_for('upload_results_file', week_id=week['id']) }}" enctype="multipart/form-data" class="form-grid">
-    <label class="col-span-2">
-      Нәтиже файлы (.xlsx)
-      <input type="file" name="results_file" accept=".xlsx" required>
+  <form method="post" action="{{ url_for('upload_results_file', week_id=week['id']) }}" enctype="multipart/form-data" id="results-upload-form">
+    <label class="dropzone" id="results-dropzone" for="results-file-input">
+      <span class="dropzone-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 16V4M12 4L7 9M12 4L17 9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </span>
+      <span class="dropzone-text">
+        Файлды осы аймаққа апарыңыз немесе<br>
+        <span class="dropzone-link">жүктеу үшін басыңыз</span>
+      </span>
+      <span class="dropzone-filename" id="results-filename"></span>
+      <input type="file" name="results_file" id="results-file-input" accept=".xlsx" required class="dropzone-input">
     </label>
-    <div class="col-span-2 import-submit-row">
+    <div class="import-submit-row">
       <button type="submit" class="btn btn-primary">Нәтиже қосу</button>
     </div>
   </form>
@@ -132,4 +142,46 @@
 
 {% block scripts %}
 <script src="{{ url_for('static', filename='import.js') }}"></script>
+<script>
+  (function () {
+    const dropzone = document.getElementById("results-dropzone");
+    const input = document.getElementById("results-file-input");
+    const filenameEl = document.getElementById("results-filename");
+    if (!dropzone || !input || !filenameEl) return;
+
+    function showFilename() {
+      if (input.files && input.files.length) {
+        filenameEl.textContent = input.files[0].name;
+        dropzone.classList.add("has-file");
+      } else {
+        filenameEl.textContent = "";
+        dropzone.classList.remove("has-file");
+      }
+    }
+
+    input.addEventListener("change", showFilename);
+
+    ["dragenter", "dragover"].forEach(function (evt) {
+      dropzone.addEventListener(evt, function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        dropzone.classList.add("is-dragover");
+      });
+    });
+    ["dragleave", "dragend", "drop"].forEach(function (evt) {
+      dropzone.addEventListener(evt, function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        dropzone.classList.remove("is-dragover");
+      });
+    });
+    dropzone.addEventListener("drop", function (e) {
+      const files = e.dataTransfer && e.dataTransfer.files;
+      if (files && files.length) {
+        input.files = files;
+        showFilename();
+      }
+    });
+  })();
+</script>
 {% endblock %}
