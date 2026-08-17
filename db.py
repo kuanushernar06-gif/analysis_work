@@ -77,14 +77,6 @@ CATEGORY_NAV_LABELS = {
 }
 SIDEBAR_CATEGORIES = [(slug, CATEGORY_NAV_LABELS[slug]) for slug, _label, _order in CATEGORIES]
 
-# Мұғалімдер режимінде санат атаулары "АНАЛИЗ" емес "МҰҒАЛІМДЕРІ" деп
-# аталады (бағдарлама/ағын таңдау экрандарында және мұғалімдер сайдбарында).
-CATEGORY_STATS_LABELS = {
-    "sabaq_tapsyru": "САБАҚ ТАПСЫРУ МҰҒАЛІМДЕРІ",
-    "aylyq_test": "АЙЛЫҚ ТЕСТ МҰҒАЛІМДЕРІ",
-    "baiqau_test": "ДЕҢГЕЙЛІК/БАЙҚАУ ТЕСТ МҰҒАЛІМДЕРІ",
-}
-
 # Постгрес (Neon/Vercel) диалектісі
 SCHEMA_PG = """
 CREATE TABLE IF NOT EXISTS programs (

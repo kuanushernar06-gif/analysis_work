@@ -4,9 +4,9 @@
 
 <div class="page-head">
   <div>
-    <a class="back-link" href="{{ url_for('category_picker', category_slug=current_category or columns[0].slug, mode=mode) }}">← Бөлімдер</a>
-    <h1>{{ program['name'] }}{% if mode == 'stats' %} · Мұғалімдер{% endif %}</h1>
-    <p class="muted">{% if current_category %}{{ category_stats_label(current_category) if mode == 'stats' else category_label(current_category) }} · {% endif %}Потокты таңдаңыз.</p>
+    <a class="back-link" href="{{ url_for('category_picker', category_slug=current_category or columns[0].slug) }}">← Бөлімдер</a>
+    <h1>{{ program['name'] }}</h1>
+    <p class="muted">{% if current_category %}{{ category_label(current_category) }} · {% endif %}Потокты таңдаңыз.</p>
   </div>
 </div>
 
@@ -55,11 +55,11 @@
   {% for col in columns %}
   {% set col_index = loop.index0 %}
   <div class="board-col" id="{{ col.slug }}">
-    <h3 class="board-col-title">{{ category_stats_label(col.slug) if mode == 'stats' else col.label }}</h3>
+    <h3 class="board-col-title">{{ col.label }}</h3>
     <div class="board-col-cards">
       {% for item in col.streams %}
       <a class="nav-card nav-card-gradient nav-card-gradient-{{ col_index }}{% if program['slug'] == 'smart' %} nav-card-tarih{% endif %}"
-         href="{{ url_for('stream_detail', stream_id=item.stream['id'], mode=mode) }}">
+         href="{{ url_for('stream_detail', stream_id=item.stream['id']) }}">
         <div class="nav-card-title">{{ item.stream['code'] }}</div>
       </a>
       {% endfor %}

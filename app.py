@@ -4,7 +4,6 @@ import os
 import re
 import secrets
 from datetime import datetime, timedelta
-from urllib.parse import urlparse
 
 from dotenv import load_dotenv
 from flask import Flask, render_template, request, redirect, url_for, g, flash, session, Response, jsonify
@@ -17,10 +16,6 @@ from analysis import (
     compute_report,
     compute_curator_extremes,
     compare_reports,
-    compute_teacher_stats,
-    compute_teacher_stats_for_week,
-    compute_teacher_stream_detail,
-    find_teacher_home_stream,
 )
 from sheets import fetch_workbook, rows_to_dicts, guess_columns, is_summary_row, is_template_sheet, SheetFetchError
 from gdocs import (
@@ -64,7 +59,6 @@ def format_summary_html(text):
 def inject_category_label():
     return {
         "category_label": lambda slug: db.CATEGORY_LABELS.get(slug, slug),
-        "category_stats_label": lambda slug: db.CATEGORY_STATS_LABELS.get(slug, slug),
         "sidebar_categories": db.SIDEBAR_CATEGORIES,
     }
 
@@ -265,15 +259,13 @@ def category_picker(category_slug):
         flash("Санат табылмады.", "error")
         return redirect(url_for("index"))
 
-    mode = request.args.get("mode")
-    category_name = db.CATEGORY_STATS_LABELS[category_slug] if mode == "stats" else db.CATEGORY_LABELS[category_slug]
+    category_name = db.CATEGORY_LABELS[category_slug]
     programs = conn.execute("SELECT * FROM programs ORDER BY sort_order, id").fetchall()
     return render_template(
         "category_picker.html",
         category_slug=category_slug,
         category_name=category_name,
         programs=programs,
-        mode=mode,
     )
 
 
@@ -316,14 +308,12 @@ def program_detail(slug):
         {"slug": cslug, "label": label, "streams": by_category.get(cslug, [])}
         for cslug, label, _order in categories_to_show
     ]
-    mode = request.args.get("mode")
     return render_template(
         "program.html",
         program=program,
         columns=columns,
         current_category=category_slug,
-        show_plan_card=mode != "stats" and (category_slug is None or category_slug == db.DEFAULT_CATEGORY),
-        mode=mode,
+        show_plan_card=category_slug is None or category_slug == db.DEFAULT_CATEGORY,
     )
 
 
@@ -458,135 +448,7 @@ def stream_detail(stream_id):
         )
     months_sorted = sorted(months.items(), key=lambda item: (item[0] is None, item[0]))
 
-    mode = request.args.get("mode")
-    return render_template("stream.html", stream=stream, program=program, months=months_sorted, mode=mode)
-
-
-@app.route("/streams/<int:stream_id>/teachers")
-def stream_teachers(stream_id):
-    conn = get_db()
-    stream = conn.execute("SELECT * FROM streams WHERE id = ?", (stream_id,)).fetchone()
-    if stream is None:
-        flash("Поток табылмады.", "error")
-        return redirect(url_for("index"))
-    program = conn.execute("SELECT * FROM programs WHERE id = ?", (stream["program_id"],)).fetchone()
-
-    teachers = compute_teacher_stats(conn, stream_id)
-    stream_stats_categories = {
-        row["category"]: row["id"]
-        for row in conn.execute(
-            "SELECT id, category FROM streams WHERE program_id = ? AND code = ?",
-            (stream["program_id"], stream["code"]),
-        ).fetchall()
-    }
-
-    return render_template(
-        "stream_teachers.html",
-        stream=stream,
-        program=program,
-        teachers=teachers,
-        stream_stats_categories=stream_stats_categories,
-    )
-
-
-@app.route("/weeks/<int:week_id>/teachers")
-def week_teachers(week_id):
-    """Мұғалімдер шолуының соңғы қадамы: ай/апта таңдалған соң, осы
-    аптаның/айдың нәтижелері бойынша есептелген мұғалім балдарын және
-    осы потоктың (код бойынша, санатқа қарамастан) тіркелген мұғалімдер
-    тізімін көрсетеді. Тіркелмеген/жаңа мұғалім осы жерден тікелей
-    қосылады — Бөлім/Поток қайта таңдаудың қажеті жоқ, өйткені навигация
-    арқылы бұрын шешілген."""
-    conn = get_db()
-    week, stream, program = get_week_context(conn, week_id)
-    if week is None or stream is None:
-        flash("Апта табылмады.", "error")
-        return redirect(url_for("teachers_browse"))
-
-    week_scores = {t["id"]: t for t in compute_teacher_stats_for_week(conn, week_id)}
-
-    all_teachers = conn.execute(
-        "SELECT t.id, t.name FROM teachers t JOIN streams s ON s.id = t.stream_id "
-        "WHERE s.program_id = ? AND s.code = ? ORDER BY t.name",
-        (stream["program_id"], stream["code"]),
-    ).fetchall()
-    teachers = [
-        {
-            "id": t["id"],
-            "name": t["name"],
-            "avg_score": week_scores.get(t["id"], {}).get("avg_score"),
-            "curator_count": week_scores.get(t["id"], {}).get("curator_count", 0),
-            "total_curators": week_scores.get(t["id"], {}).get(
-                "total_curators",
-                conn.execute(
-                    "SELECT COUNT(*) AS c FROM teacher_curators WHERE teacher_id = ?", (t["id"],)
-                ).fetchone()["c"],
-            ),
-        }
-        for t in all_teachers
-    ]
-
-    default_stream = conn.execute(
-        "SELECT id FROM streams WHERE program_id = ? AND code = ? AND category = ?",
-        (stream["program_id"], stream["code"], db.DEFAULT_CATEGORY),
-    ).fetchone()
-    add_stream_id = default_stream["id"] if default_stream else stream["id"]
-
-    stream_stats_categories = {
-        row["category"]: row["id"]
-        for row in conn.execute(
-            "SELECT id, category FROM streams WHERE program_id = ? AND code = ?",
-            (stream["program_id"], stream["code"]),
-        ).fetchall()
-    }
-
-    # base.html сайдбары "week" контекст айнымалысы болса, осы аптаның
-    # Жоспар/Импорт/Ортақ анализ сілтемелерін көрсетеді — бұл мұғалімдер
-    # бетінде орынсыз, сол себепті "current_week" деп бөлек атаумен береміз.
-    return render_template(
-        "week_teachers.html",
-        current_week=week,
-        stream=stream,
-        program=program,
-        teachers=teachers,
-        add_stream_id=add_stream_id,
-        stream_stats_categories=stream_stats_categories,
-    )
-
-
-@app.route("/streams/<int:stream_id>/teachers/<int:teacher_id>")
-def teacher_detail(stream_id, teacher_id):
-    conn = get_db()
-    stream = conn.execute("SELECT * FROM streams WHERE id = ?", (stream_id,)).fetchone()
-    if stream is None:
-        flash("Поток табылмады.", "error")
-        return redirect(url_for("index"))
-    program = conn.execute("SELECT * FROM programs WHERE id = ?", (stream["program_id"],)).fetchone()
-
-    sibling_streams = conn.execute(
-        "SELECT id, category FROM streams WHERE program_id = ? AND code = ?",
-        (stream["program_id"], stream["code"]),
-    ).fetchall()
-
-    category_streams = {}
-    for row in sibling_streams:
-        max_score, _target_score = db.score_defaults_for(program["slug"], row["category"])
-        category_streams[row["category"]] = {"stream_id": row["id"], "max_score": max_score}
-
-    detail = compute_teacher_stream_detail(conn, teacher_id, category_streams)
-    if detail["teacher"] is None:
-        flash("Мұғалім табылмады.", "error")
-        return redirect(url_for("stream_teachers", stream_id=stream_id))
-
-    stream_stats_categories = {row["category"]: row["id"] for row in sibling_streams}
-
-    return render_template(
-        "teacher_detail.html",
-        stream=stream,
-        program=program,
-        detail=detail,
-        stream_stats_categories=stream_stats_categories,
-    )
+    return render_template("stream.html", stream=stream, program=program, months=months_sorted)
 
 
 def _teacher_stream_picker_data(conn):
@@ -604,25 +466,6 @@ def _teacher_stream_picker_data(conn):
     for r in rows:
         streams_by_program.setdefault(r["program_slug"], []).append({"id": r["id"], "code": r["code"]})
     return programs, streams_by_program
-
-
-@app.route("/teachers/browse")
-def teachers_browse():
-    """Мұғалімдер статистикасына шолу: бөлімді таңдаудан бастап (одан әрі
-    /programs/<slug>?mode=stats арқылы санат+поток, содан кейін
-    /streams/<id>?mode=stats арқылы ай/апта, соңында /weeks/<id>/teachers
-    бетіне жеткізеді). Бұл бетке сайттың әр жерінен (сайдбар, жоғарғы оң
-    жақ) кіруге болатындықтан, "артқа" сілтемесі әрдайым басты бетке
-    емес, дәл осы жерге қай беттен келгеніне қарай апарады."""
-    conn = get_db()
-    programs = conn.execute("SELECT * FROM programs ORDER BY sort_order, id").fetchall()
-    back_url = url_for("index")
-    referrer = request.referrer
-    if referrer:
-        parsed = urlparse(referrer)
-        if parsed.netloc == request.host:
-            back_url = parsed.path + (f"?{parsed.query}" if parsed.query else "")
-    return render_template("teachers_browse.html", programs=programs, back_url=back_url)
 
 
 @app.route("/teachers")
@@ -679,45 +522,6 @@ def teachers_list():
         active_teacher_id=None,
         programs=programs,
         streams_by_program=streams_by_program,
-    )
-
-
-@app.route("/teachers/<int:teacher_id>")
-def teacher_home(teacher_id):
-    conn = get_db()
-    teacher = conn.execute("SELECT * FROM teachers WHERE id = ?", (teacher_id,)).fetchone()
-    if teacher is None:
-        flash("Мұғалім табылмады.", "error")
-        return redirect(url_for("teachers_list"))
-
-    stream_id = teacher["stream_id"] or find_teacher_home_stream(conn, teacher_id)
-    if stream_id is None:
-        flash("Бұл мұғалімнің кураторларының нәтижесі әлі табылған жоқ.", "error")
-        return redirect(url_for("teachers_list"))
-
-    stream = conn.execute("SELECT * FROM streams WHERE id = ?", (stream_id,)).fetchone()
-    program = conn.execute("SELECT * FROM programs WHERE id = ?", (stream["program_id"],)).fetchone()
-
-    sibling_streams = conn.execute(
-        "SELECT id, category FROM streams WHERE program_id = ? AND code = ?",
-        (stream["program_id"], stream["code"]),
-    ).fetchall()
-    category_streams = {}
-    for row in sibling_streams:
-        max_score, _target_score = db.score_defaults_for(program["slug"], row["category"])
-        category_streams[row["category"]] = {"stream_id": row["id"], "max_score": max_score}
-
-    detail = compute_teacher_stream_detail(conn, teacher_id, category_streams)
-
-    all_teachers = conn.execute("SELECT id, name FROM teachers ORDER BY name").fetchall()
-
-    return render_template(
-        "teacher_detail.html",
-        stream=stream,
-        program=program,
-        detail=detail,
-        all_teachers=all_teachers,
-        active_teacher_id=teacher_id,
     )
 
 
