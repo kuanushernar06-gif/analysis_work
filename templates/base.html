@@ -35,8 +35,8 @@
   {% block header %}{% endblock %}
 
   {% block body %}
-  <div class="site-shell{% if request.endpoint in ('index', 'category_picker', 'program_detail', 'stream_detail') %} no-sidebar{% endif %}">
-    {% if request.endpoint not in ('index', 'category_picker', 'program_detail', 'stream_detail') %}
+  <div class="site-shell{% if request.endpoint in ('index', 'category_picker', 'program_detail', 'stream_detail', 'teachers_browse') %} no-sidebar{% endif %}">
+    {% if request.endpoint not in ('index', 'category_picker', 'program_detail', 'stream_detail', 'teachers_browse') %}
     <aside class="site-sidebar no-print">
       <button type="button" class="sidebar-pin-toggle no-print" id="sidebar-pin-toggle" aria-pressed="false" aria-label="Бүйірлік мәзірді ашық қалдыру">
         <span class="sidebar-pin-arrow" aria-hidden="true"></span>
@@ -87,8 +87,10 @@
     </div>
     {% else %}
       <div class="top-right-actions no-print">
-        {% if request.endpoint != 'index' %}
+        {% if request.endpoint not in ('index', 'teachers_browse') %}
         <a class="top-right-chip" href="{{ url_for('teachers_browse') }}">МҰҒАЛІМДЕР</a>
+        {% endif %}
+        {% if request.endpoint != 'index' %}
         <a class="top-right-chip" href="{{ url_for('index') }}">БАСТЫ БЕТКЕ ӨТУ</a>
         {% endif %}
         {% if request.endpoint == 'index' %}

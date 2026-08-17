@@ -4,6 +4,7 @@ import os
 import re
 import secrets
 from datetime import datetime, timedelta
+from urllib.parse import urlparse
 
 from dotenv import load_dotenv
 from flask import Flask, render_template, request, redirect, url_for, g, flash, session, Response, jsonify
@@ -610,10 +611,18 @@ def teachers_browse():
     """Мұғалімдер статистикасына шолу: бөлімді таңдаудан бастап (одан әрі
     /programs/<slug>?mode=stats арқылы санат+поток, содан кейін
     /streams/<id>?mode=stats арқылы ай/апта, соңында /weeks/<id>/teachers
-    бетіне жеткізеді)."""
+    бетіне жеткізеді). Бұл бетке сайттың әр жерінен (сайдбар, жоғарғы оң
+    жақ) кіруге болатындықтан, "артқа" сілтемесі әрдайым басты бетке
+    емес, дәл осы жерге қай беттен келгеніне қарай апарады."""
     conn = get_db()
     programs = conn.execute("SELECT * FROM programs ORDER BY sort_order, id").fetchall()
-    return render_template("teachers_browse.html", programs=programs)
+    back_url = url_for("index")
+    referrer = request.referrer
+    if referrer:
+        parsed = urlparse(referrer)
+        if parsed.netloc == request.host:
+            back_url = parsed.path + (f"?{parsed.query}" if parsed.query else "")
+    return render_template("teachers_browse.html", programs=programs, back_url=back_url)
 
 
 @app.route("/teachers")
