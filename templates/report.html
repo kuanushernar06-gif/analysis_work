@@ -48,9 +48,12 @@
     </div>
     {% endif %}
     <div class="stat-tile">
-      <div class="stat-value">{{ report.overall_avg_score }}</div>
+      <div class="stat-value">
+        {% if report.overall_avg_percent is not none %}{{ report.overall_avg_percent }}%{% else %}—{% endif %}
+        <span class="stat-value-sub">{{ report.overall_avg_score }} балл</span>
+      </div>
       {{ delta(comparison.avg_score if comparison else none) }}
-      <div class="stat-label">Ортақ орташа балл (шикі)</div>
+      <div class="stat-label">Ортақ орташа балл</div>
     </div>
     <div class="stat-tile stat-good">
       <div class="stat-value">{{ report.max_achiever_students }}</div>
@@ -62,6 +65,12 @@
       {{ delta(comparison.zero_students if comparison else none) }}
       <div class="stat-label">0 балл жинаған оқушы</div>
     </div>
+    {% if stream and stream['category'] == 'baiqau_test' %}
+    <div class="stat-tile stat-warn">
+      <div class="stat-value">{{ report.fail_unique_students }}</div>
+      <div class="stat-label">Шектік баллға жетпеген оқушы (өту шегі: {{ report.passing_score }} балл)</div>
+    </div>
+    {% endif %}
     {% if best_curator %}
     <div class="stat-tile stat-good">
       <div class="stat-value">{{ '%.2f'|format(best_curator.avg_score) }}</div>
@@ -76,6 +85,7 @@
     {% endif %}
   </div>
 
+  {% if not (stream and stream['category'] == 'baiqau_test') %}
   <h3>Лига бойынша үлес</h3>
   <div class="stat-grid">
     <div class="stat-tile">
@@ -112,6 +122,7 @@
     <button type="submit" class="btn btn-outline btn-small">Жаңарту</button>
   </form>
   <p class="chart-legend-note">Балл кестені импорттау кезіндегі максимум баллға қатысты пайызға автоматты айналдырылады.</p>
+  {% endif %}
 
   {% if not is_month_summary %}
   <div class="import-submit-row no-print" id="clear-results-area">

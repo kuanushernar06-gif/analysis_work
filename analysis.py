@@ -8,6 +8,11 @@ DEFAULT_GOLD_PERCENT = 90.0
 DEFAULT_SILVER_PERCENT = 70.0
 WORST_TOPICS_LIMIT = 10
 
+# ДЕҢГЕЙЛІК/БАЙҚАУ ТЕСТ санатында өту шегі пәнге қарамастан 5 балл деп
+# бекітілген (curator қолмен "Қола шегі" енгізетін UI сол санатта жоқ,
+# сондықтан week['passing_score'] бос болғанда осы әдепкі қолданылады).
+CATEGORY_PASSING_SCORE_DEFAULTS = {"baiqau_test": 5}
+
 
 def _percent(score, max_score):
     if score is None or max_score in (None, 0):
@@ -58,12 +63,22 @@ def compute_report(conn, week_id, combine_week_ids=None):
     ).fetchall()
 
     ref_max_score = _reference_max_score(results)
-    passing_percent = _raw_threshold_to_percent(week["passing_score"], ref_max_score, DEFAULT_PASSING_PERCENT)
+
+    passing_score = week["passing_score"]
+    if passing_score is None and week["stream_id"] is not None:
+        stream_row = conn.execute(
+            "SELECT category FROM streams WHERE id = ?", (week["stream_id"],)
+        ).fetchone()
+        if stream_row is not None:
+            passing_score = CATEGORY_PASSING_SCORE_DEFAULTS.get(stream_row["category"])
+
+    passing_percent = _raw_threshold_to_percent(passing_score, ref_max_score, DEFAULT_PASSING_PERCENT)
     gold_percent = _raw_threshold_to_percent(week["gold_threshold"], ref_max_score, DEFAULT_GOLD_PERCENT)
     silver_percent = _raw_threshold_to_percent(week["silver_threshold"], ref_max_score, DEFAULT_SILVER_PERCENT)
 
     report = {
         "week": week,
+        "passing_score": passing_score,
         "passing_percent": passing_percent,
         "gold_percent": gold_percent,
         "silver_percent": silver_percent,

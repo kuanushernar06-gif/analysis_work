@@ -1105,6 +1105,7 @@ details[open] > .note-head::before { content: "▾"; }
 }
 .stat-tile:hover { transform: translateY(-2px); box-shadow: var(--shadow-lift); }
 .stat-value { font-size: 1.95rem; font-weight: 800; letter-spacing: -0.035em; line-height: 1.1; }
+.stat-value-sub { display: block; font-size: 0.9rem; font-weight: 600; letter-spacing: normal; color: var(--text-muted); margin-top: 2px; }
 .stat-label { font-size: 0.78rem; color: var(--text-muted); margin-top: 5px; line-height: 1.4; }
 .stat-warn { border-left-color: var(--critical); }
 .stat-warn .stat-value { color: var(--critical); }
