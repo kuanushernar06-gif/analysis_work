@@ -4,6 +4,7 @@ import os
 import re
 import secrets
 from datetime import datetime, timedelta
+from urllib.parse import urlparse
 
 from dotenv import load_dotenv
 from flask import Flask, render_template, request, redirect, url_for, g, flash, session, Response, jsonify
@@ -515,6 +516,13 @@ def teachers_list():
 
     programs, streams_by_program = _teacher_stream_picker_data(conn)
 
+    back_url = url_for("index")
+    referrer = request.referrer
+    if referrer:
+        parsed = urlparse(referrer)
+        if parsed.netloc == request.host:
+            back_url = parsed.path + (f"?{parsed.query}" if parsed.query else "")
+
     return render_template(
         "teachers.html",
         teachers=teachers,
@@ -522,6 +530,7 @@ def teachers_list():
         active_teacher_id=None,
         programs=programs,
         streams_by_program=streams_by_program,
+        back_url=back_url,
     )
 
 
