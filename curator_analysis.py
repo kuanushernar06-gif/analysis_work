@@ -37,7 +37,13 @@ SCHEMA_HINT = """{
   "curator_count": (осы бөліктегі кураторлар саны, бүтін сан немесе null),
   "main_goal": "(осы аптаның негізгі мақсаты, қысқа сөйлем)",
   "top_error_topics": [{"name": "...", "percent": 0-100}, ...] (көбіне 5-ке дейін),
-  "low_result_reasons": [{"name": "...", "percent": 0-100}, ...] (көбіне 5-ке дейін),
+  "low_result_reasons": [{"name": "...", "percent": 0-100}, ...] (тек оқушылардың
+    НЕГЕ ТӨМЕН нәтиже көрсеткені туралы кураторлар жазбада көрсеткен нақты
+    себептер, мыс. дайындықтың жеткіліксіздігі, материалды түсінбеу; көбіне
+    5-ке дейін),
+  "high_result_reasons": [{"name": "...", "percent": 0-100}, ...] (тек оқушылардың
+    НЕГЕ ЖОҒАРЫ нәтиже көрсеткені туралы кураторлар жазбада көрсеткен нақты
+    себептер, мыс. қосымша дайындық, жүйелі қайталау; көбіне 5-ке дейін),
   "curator_mistakes": [{"name": "...", "percent": 0-100}, ...] (көбіне 5-ке дейін),
   "top_solutions": [{"name": "...", "percent": 0-100}, ...] (көбіне 10-ға дейін),
   "priority_directions": ["...", ...] (келесі аптаға басымдық берілетін 5-ке дейін бағыт),
@@ -69,6 +75,11 @@ PROMPT_TEMPLATE = """Сен білім беру ұйымының деректе�
 тақырыпты немесе себепті атады). Мәтінде сан ретінде шығаруға жеткілікті
 дерек болмаса, тиісті өрісті null немесе бос тізім қалдыр — ойдан сан
 құрастырма.
+
+low_result_reasons бен high_result_reasons екеуін МІНДЕТТІ түрде бөлек ұста
+және араластырма: low_result_reasons — тек ТӨМЕН нәтиже себептері,
+high_result_reasons — тек ЖОҒАРЫ нәтиже себептері. Бір себеп екі тізімде
+қатар болмауы керек.
 
 Әр куратордың жазбасын жеке-жеке тексер: егер куратордың атынан кейін жазба
 мүлдем бос болса (немесе "жоқ", "-" секілді мазмұнсыз белгі ғана болса), оның
@@ -148,6 +159,23 @@ def _join_names(items, limit=5):
     return "; ".join(joined)
 
 
+def _join_names_with_percent(items, limit=5):
+    """_join_names-пен бірдей, бірақ әр себептің қасына сол себепті атаған
+    кураторлардың пайызын жақшамен қоса көрсетеді (мыс. 'дайындықтың
+    жеткіліксіздігі (25%)') — куратор анализі бойынша нақты нешеу куратор
+    осы себепті атағанын көрсету үшін."""
+    entries = [(i.get("name"), i.get("percent")) for i in (items or [])[:limit] if i.get("name")]
+    if not entries:
+        return "—"
+    parts = []
+    for idx, (name, percent) in enumerate(entries):
+        text = name if idx == 0 else _lowercase_first(name)
+        if percent is not None:
+            text = f"{text} ({percent}%)"
+        parts.append(text)
+    return "; ".join(parts)
+
+
 def _join_plain_names(names):
     names = [n for n in (names or []) if n]
     return "; ".join(names) if names else "Жоқ"
@@ -172,7 +200,8 @@ def build_summary_text(report, analysis: dict, label: str = "СТ") -> str:
         f"Алдын алу шаралары жасалды ма: {analysis.get('prevention_measures_taken') or 'Белгісіз'}",
         f"Анализ толтырмаған кураторлар: {_join_plain_names(analysis.get('missing_analysis_curators'))}",
         f"Алдын алу шаралары жасалмаған кураторлар: {_join_plain_names(analysis.get('no_prevention_curators'))}",
-        f"Оқушылар неге төмен/жоғары нәтиже көрсетті: {_join_names(analysis.get('low_result_reasons'))}",
+        f"Неге төмен нәтиже көрсетті: {_join_names_with_percent(analysis.get('low_result_reasons'))}",
+        f"Неге жоғары нәтиже көрсетті: {_join_names_with_percent(analysis.get('high_result_reasons'))}",
         f"Кураторлар тарапынан жіберген қателіктер: {_join_names(analysis.get('curator_mistakes'))}",
         f"Алдын алу шаралары: {_join_names(analysis.get('top_solutions'), limit=10)}",
     ]
@@ -345,6 +374,7 @@ def merge_analyses(chunk_analyses):
         "main_goal": next((a.get("main_goal") for a in chunk_analyses if a.get("main_goal")), None),
         "top_error_topics": merge_field("top_error_topics", "name", 5),
         "low_result_reasons": merge_field("low_result_reasons", "name", 5),
+        "high_result_reasons": merge_field("high_result_reasons", "name", 5),
         "curator_mistakes": merge_field("curator_mistakes", "name", 5),
         "top_solutions": merge_field("top_solutions", "name", 10),
         "priority_directions": priorities[:5],
