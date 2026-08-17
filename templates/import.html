@@ -11,6 +11,13 @@
 </div>
 
 <div class="card">
+  {% if stream and stream['category'] == 'baiqau_test' %}
+  <p class="section-intro">
+    Нәтиже файлын (Excel, .xlsx) осында жүктеңіз. Файлдың бірінші бағаны — оқушының аты-жөні,
+    ал одан кейінгі әр баған бөлек пән ретінде қаралады (сол бағандағы сан — сол пәннен алған
+    балл). Бос немесе «-» ұяшықтар өткізіп жіберіледі.
+  </p>
+  {% else %}
   <p class="section-intro">
     Рейтинг сілтемесін (Google Sheets кестесін) «Файл → Ортаққа бөлу → Сілтемесі бар кез келген
     адам → Көруші» етіп ашық қылып қойыңыз да, сілтемесін осында қойыңыз. Кестеде әр куратордың
@@ -22,6 +29,7 @@
     шығару» батырмасын бір-ақ рет басыңыз — сайт барлық рейтингті бірден өңдеп, нәтижесін
     «Ортақ анализ» бетінде біріктіреді.
   </p>
+  {% endif %}
   {% if week['max_score'] is not none %}
   <p class="muted">
     {{ program['name'] }} бағдарламасының бекітілген максимум баллы —
@@ -32,6 +40,17 @@
 </div>
 
 <div class="card">
+  {% if stream and stream['category'] == 'baiqau_test' %}
+  <form method="post" action="{{ url_for('upload_results_file', week_id=week['id']) }}" enctype="multipart/form-data" class="form-grid">
+    <label class="col-span-2">
+      Нәтиже файлы (.xlsx)
+      <input type="file" name="results_file" accept=".xlsx" required>
+    </label>
+    <div class="col-span-2 import-submit-row">
+      <button type="submit" class="btn btn-primary">Нәтиже қосу</button>
+    </div>
+  </form>
+  {% else %}
   <form method="post" action="{{ url_for('import_sheet', week_id=week['id']) }}" id="import-form">
     <div id="rating-rows"></div>
     <p id="rating-empty-hint" class="muted">Әзірге рейтинг қосылмаған. Бастау үшін төмендегі батырманы басыңыз.</p>
@@ -42,6 +61,7 @@
       <button type="submit" class="btn btn-primary">Анализ шығару</button>
     </div>
   </form>
+  {% endif %}
 </div>
 
 {% if not (stream and stream['category'] == 'baiqau_test') %}

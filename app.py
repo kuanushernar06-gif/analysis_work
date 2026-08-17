@@ -19,7 +19,15 @@ from analysis import (
     compare_reports,
     compute_teacher_stats_for_week,
 )
-from sheets import fetch_workbook, rows_to_dicts, guess_columns, is_summary_row, is_template_sheet, SheetFetchError
+from sheets import (
+    fetch_workbook,
+    rows_to_dicts,
+    guess_columns,
+    is_summary_row,
+    is_template_sheet,
+    parse_results_file,
+    SheetFetchError,
+)
 from gdocs import (
     fetch_doc_text,
     DocFetchError,
@@ -1042,6 +1050,49 @@ def import_sheet(week_id):
         if total_skipped:
             summary += f" {total_skipped} жол балл дұрыс емес болғандықтан өткізіп жіберілді."
         flash(summary, "ok")
+    return redirect(url_for("week_import", week_id=week_id))
+
+
+@app.route("/weeks/<int:week_id>/results/upload", methods=["POST"])
+def upload_results_file(week_id):
+    conn = get_db()
+    week, stream, program = get_week_context(conn, week_id)
+    if week is None:
+        flash("Апта табылмады.", "error")
+        return redirect(url_for("index"))
+    if stream is None or stream["category"] != "baiqau_test":
+        flash("Бұл әрекет тек ДЕҢГЕЙЛІК/БАЙҚАУ ТЕСТ санатында қолжетімді.", "error")
+        return redirect(url_for("week_import", week_id=week_id))
+
+    file = request.files.get("results_file")
+    if file is None or not file.filename:
+        flash("Файл таңдаңыз.", "error")
+        return redirect(url_for("week_import", week_id=week_id))
+
+    try:
+        entries = parse_results_file(file.read())
+    except SheetFetchError as e:
+        flash(str(e), "error")
+        return redirect(url_for("week_import", week_id=week_id))
+
+    default_max_score = db.score_defaults_for(program["slug"], stream["category"])[0] if program else None
+
+    import_id = conn.execute(
+        "INSERT INTO imports (week_id, sheet_url, sheet_count, row_count, skipped_count) "
+        "VALUES (?, ?, 1, 0, 0) RETURNING id",
+        (week_id, file.filename),
+    ).fetchone()["id"]
+
+    for entry in entries:
+        conn.execute(
+            "INSERT INTO results (week_id, import_id, curator, student, subject, topic, score, max_score) "
+            "VALUES (?, ?, NULL, ?, ?, NULL, ?, ?)",
+            (week_id, import_id, entry["student"], entry["subject"], entry["score"], default_max_score),
+        )
+    conn.execute("UPDATE imports SET row_count = ? WHERE id = ?", (len(entries), import_id))
+    conn.commit()
+
+    flash(f"Файл өңделді, {len(entries)} нәтиже қосылды.", "ok")
     return redirect(url_for("week_import", week_id=week_id))
 
 

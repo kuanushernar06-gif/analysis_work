@@ -68,6 +68,64 @@ def fetch_workbook(raw_url: str):
     return sheets
 
 
+def parse_results_file(file_bytes):
+    """ДЕҢГЕЙЛІК/БАЙҚАУ ТЕСТ санатына жүктелген нәтиже файлын (.xlsx) оқиды.
+    Мұнда куратор парақтары жоқ — бір ғана кесте: бірінші баған оқушының
+    аты-жөні, ал одан кейінгі әр баған бөлек пән ретінде қаралады (баған
+    атауы — пән аты, ондағы сан — сол пәннен алған балл). Бос/'-' ұяшықтар
+    және сан емес бағандар (мыс. күн/топ метадеректері) өткізіп жіберіледі
+    — олардың бірде-бір ұяшығында сан болмағандықтан нәтижеге қосылмайды.
+    'Орташа балл' сияқты қорытынды жол да (is_summary_row) өткізіледі.
+    Қайтарады: [{"student":.., "subject":.., "score":..}, ...]."""
+    try:
+        wb = openpyxl.load_workbook(io.BytesIO(file_bytes), data_only=True, read_only=True)
+    except Exception as e:
+        raise SheetFetchError(f"Файлды оқу сәтсіз аяқталды: {e}") from e
+
+    ws = wb.worksheets[0]
+    rows = [list(row) for row in ws.iter_rows(values_only=True)]
+    while rows and all(cell is None or str(cell).strip() == "" for cell in rows[-1]):
+        rows.pop()
+    if len(rows) < 2:
+        raise SheetFetchError("Файлда деректер табылмады.")
+
+    header = [str(h).strip() if h is not None else "" for h in rows[0]]
+    lower_header = [h.lower() for h in header]
+    body = rows[1:]
+
+    student_idx = _find_by_keywords(lower_header, STUDENT_KEYWORDS)
+    if student_idx is None:
+        student_idx = 0
+
+    entries = []
+    for row in body:
+        student_cell = row[student_idx] if student_idx < len(row) else None
+        student = str(student_cell).strip() if student_cell is not None else ""
+        if not student or is_summary_row(student):
+            continue
+        for i, subject_name in enumerate(header):
+            if i == student_idx or not subject_name or i >= len(row):
+                continue
+            raw = row[i]
+            if raw is None:
+                continue
+            if isinstance(raw, (int, float)):
+                score = float(raw)
+            else:
+                text = str(raw).strip()
+                if text in ("", "-", "—"):
+                    continue
+                try:
+                    score = float(text.replace(",", "."))
+                except ValueError:
+                    continue
+            entries.append({"student": student, "subject": subject_name, "score": score})
+
+    if not entries:
+        raise SheetFetchError("Файлдан бірде-бір дұрыс нәтиже табылмады.")
+    return entries
+
+
 def rows_to_dicts(rows):
     header = [h.strip() for h in rows[0]]
     body = rows[1:]

@@ -45,9 +45,9 @@ PROGRAM_MAX_SCORE = {"smart": 15, "junior": 10}
 PROGRAM_TARGET_SCORE = {"smart": 12, "junior": 7}
 
 # АЙЛЫҚ ТЕСТ АНАЛИЗ бен ДЕҢГЕЙЛІК/БАЙҚАУ ТЕСТ АНАЛИЗ санаттарында мақсат
-# балл жоқ, ал максимум балл бағдарламаға қарамастан бірдей (30) — САБАҚ
+# балл жоқ, ал максимум балл бағдарламаға қарамастан бірдей — САБАҚ
 # ТАПСЫРУ АНАЛИЗ-дан өзгеше бекітілген үлгі.
-CATEGORY_MAX_SCORE_OVERRIDE = {"aylyq_test": 30, "baiqau_test": 30}
+CATEGORY_MAX_SCORE_OVERRIDE = {"aylyq_test": 30, "baiqau_test": 20}
 CATEGORY_TARGET_SCORE_OVERRIDE = {"aylyq_test": None, "baiqau_test": None}
 
 
