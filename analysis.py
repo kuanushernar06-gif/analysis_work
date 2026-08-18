@@ -405,24 +405,74 @@ def compute_program_overview(conn, program_id):
 _NAME_SPLIT_RE = re.compile(r"[.\s]+")
 
 
-def _curator_name_tokens(name):
-    """Атты бас әріпке келтіріп, бос орын мен нүкте бойынша сөздерге бөледі
-    (мыс. 'І.Нұрайым' -> {'І', 'НҰРАЙЫМ'}, 'Ілияс Нұрайым Қайратқызы' ->
-    {'ІЛИЯС', 'НҰРАЙЫМ', 'ҚАЙРАТҚЫЗЫ'}) — рейтинг кестесіндегі куратор аты
-    (әдетте бір ғана есім) мен мұғалім тіркеген толық аты-жөнді салыстыру
-    үшін, дәл сәйкестікті емес, ортақ сөз бар-жоғын тексереміз."""
-    return {t for t in _NAME_SPLIT_RE.split((name or "").upper()) if len(t) > 1}
+def _compact_name(name):
+    """Атты бас әріпке келтіріп, әріп еместердің бәрін (бос орын, нүкте,
+    сан, сызықша) алып тастайды — мыс. 'Ернар Қ2' -> 'ЕРНАРҚ'. Осылай
+    рейтинг парағының атауы топ нөмірімен/қосымша белгімен жазылса да
+    (мыс. 'Нұрғазы2', 'НҰРҒАЗЫ-топ') салыстыруға дайын пішінге келеді."""
+    return "".join(ch for ch in (name or "").upper() if ch.isalpha())
 
 
-def _teacher_name_matches(teacher_tokens, curator_raw):
-    """Мұғалімге тіркелген аттың кез келген сөзі осы куратордың нақты
-    атауының (рейтинг кестесіндегі парақ атауының) ІШІНДЕ жол ретінде
-    кездессе де сәйкес деп есептейді — тек екі жақ та бөлек сөзге бөлініп,
-    дәл сол сөз болуын емес. Бұл парақ атауы бөлгішсіз қосымша әріп/сан/
-    топ атымен жазылған жағдайда да (мыс. 'Нұрғазы2', 'НҰРҒАЗЫ-топ')
-    танылуы үшін керек; бас-кіші әріпке қарамайды."""
-    raw_upper = (curator_raw or "").upper()
-    return any(tok in raw_upper for tok in teacher_tokens)
+def _registered_name_candidates(name):
+    """Мұғалім тіркеген 'Тегі Аты' пішініндегі атынан (мыс. 'Қуаныш Ернар')
+    рейтинг парағынан ІЗДЕУ басымдығы бойынша кілттер қайтарады:
+    1) 'Аты + Тегінің бас әрпі' біріктірілген түрде (мыс. 'ЕРНАРҚ') —
+       рейтинг парағында көбіне дәл осылай ('Ернар Қ') жазылады;
+    2) тек 'Аты' (мыс. 'ЕРНАР') — біріншісі сәйкес келмесе, соңғы амал
+       ретінде.
+    Бір сөзден тұратын атаулар үшін тек сол бір кілт қайтарылады."""
+    parts = [p for p in _NAME_SPLIT_RE.split((name or "").strip()) if p]
+    if len(parts) >= 2:
+        surname, firstname = parts[0], parts[1]
+        primary = _compact_name(firstname + surname[0])
+        fallback = _compact_name(firstname)
+        candidates = [primary]
+        if fallback and fallback != primary:
+            candidates.append(fallback)
+        return candidates
+    if parts:
+        return [_compact_name(parts[0])]
+    return []
+
+
+def _match_teacher_curators(teacher_curator_names_by_id, actual_curator_names):
+    """Әр мұғалімнің тіркелген куратор аттарын (teacher_id -> [cname, ...])
+    рейтинг парағындағы НАҚТЫ куратор аттарымен (actual_curator_names)
+    сәйкестендіреді. Екі кезеңмен жүреді: алдымен БАРЛЫҚ мұғалім үшін тек
+    қатаң 'Аты+Тегінің бас әрпі' кілтін тексереді, содан кейін ғана
+    әлі сәйкессіз қалғандарға 'тек Аты' кілтін қолданады — осылай бір
+    нақты куратор аты кездейсоқ екі басқа мұғалімге қатар 'ұрланып'
+    кетпейді (қатаң сәйкестік әрқашан бос сәйкестіктен басым болады).
+    Қайтарады: {teacher_id: {registered_cname: actual_curator_name}}."""
+    actual_compact = {name: _compact_name(name) for name in actual_curator_names}
+    teacher_candidates = {
+        teacher_id: [(cname, _registered_name_candidates(cname)) for cname in cnames]
+        for teacher_id, cnames in teacher_curator_names_by_id.items()
+    }
+
+    claimed_by_actual = {}
+    matches_by_teacher = {teacher_id: {} for teacher_id in teacher_curator_names_by_id}
+
+    max_rounds = max((len(c) for cands in teacher_candidates.values() for _, c in cands), default=0)
+    for round_idx in range(max_rounds):
+        for teacher_id, candidates in teacher_candidates.items():
+            for cname, cand_list in candidates:
+                if cname in matches_by_teacher[teacher_id]:
+                    continue
+                if round_idx >= len(cand_list):
+                    continue
+                candidate = cand_list[round_idx]
+                if not candidate:
+                    continue
+                for actual_name in actual_curator_names:
+                    if actual_name in claimed_by_actual:
+                        continue
+                    if actual_compact[actual_name].startswith(candidate):
+                        claimed_by_actual[actual_name] = teacher_id
+                        matches_by_teacher[teacher_id][cname] = actual_name
+                        break
+
+    return matches_by_teacher
 
 
 WEAK_STUDENT_MAX_SCORE = 3
@@ -476,21 +526,19 @@ def compute_teacher_stats_for_week(conn, week_id, combine_week_ids=None):
         (week["stream_id"],),
     ).fetchall():
         curator_names_by_teacher.setdefault(r["teacher_id"], []).append(r["curator_name"])
+    # Барлық мұғалім үшін бос жазба (curator тізімі жоқ) болса да, глобал
+    # сәйкестендіру функциясы дұрыс жұмыс істеуі үшін кілт ретінде болу керек.
+    for t in teacher_rows:
+        curator_names_by_teacher.setdefault(t["id"], [])
+
+    matches_by_teacher = _match_teacher_curators(curator_names_by_teacher, list(curator_avg.keys()))
 
     teachers = []
     for t in teacher_rows:
         curator_names = curator_names_by_teacher.get(t["id"], [])
-        matched_scores = []
-        used_curators = set()
-        for cname in curator_names:
-            cname_tokens = _curator_name_tokens(cname)
-            for actual_name, avg in curator_avg.items():
-                if actual_name in used_curators:
-                    continue
-                if _teacher_name_matches(cname_tokens, actual_name):
-                    matched_scores.append(avg)
-                    used_curators.add(actual_name)
-                    break
+        teacher_matches = matches_by_teacher.get(t["id"], {})
+        used_curators = set(teacher_matches.values())
+        matched_scores = [curator_avg[actual_name] for actual_name in used_curators]
 
         student_scores = {}
         student_curator = {}
