@@ -415,14 +415,16 @@ def _teacher_name_matches(teacher_tokens, curator_raw):
 
 def compute_teacher_stats_for_week(conn, week_id, combine_week_ids=None):
     """Осы аптаның (немесе, combine_week_ids берілсе, бірнеше аптаның
-    біріктірілген) нәтижелері бойынша, әр мұғалімнің өз кураторларының
-    (teacher_curators-та тіркелген) ортақ балдарының орташасын мұғалімнің
-    ортақ балы ретінде қайтарады. Куратор аты рейтинг кестесінде қысқа
-    (мыс. бір есім) жазылатындықтан, мұғалімге тіркелген толық аты-жөнмен
-    ДӘЛ сәйкес келуін емес, ортақ сөз (аты/тегі) бар-жоғын тексереміз. Осы
-    аптада бірде-бір куратор нәтижесі жоқ мұғалімдер тізімге кірмейді."""
-    week = conn.execute("SELECT month_number FROM weeks WHERE id = ?", (week_id,)).fetchone()
-    if week is None:
+    біріктірілген) нәтижелері бойынша, осы аптаның ағынына (stream)
+    тіркелген БАРЛЫҚ мұғалімді қайтарады — кестеде әлі нәтиже жоқ мұғалім
+    де тізімнен түспейді, тек avg_score-ы None болады ('нәтиже жоқ' деп
+    көрсету үшін). Ортақ балл — мұғалімнің өз кураторларының
+    (teacher_curators-та тіркелген) ортақ балдарының орташасы. Куратор аты
+    рейтинг кестесінде қысқа (мыс. бір есім) жазылатындықтан, мұғалімге
+    тіркелген толық аты-жөнмен ДӘЛ сәйкес келуін емес, ортақ сөз (аты/тегі)
+    бар-жоғын тексереміз."""
+    week = conn.execute("SELECT stream_id FROM weeks WHERE id = ?", (week_id,)).fetchone()
+    if week is None or week["stream_id"] is None:
         return []
 
     week_ids = combine_week_ids if combine_week_ids else [week_id]
@@ -439,16 +441,19 @@ def compute_teacher_stats_for_week(conn, week_id, combine_week_ids=None):
     curator_avg = {name: sum(vals) / len(vals) for name, vals in curator_scores.items() if vals}
 
     teacher_rows = conn.execute(
-        "SELECT t.id, t.name, tc.curator_name FROM teacher_curators tc "
-        "JOIN teachers t ON t.id = tc.teacher_id"
+        "SELECT id, name FROM teachers WHERE stream_id = ? ORDER BY name", (week["stream_id"],)
     ).fetchall()
-
-    by_teacher = {}
-    for r in teacher_rows:
-        by_teacher.setdefault((r["id"], r["name"]), []).append(r["curator_name"])
+    curator_names_by_teacher = {}
+    for r in conn.execute(
+        "SELECT tc.teacher_id, tc.curator_name FROM teacher_curators tc "
+        "JOIN teachers t ON t.id = tc.teacher_id WHERE t.stream_id = ?",
+        (week["stream_id"],),
+    ).fetchall():
+        curator_names_by_teacher.setdefault(r["teacher_id"], []).append(r["curator_name"])
 
     teachers = []
-    for (teacher_id, name), curator_names in by_teacher.items():
+    for t in teacher_rows:
+        curator_names = curator_names_by_teacher.get(t["id"], [])
         matched_scores = []
         used_curators = set()
         for cname in curator_names:
@@ -460,17 +465,15 @@ def compute_teacher_stats_for_week(conn, week_id, combine_week_ids=None):
                     matched_scores.append(avg)
                     used_curators.add(actual_name)
                     break
-        if not matched_scores:
-            continue
         teachers.append(
             {
-                "id": teacher_id,
-                "name": name,
-                "avg_score": round(sum(matched_scores) / len(matched_scores), 2),
+                "id": t["id"],
+                "name": t["name"],
+                "avg_score": round(sum(matched_scores) / len(matched_scores), 2) if matched_scores else None,
                 "curator_count": len(matched_scores),
                 "total_curators": len(curator_names),
             }
         )
-    teachers.sort(key=lambda t: t["avg_score"], reverse=True)
+    teachers.sort(key=lambda t: (t["avg_score"] is None, -(t["avg_score"] or 0), t["name"]))
     return teachers
 
