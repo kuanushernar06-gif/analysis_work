@@ -477,3 +477,48 @@ def compute_teacher_stats_for_week(conn, week_id, combine_week_ids=None):
     teachers.sort(key=lambda t: (t["avg_score"] is None, -(t["avg_score"] or 0), t["name"]))
     return teachers
 
+
+# 'ШІЛДЕ' (ТАРИХ-01) ағынының өткен жылғы баламасы болмағандықтан (өткен
+# жылы бұл ай ашылмаған), оның орнына 'ТАМЫЗ' (ТАРИХ-11) деректерімен
+# салыстырылады.
+PRIOR_YEAR_STREAM_FALLBACK = {"ТАРИХ-01": "ТАРИХ-11"}
+
+
+def get_prior_year_comparison(conn, category_slug, stream_code, month_number):
+    """Ағымдағы санат/поток/ай үшін өткен жылғы орташа баллды қайтарады.
+    СТ санаты (sabaq_tapsyru) үшін бір мән, ал ДЕҢГЕЙЛІК/БАЙҚАУ ТЕСТ санаты
+    (baiqau_test) үшін ДТ мен БТ бөлек қайтарылады — ағымдағы жүйеде бұл
+    екеуі бір санатқа біріктірілген, бірақ өткен жылғы отчетте ДТ мен БТ
+    бөлек парақ болған, сондықтан қайсысы екенін біле алмаймыз. Деректе
+    ештеңе болмаса None қайтарады."""
+    lookup_code = PRIOR_YEAR_STREAM_FALLBACK.get(stream_code, stream_code)
+
+    def _fetch(category):
+        row = conn.execute(
+            "SELECT academic_year, avg_score FROM prior_year_stats "
+            "WHERE category = ? AND stream_code = ? AND month_number = ? AND avg_score IS NOT NULL "
+            "ORDER BY academic_year DESC LIMIT 1",
+            (category, lookup_code, month_number),
+        ).fetchone()
+        return (row["academic_year"], row["avg_score"]) if row else (None, None)
+
+    if category_slug == "sabaq_tapsyru":
+        year, avg = _fetch("sabaq_tapsyru")
+        if avg is None:
+            return None
+        return {"sabaq_tapsyru": {"academic_year": year, "avg_score": avg}}
+
+    if category_slug == "baiqau_test":
+        dt_year, dt_avg = _fetch("dt")
+        bt_year, bt_avg = _fetch("bt")
+        if dt_avg is None and bt_avg is None:
+            return None
+        result = {}
+        if dt_avg is not None:
+            result["dt"] = {"academic_year": dt_year, "avg_score": dt_avg}
+        if bt_avg is not None:
+            result["bt"] = {"academic_year": bt_year, "avg_score": bt_avg}
+        return result
+
+    return None
+

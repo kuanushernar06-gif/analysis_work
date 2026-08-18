@@ -143,6 +143,32 @@
 
 {% endif %}
 
+{% if prior_year %}
+<div class="card">
+  <h2>Өткен жылмен салыстыру</h2>
+  <div class="stat-grid">
+    {% if prior_year.sabaq_tapsyru %}
+    <div class="stat-tile {{ 'stat-good' if report.overall_avg_score is not none and report.overall_avg_score >= prior_year.sabaq_tapsyru.avg_score else 'stat-warn' }}">
+      <div class="stat-value">{{ '%.2f'|format(prior_year.sabaq_tapsyru.avg_score) }}</div>
+      <div class="stat-label">{{ prior_year.sabaq_tapsyru.academic_year }} осы айдың ортақ баллы</div>
+    </div>
+    {% endif %}
+    {% if prior_year.dt %}
+    <div class="stat-tile {{ 'stat-good' if report.overall_avg_score is not none and report.overall_avg_score >= prior_year.dt.avg_score else 'stat-warn' }}">
+      <div class="stat-value">{{ '%.2f'|format(prior_year.dt.avg_score) }}</div>
+      <div class="stat-label">{{ prior_year.dt.academic_year }} ДТ ортақ баллы</div>
+    </div>
+    {% endif %}
+    {% if prior_year.bt %}
+    <div class="stat-tile {{ 'stat-good' if report.overall_avg_score is not none and report.overall_avg_score >= prior_year.bt.avg_score else 'stat-warn' }}">
+      <div class="stat-value">{{ '%.2f'|format(prior_year.bt.avg_score) }}</div>
+      <div class="stat-label">{{ prior_year.bt.academic_year }} БТ ортақ баллы</div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
 {% if not (stream and stream['category'] == 'baiqau_test') %}
 <div class="card">
   <h2>Кураторлардың жиынтық анализі</h2>

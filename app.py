@@ -18,6 +18,7 @@ from analysis import (
     compute_curator_extremes,
     compare_reports,
     compute_teacher_stats_for_week,
+    get_prior_year_comparison,
 )
 from sheets import (
     fetch_workbook,
@@ -26,6 +27,7 @@ from sheets import (
     is_summary_row,
     is_template_sheet,
     parse_results_file,
+    parse_prior_year_report,
     SheetFetchError,
 )
 from gdocs import (
@@ -840,6 +842,13 @@ def week_report(week_id):
                 comparison = compare_reports(report, prev_report)
                 comparison["is_aylyq_test"] = bool(stream and stream["category"] == "aylyq_test")
 
+    prior_year = None
+    if stream and week["month_number"] is not None:
+        if stream["category"] == "sabaq_tapsyru" and is_summary:
+            prior_year = get_prior_year_comparison(conn, "sabaq_tapsyru", stream["code"], week["month_number"])
+        elif stream["category"] == "baiqau_test":
+            prior_year = get_prior_year_comparison(conn, "baiqau_test", stream["code"], week["month_number"])
+
     return render_template(
         "report.html",
         week=week,
@@ -855,6 +864,7 @@ def week_report(week_id):
         best_curator=best_curator,
         worst_curator=worst_curator,
         comparison=comparison,
+        prior_year=prior_year,
     )
 
 
@@ -1104,6 +1114,38 @@ def upload_results_file(week_id):
 
     flash(f"Файл өңделді, {len(entries)} нәтиже қосылды.", "ok")
     return redirect(url_for("week_import", week_id=week_id))
+
+
+@app.route("/admin/import-prior-year", methods=["POST"])
+def import_prior_year():
+    """Жылдық отчет (Google Sheets) кестесінен СТ/ДТ/БТ поток-ай орташа
+    баллдарын оқып, prior_year_stats кестесіне сақтайды — Ортақ анализ
+    беттеріндегі 'өткен жылмен салыстыру' осыдан алынады. UI-де форма жоқ,
+    admin өзі curl-мен sheet_url + academic_year жіберіп іске қосады."""
+    sheet_url = request.form.get("sheet_url", "").strip()
+    academic_year = request.form.get("academic_year", "").strip()
+    if not sheet_url or not academic_year:
+        flash("Сілтеме мен оқу жылын көрсетіңіз.", "error")
+        return redirect(url_for("index"))
+
+    try:
+        stats = parse_prior_year_report(sheet_url)
+    except SheetFetchError as e:
+        flash(f"Жылдық отчетті оқу сәтсіз аяқталды: {e}", "error")
+        return redirect(url_for("index"))
+
+    conn = get_db()
+    conn.execute("DELETE FROM prior_year_stats WHERE academic_year = ?", (academic_year,))
+    for category, stream_code, month_number, avg_score in stats:
+        conn.execute(
+            "INSERT INTO prior_year_stats (academic_year, category, stream_code, month_number, avg_score) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (academic_year, category, stream_code, month_number, avg_score),
+        )
+    conn.commit()
+
+    flash(f"Жылдық отчет импортталды: {len(stats)} жол ({academic_year}).", "ok")
+    return redirect(url_for("index"))
 
 
 @app.route("/weeks/<int:week_id>/results/clear", methods=["POST"])

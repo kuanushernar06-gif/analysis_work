@@ -8,6 +8,27 @@ from netfetch import urlopen
 
 SHEET_ID_RE = re.compile(r"/spreadsheets/d/([a-zA-Z0-9-_]+)")
 
+# Жылдық отчеттағы ай-топ атаулары нақты потоктың кодына сәйкес келеді —
+# бұл сәйкестік тұрақты (жыл сайын өзгермейді): әр поток әрдайым сол бір
+# айда ашылады. 'ШІЛДЕ' (ТАРИХ-01) өткен жылы болмағандықтан бұл сөздікте
+# жоқ — оның орнына шақырушы тарап (app.py) 'ТАМЫЗ' (ТАРИХ-11) деректерін
+# қолданады.
+PRIOR_YEAR_MONTH_TO_STREAM = {
+    "ТАМЫЗ": "ТАРИХ-11",
+    "ҚЫРКҮЙЕК": "ТАРИХ-21",
+    "ҚАЗАН": "ТАРИХ-31",
+    "ҚАРАША": "ТАРИХ-41",
+    "ЖЕЛТОҚСАН": "ТАРИХ-51",
+    "ҚАҢТАР": "ТАРИХ-61",
+    "АҚПАН": "ТАРИХ-71",
+    "НАУРЫЗ": "ТАРИХ-81",
+    "СӘУІР": "ТАРИХ-91",
+    "МАМЫР": "ТАРИХ-101",
+}
+
+_PRIOR_YEAR_MONTH_ROW_RE = re.compile(r"^(\d)-АЙ$")
+_PRIOR_YEAR_DT_BT_HEADER_RE = re.compile(r"^([А-ЯӘҒҚҢӨҰҮҺІЁ]+)\s+ШЫҒАРМ$")
+
 
 class SheetFetchError(Exception):
     pass
@@ -265,3 +286,94 @@ def guess_columns(header, body):
         "subject": subject_idx,
         "topic": topic_idx,
     }
+
+
+def _parse_prior_year_number(raw):
+    text = (raw or "").strip()
+    if text in ("", "-", "-%"):
+        return None
+    try:
+        return float(text.replace(",", "."))
+    except ValueError:
+        return None
+
+
+def _parse_prior_year_st_sheet(rows):
+    """'СТ нәтижелері' парағын оқиды: әр блок бір поток (ай атымен
+    белгіленген), одан кейінгі 'N-АЙ' жолдарының 6-бағаны (ОРТАҚ) — сол
+    айдың орташа баллы. Қайтарады: [(stream_code, month_number, avg), ...]."""
+    out = []
+    i = 0
+    while i < len(rows):
+        row = rows[i]
+        col0 = (row[0] or "").strip()
+        stream_code = PRIOR_YEAR_MONTH_TO_STREAM.get(col0)
+        is_header = stream_code and len(row) > 1 and (row[1] or "").strip() == "1-АПТА"
+        if is_header:
+            i += 1
+            while i < len(rows):
+                r = rows[i]
+                m = _PRIOR_YEAR_MONTH_ROW_RE.match((r[0] or "").strip())
+                if not m:
+                    break
+                month_number = int(m.group(1))
+                avg = _parse_prior_year_number(r[5]) if len(r) > 5 else None
+                out.append((stream_code, month_number, avg))
+                i += 1
+        else:
+            i += 1
+    return out
+
+
+def _parse_prior_year_dt_bt_sheet(rows):
+    """'ДТ нәтижелері'/'БТ нәтижелері' парағын оқиды: әр блок бір поток
+    ('<АЙ АТЫ> ШЫҒАРМ' деп басталады), одан кейінгі 'N-АЙ' жолдарының
+    2-бағаны (ОРТАҚ БАЛЛ) — сол айдың орташа баллы. Қайтарады:
+    [(stream_code, month_number, avg), ...]."""
+    out = []
+    i = 0
+    while i < len(rows):
+        row = rows[i]
+        col0 = (row[0] or "").strip()
+        header_match = _PRIOR_YEAR_DT_BT_HEADER_RE.match(col0)
+        stream_code = (
+            PRIOR_YEAR_MONTH_TO_STREAM.get(header_match.group(1)) if header_match else None
+        )
+        if stream_code:
+            i += 1
+            while i < len(rows):
+                r = rows[i]
+                m = _PRIOR_YEAR_MONTH_ROW_RE.match((r[0] or "").strip())
+                if not m:
+                    break
+                month_number = int(m.group(1))
+                avg = _parse_prior_year_number(r[1]) if len(r) > 1 else None
+                out.append((stream_code, month_number, avg))
+                i += 1
+        else:
+            i += 1
+    return out
+
+
+def parse_prior_year_report(raw_url):
+    """Жылдық отчет Google Sheets кестесін оқып, СТ/ДТ/БТ парақтарынан
+    (АТ-ны қоспай — ол бөлек есептеледі/жоқ) поток пен ай бойынша орташа
+    баллды алады. Қайтарады: [(category, stream_code, month_number, avg), ...]
+    мұндағы category — 'sabaq_tapsyru', 'dt' немесе 'bt'."""
+    sheets = fetch_workbook(raw_url)
+    by_name = {name.strip(): rows for name, rows in sheets}
+
+    out = []
+    if "СТ нәтижелері" in by_name:
+        for stream_code, month_number, avg in _parse_prior_year_st_sheet(by_name["СТ нәтижелері"]):
+            out.append(("sabaq_tapsyru", stream_code, month_number, avg))
+    if "ДТ нәтижелері" in by_name:
+        for stream_code, month_number, avg in _parse_prior_year_dt_bt_sheet(by_name["ДТ нәтижелері"]):
+            out.append(("dt", stream_code, month_number, avg))
+    if "БТ нәтижелері" in by_name:
+        for stream_code, month_number, avg in _parse_prior_year_dt_bt_sheet(by_name["БТ нәтижелері"]):
+            out.append(("bt", stream_code, month_number, avg))
+
+    if not out:
+        raise SheetFetchError("Жылдық отчеттен СТ/ДТ/БТ парақтары табылмады.")
+    return out

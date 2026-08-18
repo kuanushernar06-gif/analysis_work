@@ -173,6 +173,16 @@ CREATE TABLE IF NOT EXISTS teacher_curators (
     UNIQUE(curator_name)
 );
 
+CREATE TABLE IF NOT EXISTS prior_year_stats (
+    id SERIAL PRIMARY KEY,
+    academic_year TEXT NOT NULL,
+    category TEXT NOT NULL,
+    stream_code TEXT NOT NULL,
+    month_number INTEGER NOT NULL,
+    avg_score REAL,
+    UNIQUE(academic_year, category, stream_code, month_number)
+);
+
 CREATE INDEX IF NOT EXISTS idx_streams_program ON streams(program_id);
 CREATE INDEX IF NOT EXISTS idx_results_week ON results(week_id);
 CREATE INDEX IF NOT EXISTS idx_notes_week ON curator_notes(week_id);
@@ -276,6 +286,16 @@ CREATE TABLE IF NOT EXISTS teacher_curators (
     teacher_id INTEGER NOT NULL REFERENCES teachers(id) ON DELETE CASCADE,
     curator_name TEXT NOT NULL,
     UNIQUE(curator_name)
+);
+
+CREATE TABLE IF NOT EXISTS prior_year_stats (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    academic_year TEXT NOT NULL,
+    category TEXT NOT NULL,
+    stream_code TEXT NOT NULL,
+    month_number INTEGER NOT NULL,
+    avg_score REAL,
+    UNIQUE(academic_year, category, stream_code, month_number)
 );
 
 CREATE INDEX IF NOT EXISTS idx_streams_program ON streams(program_id);
