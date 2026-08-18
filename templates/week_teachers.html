@@ -43,6 +43,7 @@
         <div class="stat-value">{{ t.report.zero_students }}</div>
         <div class="stat-label">0 балл жинаған оқушы</div>
       </div>
+      {% if not is_month_summary %}
       {% if t.best_curator %}
       <div class="stat-tile stat-good">
         <div class="stat-value">{{ '%.2f'|format(t.best_curator.avg_score) }}</div>
@@ -54,6 +55,7 @@
         <div class="stat-value">{{ '%.2f'|format(t.worst_curator.avg_score) }}</div>
         <div class="stat-label">Ең төменгі ортақ балл — {{ t.worst_curator.curator }}</div>
       </div>
+      {% endif %}
       {% endif %}
     </div>
     {% else %}
