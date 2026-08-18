@@ -490,9 +490,10 @@ def _teacher_stream_picker_data(conn):
     return programs, streams_by_program
 
 
-@app.route("/teachers")
-def teachers_list():
-    conn = get_db()
+def _teachers_with_curators(conn):
+    """Барлық мұғалімдерді, олардың кураторлар тізімі мен поток атауымен қоса
+    қайтарады, поток (содан кейін аты) бойынша сұрыпталған — сайдбардағы
+    топтастыру мен негізгі кестенің реті бірдей болу үшін."""
     rows = conn.execute(
         "SELECT t.id, t.name, t.stream_id, "
         "array_agg(tc.curator_name) AS curator_names "
@@ -534,6 +535,15 @@ def teachers_list():
                     "stream_label": stream_labels.get(r["stream_id"]),
                 }
             )
+
+    teachers.sort(key=lambda t: (t["stream_label"] or "￿", t["name"]))
+    return teachers
+
+
+@app.route("/teachers")
+def teachers_list():
+    conn = get_db()
+    teachers = _teachers_with_curators(conn)
 
     back_url = url_for("index")
     referrer = request.referrer
@@ -625,7 +635,7 @@ def edit_teacher(teacher_id):
         current_program_slug = row["slug"] if row else None
 
     programs, streams_by_program = _teacher_stream_picker_data(conn)
-    all_teachers = conn.execute("SELECT id, name FROM teachers ORDER BY name").fetchall()
+    all_teachers = _teachers_with_curators(conn)
 
     return render_template(
         "teacher_edit.html",
