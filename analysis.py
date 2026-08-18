@@ -451,34 +451,47 @@ def _match_teacher_curators(teacher_curator_names_by_id, actual_curator_names):
     ғана әлі сәйкессіз қалғандарға бос ('тек Аты') кілтті қолданады —
     осылай бір нақты куратор аты кездейсоқ екі басқа мұғалімге қатар
     'ұрланып' кетпейді (қатаң сәйкестік әрқашан бос сәйкестіктен басым
-    болады). Қайтарады: {teacher_id: {registered_cname: actual_curator_name}}."""
+    болады). Егер бос ('тек Аты') кілт осы жиынтықтағы БІРНЕШЕ түрлі
+    тіркелген куратор атына бірдей сәйкес келсе (мыс. 'Советхан Мерей'
+    мен 'Бактығали Мерей' екеуі де 'МЕРЕЙ' дейді), ол кілт екіұшты
+    болғандықтан МҮЛДЕМ қолданылмайды — қате мұғалімге теліп қоюдан гөрі,
+    сол куратордың нәтижесі есептен тыс қалғаны дұрыс. Қайтарады:
+    {teacher_id: {registered_cname: actual_curator_name}}."""
     actual_compact = {name: _compact_name(name) for name in actual_curator_names}
-    teacher_candidates = {
-        teacher_id: [(cname, _registered_name_candidates(cname)) for cname in cnames]
-        for teacher_id, cnames in teacher_curator_names_by_id.items()
-    }
+    entries = []
+    fallback_owners = {}
+    for teacher_id, cnames in teacher_curator_names_by_id.items():
+        for cname in cnames:
+            groups = _registered_name_candidates(cname)
+            entries.append((teacher_id, cname, groups))
+            if len(groups) > 1:
+                for key in groups[1]:
+                    fallback_owners.setdefault(key, set()).add((teacher_id, cname))
 
     claimed_by_actual = {}
     matches_by_teacher = {teacher_id: {} for teacher_id in teacher_curator_names_by_id}
 
-    max_rounds = max((len(groups) for cands in teacher_candidates.values() for _, groups in cands), default=0)
+    max_rounds = max((len(groups) for _, _, groups in entries), default=0)
     for round_idx in range(max_rounds):
-        for teacher_id, candidates in teacher_candidates.items():
-            for cname, cand_groups in candidates:
-                if cname in matches_by_teacher[teacher_id]:
+        for teacher_id, cname, groups in entries:
+            if cname in matches_by_teacher[teacher_id]:
+                continue
+            if round_idx >= len(groups):
+                continue
+            group = groups[round_idx]
+            if round_idx >= 1:
+                # Бос (fallback) деңгей: осы жиынтықта екіұшты кілттерді алып тастаймыз.
+                group = [c for c in group if len(fallback_owners.get(c, ())) <= 1]
+            group = [c for c in group if c]
+            if not group:
+                continue
+            for actual_name in actual_curator_names:
+                if actual_name in claimed_by_actual:
                     continue
-                if round_idx >= len(cand_groups):
-                    continue
-                group = [c for c in cand_groups[round_idx] if c]
-                if not group:
-                    continue
-                for actual_name in actual_curator_names:
-                    if actual_name in claimed_by_actual:
-                        continue
-                    if any(actual_compact[actual_name].startswith(c) for c in group):
-                        claimed_by_actual[actual_name] = teacher_id
-                        matches_by_teacher[teacher_id][cname] = actual_name
-                        break
+                if any(actual_compact[actual_name].startswith(c) for c in group):
+                    claimed_by_actual[actual_name] = teacher_id
+                    matches_by_teacher[teacher_id][cname] = actual_name
+                    break
 
     return matches_by_teacher
 

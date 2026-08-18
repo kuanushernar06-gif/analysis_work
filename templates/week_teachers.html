@@ -60,8 +60,10 @@
     <p class="muted">Бұл аптада нәтиже жоқ.</p>
     {% endif %}
 
-    <h3>Оқушылар</h3>
-    <div class="teacher-student-breakdown">
+    <button type="button" class="teacher-students-toggle" data-teacher-toggle="teacher-students-{{ t.id }}">
+      <span class="teacher-curators-arrow" aria-hidden="true">▸</span> Оқушылар
+    </button>
+    <div class="teacher-student-breakdown" id="teacher-students-{{ t.id }}" hidden>
       <div class="teacher-student-group">
         <h4>Нашар оқушылар (0–3 балл)</h4>
         {% if t.weak_students %}
