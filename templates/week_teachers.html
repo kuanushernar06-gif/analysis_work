@@ -16,7 +16,7 @@
   {% if teachers %}
   <div class="table-scroll">
     <table class="table">
-      <thead><tr><th>Мұғалім</th><th>Ортақ балл</th><th>Кураторлар</th><th>Талдау</th></tr></thead>
+      <thead><tr><th>Мұғалім</th><th>Ортақ балл</th><th>Кураторлар</th><th>Оқушылар</th></tr></thead>
       <tbody>
         {% for t in teachers %}
         <tr id="teacher-{{ t.id }}">
@@ -25,7 +25,7 @@
           <td>{{ t.curator_count }}/{{ t.total_curators }}</td>
           <td>
             <button type="button" class="teacher-curators-toggle" data-teacher-toggle="teacher-analysis-{{ t.id }}">
-              <span class="teacher-curators-arrow" aria-hidden="true">▸</span> Талдау
+              <span class="teacher-curators-arrow" aria-hidden="true">▸</span> Оқушылар
             </button>
           </td>
         </tr>
