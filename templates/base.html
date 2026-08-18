@@ -72,21 +72,7 @@
           {% for stream_label, group in all_teachers|groupby('stream_label') %}
           <p class="sidebar-group-label">{{ stream_label or 'Поток тағайындалмаған' }}</p>
           {% for t in group %}
-          <div class="sidebar-teacher-item">
-            <button type="button" class="sidebar-teacher-toggle{{ ' active is-open' if active_teacher_id == t.id else '' }}" data-teacher-toggle="teacher-curators-{{ t.id }}">
-              <span class="sidebar-teacher-arrow" aria-hidden="true">▸</span> {{ t.name }}
-            </button>
-            <div class="sidebar-teacher-curators" id="teacher-curators-{{ t.id }}"{% if t.id != active_teacher_id %} hidden{% endif %}>
-              {% if t.curator_names %}
-              <ul>
-                {% for c in t.curator_names %}<li>{{ c }}</li>{% endfor %}
-              </ul>
-              {% else %}
-              <p class="sidebar-empty-note">Куратор қосылмаған.</p>
-              {% endif %}
-              <a class="sidebar-teacher-edit" href="{{ url_for('edit_teacher', teacher_id=t.id) }}">Өзгерту →</a>
-            </div>
-          </div>
+          <a href="{{ url_for('edit_teacher', teacher_id=t.id) }}" class="{{ 'active' if active_teacher_id == t.id else '' }}">{{ t.name }}</a>
           {% endfor %}
           {% else %}
           <p class="sidebar-empty-note">Әзірге мұғалім қосылмаған.</p>
