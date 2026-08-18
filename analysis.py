@@ -420,11 +420,9 @@ def compute_teacher_stats_for_week(conn, week_id, combine_week_ids=None):
     ортақ балы ретінде қайтарады. Куратор аты рейтинг кестесінде қысқа
     (мыс. бір есім) жазылатындықтан, мұғалімге тіркелген толық аты-жөнмен
     ДӘЛ сәйкес келуін емес, ортақ сөз (аты/тегі) бар-жоғын тексереміз. Осы
-    аптада бірде-бір куратор нәтижесі жоқ мұғалімдер тізімге кірмейді.
-    1-айдың нәтижелері есептелмейді — сол айда рейтинг кестелерінде куратор
-    аты-жөндері дұрыс жазылмаған болатын."""
+    аптада бірде-бір куратор нәтижесі жоқ мұғалімдер тізімге кірмейді."""
     week = conn.execute("SELECT month_number FROM weeks WHERE id = ?", (week_id,)).fetchone()
-    if week is None or week["month_number"] == 1:
+    if week is None:
         return []
 
     week_ids = combine_week_ids if combine_week_ids else [week_id]
