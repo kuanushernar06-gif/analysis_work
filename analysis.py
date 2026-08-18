@@ -44,7 +44,7 @@ def _raw_threshold_to_percent(raw_value, ref_max_score, default_percent):
         return default_percent
 
 
-def compute_report(conn, week_id, combine_week_ids=None, subjects_filter=None):
+def compute_report(conn, week_id, combine_week_ids=None, subjects_filter=None, curators_filter=None):
     """Апта бойынша (немесе, combine_week_ids берілсе, бірнеше апта нәтижесін
     біріктіріп) есеп жасайды. combine_week_ids — айлық ортақ апта сияқты,
     нәтижелер басқа апталардан жиналатын жағдайда пайдаланылады: week_id
@@ -52,7 +52,9 @@ def compute_report(conn, week_id, combine_week_ids=None, subjects_filter=None):
     қолданылады, бірақ results тек combine_week_ids тізіміндегі апталардан
     алынады. subjects_filter берілсе (ДТ/БТ-да 'Шығармашылық' пен 'Тарих
     жалпы' бөлек талдау үшін), тек сол пән атауларының нәтижелері ғана
-    есепке алынады."""
+    есепке алынады. curators_filter берілсе (мұғалім бойынша бөлек есеп
+    үшін), тек сол нақты куратор атауларының (results.curator баганындағы
+    дәл жазылуымен) нәтижелері ғана есепке алынады."""
     week = conn.execute("SELECT * FROM weeks WHERE id = ?", (week_id,)).fetchone()
     if week is None:
         return None
@@ -65,6 +67,10 @@ def compute_report(conn, week_id, combine_week_ids=None, subjects_filter=None):
         subj_placeholders = ",".join("?" * len(subjects_filter))
         query += f" AND subject IN ({subj_placeholders})"
         params.extend(subjects_filter)
+    if curators_filter is not None:
+        cur_placeholders = ",".join("?" * len(curators_filter))
+        query += f" AND curator IN ({cur_placeholders})"
+        params.extend(curators_filter)
     query += " ORDER BY subject, topic, student"
     results = conn.execute(query, params).fetchall()
 
@@ -435,7 +441,10 @@ def compute_teacher_stats_for_week(conn, week_id, combine_week_ids=None):
     бар-жоғын тексереміз. Сонымен қатар әр мұғалімнің өз кураторларының
     оқушылары арасынан нашар (орташа балл ≤3) және мықты (орташа балл ≥13)
     оқушыларды, олардың кураторымен қоса, тізімдейді (weak_students /
-    strong_students)."""
+    strong_students), сол мұғалімнің өз кураторлары бойынша ғана есептелген
+    толық compute_report нәтижесін ('report') және сол топтың ішіндегі ең
+    жоғарғы/ең төменгі ортақ балл куратор ('best_curator'/'worst_curator')
+    қоса қайтарады."""
     week = conn.execute("SELECT stream_id FROM weeks WHERE id = ?", (week_id,)).fetchone()
     if week is None or week["stream_id"] is None:
         return []
@@ -505,6 +514,23 @@ def compute_teacher_stats_for_week(conn, week_id, combine_week_ids=None):
         weak_students.sort(key=lambda e: e["avg_score"])
         strong_students.sort(key=lambda e: e["avg_score"], reverse=True)
 
+        matched_curator_names = list(used_curators)
+        teacher_report = (
+            compute_report(conn, week_id, combine_week_ids=combine_week_ids, curators_filter=matched_curator_names)
+            if matched_curator_names
+            else None
+        )
+        teacher_best_curator = teacher_worst_curator = None
+        if matched_curator_names:
+            curator_avgs_here = [
+                {"curator": name, "avg_score": round(curator_avg[name], 2)}
+                for name in matched_curator_names
+                if name in curator_avg
+            ]
+            if curator_avgs_here:
+                teacher_best_curator = max(curator_avgs_here, key=lambda c: c["avg_score"])
+                teacher_worst_curator = min(curator_avgs_here, key=lambda c: c["avg_score"])
+
         teachers.append(
             {
                 "id": t["id"],
@@ -514,6 +540,9 @@ def compute_teacher_stats_for_week(conn, week_id, combine_week_ids=None):
                 "total_curators": len(curator_names),
                 "weak_students": weak_students,
                 "strong_students": strong_students,
+                "report": teacher_report,
+                "best_curator": teacher_best_curator,
+                "worst_curator": teacher_worst_curator,
             }
         )
     teachers.sort(key=lambda t: (t["avg_score"] is None, -(t["avg_score"] or 0), t["name"]))

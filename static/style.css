@@ -978,6 +978,7 @@ input[type="number"]::-webkit-outer-spin-button {
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 16px;
 }
+.stat-grid + .teacher-student-breakdown { margin-top: 16px; }
 .teacher-student-group h4 { margin: 0 0 8px; font-size: 0.85rem; }
 .teacher-student-group .teacher-curators-list { grid-template-columns: 1fr; }
 

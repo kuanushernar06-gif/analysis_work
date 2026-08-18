@@ -31,6 +31,42 @@
         </tr>
         <tr class="teacher-curators-row" id="teacher-analysis-{{ t.id }}" hidden>
           <td colspan="4">
+            {% if t.report and t.report.has_data %}
+            <div class="stat-grid">
+              {% if t.report.has_targets %}
+              <div class="stat-tile {{ 'stat-good' if t.report.target_achievement_percent is not none and t.report.target_achievement_percent >= 100 else 'stat-warn' }}">
+                <div class="stat-value">{% if t.report.target_achievement_percent is not none %}{{ t.report.target_achievement_percent }}%{% else %}—{% endif %}</div>
+                <div class="stat-label">Мақсат орындалу пайызы</div>
+              </div>
+              {% endif %}
+              <div class="stat-tile">
+                <div class="stat-value">{{ t.report.overall_avg_score }}</div>
+                <div class="stat-label">Ортақ орташа балл</div>
+              </div>
+              <div class="stat-tile stat-good">
+                <div class="stat-value">{{ t.report.max_achiever_students }}</div>
+                <div class="stat-label">Ең жоғарғы балл жинаған оқушы</div>
+              </div>
+              <div class="stat-tile stat-warn">
+                <div class="stat-value">{{ t.report.zero_students }}</div>
+                <div class="stat-label">0 балл жинаған оқушы</div>
+              </div>
+              {% if t.best_curator %}
+              <div class="stat-tile stat-good">
+                <div class="stat-value">{{ '%.2f'|format(t.best_curator.avg_score) }}</div>
+                <div class="stat-label">Ең жоғарғы ортақ балл — {{ t.best_curator.curator }}</div>
+              </div>
+              {% endif %}
+              {% if t.worst_curator %}
+              <div class="stat-tile stat-warn">
+                <div class="stat-value">{{ '%.2f'|format(t.worst_curator.avg_score) }}</div>
+                <div class="stat-label">Ең төменгі ортақ балл — {{ t.worst_curator.curator }}</div>
+              </div>
+              {% endif %}
+            </div>
+            {% else %}
+            <p class="muted">Бұл аптада нәтиже жоқ.</p>
+            {% endif %}
             <div class="teacher-student-breakdown">
               <div class="teacher-student-group">
                 <h4>Нашар оқушылар (0–3 балл)</h4>
