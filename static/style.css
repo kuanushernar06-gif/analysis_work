@@ -973,6 +973,13 @@ input[type="number"]::-webkit-outer-spin-button {
   gap: 4px 16px;
 }
 .teacher-curators-list li { font-size: 0.85rem; color: var(--text-secondary); }
+.teacher-student-breakdown {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+}
+.teacher-student-group h4 { margin: 0 0 8px; font-size: 0.85rem; }
+.teacher-student-group .teacher-curators-list { grid-template-columns: 1fr; }
 
 .teacher-actions { display: flex; align-items: center; gap: 6px; }
 .teacher-actions .teacher-delete-confirm { display: none; align-items: center; gap: 6px; margin: 0; }

@@ -419,6 +419,10 @@ def _teacher_name_matches(teacher_tokens, curator_raw):
     return any(tok in raw_upper for tok in teacher_tokens)
 
 
+WEAK_STUDENT_MAX_SCORE = 3
+STRONG_STUDENT_MIN_SCORE = 13
+
+
 def compute_teacher_stats_for_week(conn, week_id, combine_week_ids=None):
     """Осы аптаның (немесе, combine_week_ids берілсе, бірнеше аптаның
     біріктірілген) нәтижелері бойынша, осы аптаның ағынына (stream)
@@ -428,7 +432,10 @@ def compute_teacher_stats_for_week(conn, week_id, combine_week_ids=None):
     (teacher_curators-та тіркелген) ортақ балдарының орташасы. Куратор аты
     рейтинг кестесінде қысқа (мыс. бір есім) жазылатындықтан, мұғалімге
     тіркелген толық аты-жөнмен ДӘЛ сәйкес келуін емес, ортақ сөз (аты/тегі)
-    бар-жоғын тексереміз."""
+    бар-жоғын тексереміз. Сонымен қатар әр мұғалімнің өз кураторларының
+    оқушылары арасынан нашар (орташа балл ≤3) және мықты (орташа балл ≥13)
+    оқушыларды, олардың кураторымен қоса, тізімдейді (weak_students /
+    strong_students)."""
     week = conn.execute("SELECT stream_id FROM weeks WHERE id = ?", (week_id,)).fetchone()
     if week is None or week["stream_id"] is None:
         return []
@@ -436,14 +443,18 @@ def compute_teacher_stats_for_week(conn, week_id, combine_week_ids=None):
     week_ids = combine_week_ids if combine_week_ids else [week_id]
     placeholders = ",".join("?" * len(week_ids))
     rows = conn.execute(
-        f"SELECT curator, score FROM results WHERE week_id IN ({placeholders}) "
+        f"SELECT curator, student, score FROM results WHERE week_id IN ({placeholders}) "
         "AND score IS NOT NULL AND curator IS NOT NULL AND curator != ''",
         week_ids,
     ).fetchall()
 
     curator_scores = {}
+    curator_student_rows = {}
     for r in rows:
-        curator_scores.setdefault(r["curator"].strip(), []).append(float(r["score"]))
+        cname = r["curator"].strip()
+        score = float(r["score"])
+        curator_scores.setdefault(cname, []).append(score)
+        curator_student_rows.setdefault(cname, []).append((r["student"], score))
     curator_avg = {name: sum(vals) / len(vals) for name, vals in curator_scores.items() if vals}
 
     teacher_rows = conn.execute(
@@ -471,6 +482,29 @@ def compute_teacher_stats_for_week(conn, week_id, combine_week_ids=None):
                     matched_scores.append(avg)
                     used_curators.add(actual_name)
                     break
+
+        student_scores = {}
+        student_curator = {}
+        for actual_name in used_curators:
+            for student_raw, score in curator_student_rows.get(actual_name, []):
+                student = (student_raw or "").strip()
+                if not student:
+                    continue
+                student_scores.setdefault(student, []).append(score)
+                student_curator.setdefault(student, actual_name)
+
+        weak_students = []
+        strong_students = []
+        for student, scores in student_scores.items():
+            avg = sum(scores) / len(scores)
+            entry = {"student": student, "curator": student_curator[student], "avg_score": round(avg, 2)}
+            if avg <= WEAK_STUDENT_MAX_SCORE:
+                weak_students.append(entry)
+            elif avg >= STRONG_STUDENT_MIN_SCORE:
+                strong_students.append(entry)
+        weak_students.sort(key=lambda e: e["avg_score"])
+        strong_students.sort(key=lambda e: e["avg_score"], reverse=True)
+
         teachers.append(
             {
                 "id": t["id"],
@@ -478,6 +512,8 @@ def compute_teacher_stats_for_week(conn, week_id, combine_week_ids=None):
                 "avg_score": round(sum(matched_scores) / len(matched_scores), 2) if matched_scores else None,
                 "curator_count": len(matched_scores),
                 "total_curators": len(curator_names),
+                "weak_students": weak_students,
+                "strong_students": strong_students,
             }
         )
     teachers.sort(key=lambda t: (t["avg_score"] is None, -(t["avg_score"] or 0), t["name"]))
