@@ -858,11 +858,29 @@ def week_report(week_id):
                 comparison = compare_reports(report, prev_report)
                 comparison["is_aylyq_test"] = bool(stream and stream["category"] == "aylyq_test")
 
+    # ДЕҢГЕЙЛІК/БАЙҚАУ ТЕСТ санатында нәтиже екі бөлек топқа бөлінеді:
+    # 'Шығармашылық' (пән атауында 'ШЫҒАРМ' сөзі бар) және 'Тарих жалпы'
+    # (қалғандары) — жылдық отчеттегі 'ШЫҒАРМ' мен 'БАРЛЫҚ КОМБ ТАРИХ'
+    # парақтарына сәйкес. Тек шығармашылықтың ортақ баллы өткен жылмен
+    # салыстырылады, жалпы тарих салыстырылмайды.
+    creative_report = general_report = None
+    if stream and stream["category"] == "baiqau_test" and report and report.get("has_data"):
+        all_subjects = [s["name"] for s in (report.get("subjects") or [])]
+        creative_subjects = [s for s in all_subjects if "ШЫҒАРМ" in s.upper()]
+        general_subjects = [s for s in all_subjects if s not in creative_subjects]
+        if creative_subjects:
+            creative_report = compute_report(conn, week_id, subjects_filter=creative_subjects)
+        if general_subjects:
+            general_report = compute_report(conn, week_id, subjects_filter=general_subjects)
+
     prior_year = None
     if stream and week["month_number"] is not None and stream["category"] in ("sabaq_tapsyru", "baiqau_test"):
         prior_year = get_prior_year_comparison(conn, stream["category"], stream["code"], week["month_number"])
-        if prior_year and report and report.get("has_data"):
-            current_score = report.get("overall_avg_score")
+        if prior_year:
+            if stream["category"] == "sabaq_tapsyru":
+                current_score = report.get("overall_avg_score") if report and report.get("has_data") else None
+            else:
+                current_score = creative_report.get("overall_avg_score") if creative_report else None
             for entry in prior_year.values():
                 entry["delta"] = _delta(current_score, entry["avg_score"])
 
@@ -882,6 +900,8 @@ def week_report(week_id):
         worst_curator=worst_curator,
         comparison=comparison,
         prior_year=prior_year,
+        creative_report=creative_report,
+        general_report=general_report,
     )
 
 

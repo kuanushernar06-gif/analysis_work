@@ -44,23 +44,29 @@ def _raw_threshold_to_percent(raw_value, ref_max_score, default_percent):
         return default_percent
 
 
-def compute_report(conn, week_id, combine_week_ids=None):
+def compute_report(conn, week_id, combine_week_ids=None, subjects_filter=None):
     """Апта бойынша (немесе, combine_week_ids берілсе, бірнеше апта нәтижесін
     біріктіріп) есеп жасайды. combine_week_ids — айлық ортақ апта сияқты,
     нәтижелер басқа апталардан жиналатын жағдайда пайдаланылады: week_id
     әлі де шектер/мақсат (thresholds/target) үшін негізгі апта ретінде
     қолданылады, бірақ results тек combine_week_ids тізіміндегі апталардан
-    алынады."""
+    алынады. subjects_filter берілсе (ДТ/БТ-да 'Шығармашылық' пен 'Тарих
+    жалпы' бөлек талдау үшін), тек сол пән атауларының нәтижелері ғана
+    есепке алынады."""
     week = conn.execute("SELECT * FROM weeks WHERE id = ?", (week_id,)).fetchone()
     if week is None:
         return None
 
     week_ids = combine_week_ids if combine_week_ids else [week_id]
     placeholders = ",".join("?" * len(week_ids))
-    results = conn.execute(
-        f"SELECT * FROM results WHERE week_id IN ({placeholders}) ORDER BY subject, topic, student",
-        week_ids,
-    ).fetchall()
+    query = f"SELECT * FROM results WHERE week_id IN ({placeholders})"
+    params = list(week_ids)
+    if subjects_filter is not None:
+        subj_placeholders = ",".join("?" * len(subjects_filter))
+        query += f" AND subject IN ({subj_placeholders})"
+        params.extend(subjects_filter)
+    query += " ORDER BY subject, topic, student"
+    results = conn.execute(query, params).fetchall()
 
     ref_max_score = _reference_max_score(results)
 

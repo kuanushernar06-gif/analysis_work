@@ -19,6 +19,60 @@
 {% endif %}
 {% endmacro %}
 
+{% macro stat_tiles(rep, is_baiqau, show_threshold, cmp=none, prior=none) %}
+<div class="stat-tile">
+  <div class="stat-value">
+    {% if is_baiqau %}
+    {% if rep.overall_avg_percent is not none %}{{ rep.overall_avg_percent }}%{% else %}—{% endif %}
+    <span class="stat-value-sub">{{ rep.overall_avg_score }} балл</span>
+    {% else %}
+    {{ rep.overall_avg_score }}
+    {% endif %}
+  </div>
+  {{ delta(cmp.avg_score if cmp else none) }}
+  <div class="stat-label">Ортақ орташа балл</div>
+</div>
+{% if prior %}
+  {% if prior.sabaq_tapsyru %}
+  <div class="stat-tile stat-prior-year">
+    <div class="stat-value">{% if prior.sabaq_tapsyru.avg_score is not none %}{{ '%.2f'|format(prior.sabaq_tapsyru.avg_score) }}{% else %}—{% endif %}</div>
+    {{ delta(prior.sabaq_tapsyru.delta) }}
+    <div class="stat-label">Өткен жыл ({{ prior.sabaq_tapsyru.academic_year }}) ортақ баллы</div>
+  </div>
+  {% endif %}
+  {% if prior.dt %}
+  <div class="stat-tile stat-prior-year">
+    <div class="stat-value">{% if prior.dt.avg_score is not none %}{{ '%.2f'|format(prior.dt.avg_score) }}{% else %}—{% endif %}</div>
+    {{ delta(prior.dt.delta) }}
+    <div class="stat-label">Өткен жыл ({{ prior.dt.academic_year }}) ДТ ортақ баллы</div>
+  </div>
+  {% endif %}
+  {% if prior.bt %}
+  <div class="stat-tile stat-prior-year">
+    <div class="stat-value">{% if prior.bt.avg_score is not none %}{{ '%.2f'|format(prior.bt.avg_score) }}{% else %}—{% endif %}</div>
+    {{ delta(prior.bt.delta) }}
+    <div class="stat-label">Өткен жыл ({{ prior.bt.academic_year }}) БТ ортақ баллы</div>
+  </div>
+  {% endif %}
+{% endif %}
+<div class="stat-tile stat-good">
+  <div class="stat-value">{{ rep.max_achiever_students }}</div>
+  {{ delta(cmp.max_achiever_students if cmp else none) }}
+  <div class="stat-label">Ең жоғарғы балл жинаған оқушы</div>
+</div>
+<div class="stat-tile stat-warn">
+  <div class="stat-value">{{ rep.zero_students }}</div>
+  {{ delta(cmp.zero_students if cmp else none) }}
+  <div class="stat-label">0 балл жинаған оқушы</div>
+</div>
+{% if show_threshold %}
+<div class="stat-tile stat-warn">
+  <div class="stat-value">{{ rep.fail_unique_students }}</div>
+  <div class="stat-label">Шектік баллға жетпеген оқушы (өту шегі: {{ rep.passing_score }} балл)</div>
+</div>
+{% endif %}
+{% endmacro %}
+
 {% if not report.has_data %}
 <div class="card">
   <p class="muted">
@@ -37,6 +91,20 @@
     («{{ comparison.prev_title }}») нәтижесімен салыстырғанда прогресс/регресс төменде көрсетілген.
   </p>
   {% endif %}
+  {% if stream and stream['category'] == 'baiqau_test' and (creative_report or general_report) %}
+    {% if creative_report and creative_report.has_data %}
+    <h3>Шығармашылық</h3>
+    <div class="stat-grid">
+      {{ stat_tiles(creative_report, true, true, none, prior_year) }}
+    </div>
+    {% endif %}
+    {% if general_report and general_report.has_data %}
+    <h3>Тарих жалпы</h3>
+    <div class="stat-grid">
+      {{ stat_tiles(general_report, true, true, none, none) }}
+    </div>
+    {% endif %}
+  {% else %}
   <div class="stat-grid">
     {% if report.has_targets %}
     <div class="stat-tile {{ 'stat-good' if report.target_achievement_percent is not none and report.target_achievement_percent >= 100 else 'stat-warn' }}">
@@ -47,57 +115,7 @@
       <div class="stat-label">Мақсат орындалу пайызы (мақсат: {{ week['target_score'] }})</div>
     </div>
     {% endif %}
-    <div class="stat-tile">
-      <div class="stat-value">
-        {% if stream and stream['category'] == 'baiqau_test' %}
-        {% if report.overall_avg_percent is not none %}{{ report.overall_avg_percent }}%{% else %}—{% endif %}
-        <span class="stat-value-sub">{{ report.overall_avg_score }} балл</span>
-        {% else %}
-        {{ report.overall_avg_score }}
-        {% endif %}
-      </div>
-      {{ delta(comparison.avg_score if comparison else none) }}
-      <div class="stat-label">Ортақ орташа балл</div>
-    </div>
-    {% if prior_year %}
-      {% if prior_year.sabaq_tapsyru %}
-      <div class="stat-tile stat-prior-year">
-        <div class="stat-value">{% if prior_year.sabaq_tapsyru.avg_score is not none %}{{ '%.2f'|format(prior_year.sabaq_tapsyru.avg_score) }}{% else %}—{% endif %}</div>
-        {{ delta(prior_year.sabaq_tapsyru.delta) }}
-        <div class="stat-label">Өткен жыл ({{ prior_year.sabaq_tapsyru.academic_year }}) ортақ баллы</div>
-      </div>
-      {% endif %}
-      {% if prior_year.dt %}
-      <div class="stat-tile stat-prior-year">
-        <div class="stat-value">{% if prior_year.dt.avg_score is not none %}{{ '%.2f'|format(prior_year.dt.avg_score) }}{% else %}—{% endif %}</div>
-        {{ delta(prior_year.dt.delta) }}
-        <div class="stat-label">Өткен жыл ({{ prior_year.dt.academic_year }}) ДТ ортақ баллы</div>
-      </div>
-      {% endif %}
-      {% if prior_year.bt %}
-      <div class="stat-tile stat-prior-year">
-        <div class="stat-value">{% if prior_year.bt.avg_score is not none %}{{ '%.2f'|format(prior_year.bt.avg_score) }}{% else %}—{% endif %}</div>
-        {{ delta(prior_year.bt.delta) }}
-        <div class="stat-label">Өткен жыл ({{ prior_year.bt.academic_year }}) БТ ортақ баллы</div>
-      </div>
-      {% endif %}
-    {% endif %}
-    <div class="stat-tile stat-good">
-      <div class="stat-value">{{ report.max_achiever_students }}</div>
-      {{ delta(comparison.max_achiever_students if comparison else none) }}
-      <div class="stat-label">Ең жоғарғы балл жинаған оқушы</div>
-    </div>
-    <div class="stat-tile stat-warn">
-      <div class="stat-value">{{ report.zero_students }}</div>
-      {{ delta(comparison.zero_students if comparison else none) }}
-      <div class="stat-label">0 балл жинаған оқушы</div>
-    </div>
-    {% if stream and stream['category'] == 'baiqau_test' %}
-    <div class="stat-tile stat-warn">
-      <div class="stat-value">{{ report.fail_unique_students }}</div>
-      <div class="stat-label">Шектік баллға жетпеген оқушы (өту шегі: {{ report.passing_score }} балл)</div>
-    </div>
-    {% endif %}
+    {{ stat_tiles(report, stream and stream['category'] == 'baiqau_test', stream and stream['category'] == 'baiqau_test', comparison, prior_year) }}
     {% if best_curator %}
     <div class="stat-tile stat-good">
       <div class="stat-value">{{ '%.2f'|format(best_curator.avg_score) }}</div>
@@ -111,6 +129,7 @@
     </div>
     {% endif %}
   </div>
+  {% endif %}
 
   {% if not (stream and stream['category'] == 'baiqau_test') %}
   <h3>Лига бойынша үлес</h3>
