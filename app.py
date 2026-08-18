@@ -19,6 +19,8 @@ from analysis import (
     compare_reports,
     compute_teacher_stats_for_week,
     get_prior_year_comparison,
+    _match_teacher_curators,
+    _registered_name_candidates,
 )
 from sheets import (
     fetch_workbook,
@@ -933,6 +935,69 @@ def week_teachers(week_id):
         teachers=teachers,
         all_teachers=teachers,
     )
+
+
+@app.route("/admin/debug-teacher-curators/<int:week_id>/<int:teacher_id>")
+def debug_teacher_curators(week_id, teacher_id):
+    """Куратор сәйкестендіру неге белгілі бір атауды таппай жатқанын
+    диагностикалау үшін уақытша бет: осы аптадағы НАҚТЫ куратор
+    аттарының бәрін және мұғалімнің тіркелген әр атауының қай кілтпен
+    (candidates) іздегенін, нәтижесін дәл көрсетеді."""
+    conn = get_db()
+    week, stream, program = get_week_context(conn, week_id)
+    if week is None:
+        return "Апта табылмады", 404
+
+    week_ids = [week_id]
+    if is_month_summary_week(week, stream):
+        component_ids = [w["id"] for w in get_month_component_weeks(conn, week)]
+        if component_ids:
+            week_ids = component_ids
+
+    placeholders = ",".join("?" * len(week_ids))
+    actual_rows = conn.execute(
+        f"SELECT DISTINCT curator FROM results WHERE week_id IN ({placeholders}) "
+        "AND curator IS NOT NULL AND curator != ''",
+        week_ids,
+    ).fetchall()
+    actual_names = sorted({r["curator"].strip() for r in actual_rows})
+
+    teacher = conn.execute("SELECT * FROM teachers WHERE id = ?", (teacher_id,)).fetchone()
+    stream_id = stream["id"] if stream else (teacher["stream_id"] if teacher else None)
+
+    curator_names_by_teacher = {}
+    for r in conn.execute(
+        "SELECT tc.teacher_id, tc.curator_name FROM teacher_curators tc "
+        "JOIN teachers t ON t.id = tc.teacher_id WHERE t.stream_id = ?",
+        (stream_id,),
+    ).fetchall():
+        curator_names_by_teacher.setdefault(r["teacher_id"], []).append(r["curator_name"])
+
+    matches = _match_teacher_curators(curator_names_by_teacher, actual_names)
+    teacher_matches = matches.get(teacher_id, {})
+    registered = curator_names_by_teacher.get(teacher_id, [])
+    all_claimed = {name for m in matches.values() for name in m.values()}
+
+    lines = [
+        f"Апта(лар) ID: {week_ids}",
+        f"Мұғалім: {teacher['name'] if teacher else teacher_id} (id={teacher_id})",
+        "",
+        f"=== Осы апта(лар)дағы БАРЛЫҚ нақты куратор аттары ({len(actual_names)}) ===",
+    ]
+    for n in actual_names:
+        claimed_note = "" if n in all_claimed else "   <<< ЕШКІМГЕ СӘЙКЕСТЕНДІРІЛМЕГЕН"
+        lines.append(f"  {n!r}{claimed_note}")
+
+    lines.append("")
+    lines.append(f"=== {teacher['name'] if teacher else teacher_id} тіркелген кураторлары ({len(registered)}) ===")
+    for cname in registered:
+        matched = teacher_matches.get(cname)
+        candidates = _registered_name_candidates(cname)
+        status = f"САЙКЕС ТАПТЫ -> {matched!r}" if matched else "ТАБЫЛМАДЫ"
+        lines.append(f"  {cname!r}: {status}")
+        lines.append(f"      ізделген кілттер: {candidates}")
+
+    return Response("\n".join(lines), mimetype="text/plain; charset=utf-8")
 
 
 # ---------------------------------------------------------------------------
