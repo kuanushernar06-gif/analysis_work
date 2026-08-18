@@ -213,6 +213,22 @@ def get_month_component_weeks(conn, week):
     ).fetchall()
 
 
+def _delta(current, prior):
+    """compare_reports ішіндегі _cmp-пен бірдей пішінде (delta, state)
+    қайтарады — 'Талдау' тайлдарындағы ▲/▼ көрсеткішін prior_year
+    салыстыруында да қайта пайдалану үшін."""
+    if current is None or prior is None:
+        return None
+    delta = round(current - prior, 2)
+    if delta == 0:
+        state = "same"
+    elif delta > 0:
+        state = "up"
+    else:
+        state = "down"
+    return {"delta": delta, "state": state}
+
+
 def find_previous_week_with_data(conn, week, stream):
     """Ағымдағы кезекті (айлық ортақ емес) аптаның алдында, дәл осы ағында
     нақты нәтижесі бар ЕҢ СОҢҚЫ аптаны табады. Тікелей алдыңғы апта бос
@@ -843,11 +859,12 @@ def week_report(week_id):
                 comparison["is_aylyq_test"] = bool(stream and stream["category"] == "aylyq_test")
 
     prior_year = None
-    if stream and week["month_number"] is not None:
-        if stream["category"] == "sabaq_tapsyru" and is_summary:
-            prior_year = get_prior_year_comparison(conn, "sabaq_tapsyru", stream["code"], week["month_number"])
-        elif stream["category"] == "baiqau_test":
-            prior_year = get_prior_year_comparison(conn, "baiqau_test", stream["code"], week["month_number"])
+    if stream and week["month_number"] is not None and stream["category"] in ("sabaq_tapsyru", "baiqau_test"):
+        prior_year = get_prior_year_comparison(conn, stream["category"], stream["code"], week["month_number"])
+        if prior_year and report and report.get("has_data"):
+            current_score = report.get("overall_avg_score")
+            for entry in prior_year.values():
+                entry["delta"] = _delta(current_score, entry["avg_score"])
 
     return render_template(
         "report.html",
