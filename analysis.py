@@ -415,35 +415,43 @@ def _compact_name(name):
 
 def _registered_name_candidates(name):
     """Мұғалім тіркеген 'Тегі Аты' пішініндегі атынан (мыс. 'Қуаныш Ернар')
-    рейтинг парағынан ІЗДЕУ басымдығы бойынша кілттер қайтарады:
-    1) 'Аты + Тегінің бас әрпі' біріктірілген түрде (мыс. 'ЕРНАРҚ') —
-       рейтинг парағында көбіне дәл осылай ('Ернар Қ') жазылады;
-    2) тек 'Аты' (мыс. 'ЕРНАР') — біріншісі сәйкес келмесе, соңғы амал
-       ретінде.
-    Бір сөзден тұратын атаулар үшін тек сол бір кілт қайтарылады."""
+    рейтинг парағынан ІЗДЕУ басымдығы бойынша кілт ТОПТАРЫН қайтарады —
+    әр топтағы кілттердің кез келгені сәйкес келсе, сол топ 'тапты' деп
+    есептеледі:
+    1-топ (қатаң, тегінің бас әрпімен): рейтинг парағында куратор аты екі
+       түрлі ретпен жазылуы мүмкін — 'Аты + Тегінің бас әрпі' (мыс.
+       'Ернар Қ') немесе 'Тегінің бас әрпі.Аты' (мыс. 'І.Нұрайым') —
+       екеуі де осы топта бірдей басымдықпен тексеріледі;
+    2-топ (бос, соңғы амал): тек 'Аты' (мыс. 'ЕРНАР') — 1-топ ешбір
+       нақты атаумен сәйкес келмесе ғана қолданылады.
+    Бір сөзден тұратын атаулар үшін тек сол бір кілттен тұратын жалғыз
+    топ қайтарылады."""
     parts = [p for p in _NAME_SPLIT_RE.split((name or "").strip()) if p]
     if len(parts) >= 2:
         surname, firstname = parts[0], parts[1]
-        primary = _compact_name(firstname + surname[0])
-        fallback = _compact_name(firstname)
-        candidates = [primary]
-        if fallback and fallback != primary:
-            candidates.append(fallback)
-        return candidates
+        firstname_c = _compact_name(firstname)
+        initial_c = _compact_name(surname[0])
+        forward = firstname_c + initial_c  # "Ернар Қ" пішіні
+        backward = initial_c + firstname_c  # "І.Нұрайым" пішіні
+        strict_group = [forward] if forward == backward else [forward, backward]
+        groups = [strict_group]
+        if firstname_c and firstname_c not in strict_group:
+            groups.append([firstname_c])
+        return groups
     if parts:
-        return [_compact_name(parts[0])]
+        return [[_compact_name(parts[0])]]
     return []
 
 
 def _match_teacher_curators(teacher_curator_names_by_id, actual_curator_names):
     """Әр мұғалімнің тіркелген куратор аттарын (teacher_id -> [cname, ...])
     рейтинг парағындағы НАҚТЫ куратор аттарымен (actual_curator_names)
-    сәйкестендіреді. Екі кезеңмен жүреді: алдымен БАРЛЫҚ мұғалім үшін тек
-    қатаң 'Аты+Тегінің бас әрпі' кілтін тексереді, содан кейін ғана
-    әлі сәйкессіз қалғандарға 'тек Аты' кілтін қолданады — осылай бір
-    нақты куратор аты кездейсоқ екі басқа мұғалімге қатар 'ұрланып'
-    кетпейді (қатаң сәйкестік әрқашан бос сәйкестіктен басым болады).
-    Қайтарады: {teacher_id: {registered_cname: actual_curator_name}}."""
+    сәйкестендіреді. Кезең-кезеңмен жүреді: алдымен БАРЛЫҚ мұғалім үшін
+    тек қатаң (тегінің бас әрпі бар) кілт тобын тексереді, содан кейін
+    ғана әлі сәйкессіз қалғандарға бос ('тек Аты') кілтті қолданады —
+    осылай бір нақты куратор аты кездейсоқ екі басқа мұғалімге қатар
+    'ұрланып' кетпейді (қатаң сәйкестік әрқашан бос сәйкестіктен басым
+    болады). Қайтарады: {teacher_id: {registered_cname: actual_curator_name}}."""
     actual_compact = {name: _compact_name(name) for name in actual_curator_names}
     teacher_candidates = {
         teacher_id: [(cname, _registered_name_candidates(cname)) for cname in cnames]
@@ -453,21 +461,21 @@ def _match_teacher_curators(teacher_curator_names_by_id, actual_curator_names):
     claimed_by_actual = {}
     matches_by_teacher = {teacher_id: {} for teacher_id in teacher_curator_names_by_id}
 
-    max_rounds = max((len(c) for cands in teacher_candidates.values() for _, c in cands), default=0)
+    max_rounds = max((len(groups) for cands in teacher_candidates.values() for _, groups in cands), default=0)
     for round_idx in range(max_rounds):
         for teacher_id, candidates in teacher_candidates.items():
-            for cname, cand_list in candidates:
+            for cname, cand_groups in candidates:
                 if cname in matches_by_teacher[teacher_id]:
                     continue
-                if round_idx >= len(cand_list):
+                if round_idx >= len(cand_groups):
                     continue
-                candidate = cand_list[round_idx]
-                if not candidate:
+                group = [c for c in cand_groups[round_idx] if c]
+                if not group:
                     continue
                 for actual_name in actual_curator_names:
                     if actual_name in claimed_by_actual:
                         continue
-                    if actual_compact[actual_name].startswith(candidate):
+                    if any(actual_compact[actual_name].startswith(c) for c in group):
                         claimed_by_actual[actual_name] = teacher_id
                         matches_by_teacher[teacher_id][cname] = actual_name
                         break

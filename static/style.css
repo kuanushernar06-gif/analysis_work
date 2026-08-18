@@ -973,6 +973,9 @@ input[type="number"]::-webkit-outer-spin-button {
   gap: 4px 16px;
 }
 .teacher-curators-list li { font-size: 0.85rem; color: var(--text-secondary); }
+.teacher-card-head { margin-bottom: 16px; }
+.teacher-card-head h2 { margin-bottom: 4px; }
+.teacher-card-head p { margin: 0; }
 .teacher-student-breakdown {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));

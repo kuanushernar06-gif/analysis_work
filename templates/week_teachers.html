@@ -12,96 +12,87 @@
   </div>
 </div>
 
-<div class="card">
-  {% if teachers %}
-  <div class="table-scroll">
-    <table class="table">
-      <thead><tr><th>Мұғалім</th><th>Ортақ балл</th><th>Кураторлар</th><th>Оқушылар</th></tr></thead>
-      <tbody>
-        {% for t in teachers %}
-        <tr id="teacher-{{ t.id }}">
-          <td>{{ t.name }}</td>
-          <td>{% if t.avg_score is not none %}{{ '%.2f'|format(t.avg_score) }}{% else %}<span class="muted">нәтиже жоқ</span>{% endif %}</td>
-          <td>{{ t.curator_count }}/{{ t.total_curators }}</td>
-          <td>
-            <button type="button" class="teacher-curators-toggle" data-teacher-toggle="teacher-analysis-{{ t.id }}">
-              <span class="teacher-curators-arrow" aria-hidden="true">▸</span> Оқушылар
-            </button>
-          </td>
-        </tr>
-        <tr class="teacher-curators-row" id="teacher-analysis-{{ t.id }}" hidden>
-          <td colspan="4">
-            {% if t.report and t.report.has_data %}
-            <div class="stat-grid">
-              {% if t.report.has_targets %}
-              <div class="stat-tile {{ 'stat-good' if t.report.target_achievement_percent is not none and t.report.target_achievement_percent >= 100 else 'stat-warn' }}">
-                <div class="stat-value">{% if t.report.target_achievement_percent is not none %}{{ t.report.target_achievement_percent }}%{% else %}—{% endif %}</div>
-                <div class="stat-label">Мақсат орындалу пайызы</div>
-              </div>
-              {% endif %}
-              <div class="stat-tile">
-                <div class="stat-value">{{ t.report.overall_avg_score }}</div>
-                <div class="stat-label">Ортақ орташа балл</div>
-              </div>
-              <div class="stat-tile stat-good">
-                <div class="stat-value">{{ t.report.max_achiever_students }}</div>
-                <div class="stat-label">Ең жоғарғы балл жинаған оқушы</div>
-              </div>
-              <div class="stat-tile stat-warn">
-                <div class="stat-value">{{ t.report.zero_students }}</div>
-                <div class="stat-label">0 балл жинаған оқушы</div>
-              </div>
-              {% if t.best_curator %}
-              <div class="stat-tile stat-good">
-                <div class="stat-value">{{ '%.2f'|format(t.best_curator.avg_score) }}</div>
-                <div class="stat-label">Ең жоғарғы ортақ балл — {{ t.best_curator.curator }}</div>
-              </div>
-              {% endif %}
-              {% if t.worst_curator %}
-              <div class="stat-tile stat-warn">
-                <div class="stat-value">{{ '%.2f'|format(t.worst_curator.avg_score) }}</div>
-                <div class="stat-label">Ең төменгі ортақ балл — {{ t.worst_curator.curator }}</div>
-              </div>
-              {% endif %}
-            </div>
-            {% else %}
-            <p class="muted">Бұл аптада нәтиже жоқ.</p>
-            {% endif %}
-            <div class="teacher-student-breakdown">
-              <div class="teacher-student-group">
-                <h4>Нашар оқушылар (0–3 балл)</h4>
-                {% if t.weak_students %}
-                <ul class="teacher-curators-list">
-                  {% for s in t.weak_students %}
-                  <li>{{ s.student }} — {{ s.curator }} <span class="muted">({{ '%.2f'|format(s.avg_score) }})</span></li>
-                  {% endfor %}
-                </ul>
-                {% else %}
-                <p class="muted">Жоқ.</p>
-                {% endif %}
-              </div>
-              <div class="teacher-student-group">
-                <h4>Мықты оқушылар (13–15 балл)</h4>
-                {% if t.strong_students %}
-                <ul class="teacher-curators-list">
-                  {% for s in t.strong_students %}
-                  <li>{{ s.student }} — {{ s.curator }} <span class="muted">({{ '%.2f'|format(s.avg_score) }})</span></li>
-                  {% endfor %}
-                </ul>
-                {% else %}
-                <p class="muted">Жоқ.</p>
-                {% endif %}
-              </div>
-            </div>
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+{% if teachers %}
+  {% for t in teachers %}
+  <div class="card" id="teacher-{{ t.id }}">
+    <div class="teacher-card-head">
+      <h2>{{ t.name }}</h2>
+      <p class="muted">
+        Ортақ балл: {% if t.avg_score is not none %}{{ '%.2f'|format(t.avg_score) }}{% else %}нәтиже жоқ{% endif %}
+        · Кураторлар: {{ t.curator_count }}/{{ t.total_curators }}
+      </p>
+    </div>
+
+    {% if t.report and t.report.has_data %}
+    <div class="stat-grid">
+      {% if t.report.has_targets %}
+      <div class="stat-tile {{ 'stat-good' if t.report.target_achievement_percent is not none and t.report.target_achievement_percent >= 100 else 'stat-warn' }}">
+        <div class="stat-value">{% if t.report.target_achievement_percent is not none %}{{ t.report.target_achievement_percent }}%{% else %}—{% endif %}</div>
+        <div class="stat-label">Мақсат орындалу пайызы</div>
+      </div>
+      {% endif %}
+      <div class="stat-tile">
+        <div class="stat-value">{{ t.report.overall_avg_score }}</div>
+        <div class="stat-label">Ортақ орташа балл</div>
+      </div>
+      <div class="stat-tile stat-good">
+        <div class="stat-value">{{ t.report.max_achiever_students }}</div>
+        <div class="stat-label">Ең жоғарғы балл жинаған оқушы</div>
+      </div>
+      <div class="stat-tile stat-warn">
+        <div class="stat-value">{{ t.report.zero_students }}</div>
+        <div class="stat-label">0 балл жинаған оқушы</div>
+      </div>
+      {% if t.best_curator %}
+      <div class="stat-tile stat-good">
+        <div class="stat-value">{{ '%.2f'|format(t.best_curator.avg_score) }}</div>
+        <div class="stat-label">Ең жоғарғы ортақ балл — {{ t.best_curator.curator }}</div>
+      </div>
+      {% endif %}
+      {% if t.worst_curator %}
+      <div class="stat-tile stat-warn">
+        <div class="stat-value">{{ '%.2f'|format(t.worst_curator.avg_score) }}</div>
+        <div class="stat-label">Ең төменгі ортақ балл — {{ t.worst_curator.curator }}</div>
+      </div>
+      {% endif %}
+    </div>
+    {% else %}
+    <p class="muted">Бұл аптада нәтиже жоқ.</p>
+    {% endif %}
+
+    <h3>Оқушылар</h3>
+    <div class="teacher-student-breakdown">
+      <div class="teacher-student-group">
+        <h4>Нашар оқушылар (0–3 балл)</h4>
+        {% if t.weak_students %}
+        <ul class="teacher-curators-list">
+          {% for s in t.weak_students %}
+          <li>{{ s.student }} — {{ s.curator }} <span class="muted">({{ '%.2f'|format(s.avg_score) }})</span></li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <p class="muted">Жоқ.</p>
+        {% endif %}
+      </div>
+      <div class="teacher-student-group">
+        <h4>Мықты оқушылар (13–15 балл)</h4>
+        {% if t.strong_students %}
+        <ul class="teacher-curators-list">
+          {% for s in t.strong_students %}
+          <li>{{ s.student }} — {{ s.curator }} <span class="muted">({{ '%.2f'|format(s.avg_score) }})</span></li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <p class="muted">Жоқ.</p>
+        {% endif %}
+      </div>
+    </div>
   </div>
-  {% else %}
+  {% endfor %}
+{% else %}
+<div class="card">
   <p class="muted">Бұл поток үшін әлі мұғалім тіркелмеген.</p>
-  {% endif %}
 </div>
+{% endif %}
 
 {% endblock %}
