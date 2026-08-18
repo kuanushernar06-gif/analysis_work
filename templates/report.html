@@ -61,21 +61,21 @@
     </div>
     {% if prior_year %}
       {% if prior_year.sabaq_tapsyru %}
-      <div class="stat-tile">
+      <div class="stat-tile stat-prior-year">
         <div class="stat-value">{% if prior_year.sabaq_tapsyru.avg_score is not none %}{{ '%.2f'|format(prior_year.sabaq_tapsyru.avg_score) }}{% else %}—{% endif %}</div>
         {{ delta(prior_year.sabaq_tapsyru.delta) }}
         <div class="stat-label">Өткен жыл ({{ prior_year.sabaq_tapsyru.academic_year }}) ортақ баллы</div>
       </div>
       {% endif %}
       {% if prior_year.dt %}
-      <div class="stat-tile">
+      <div class="stat-tile stat-prior-year">
         <div class="stat-value">{% if prior_year.dt.avg_score is not none %}{{ '%.2f'|format(prior_year.dt.avg_score) }}{% else %}—{% endif %}</div>
         {{ delta(prior_year.dt.delta) }}
         <div class="stat-label">Өткен жыл ({{ prior_year.dt.academic_year }}) ДТ ортақ баллы</div>
       </div>
       {% endif %}
       {% if prior_year.bt %}
-      <div class="stat-tile">
+      <div class="stat-tile stat-prior-year">
         <div class="stat-value">{% if prior_year.bt.avg_score is not none %}{{ '%.2f'|format(prior_year.bt.avg_score) }}{% else %}—{% endif %}</div>
         {{ delta(prior_year.bt.delta) }}
         <div class="stat-label">Өткен жыл ({{ prior_year.bt.academic_year }}) БТ ортақ баллы</div>

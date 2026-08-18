@@ -1157,6 +1157,8 @@ details[open] > .note-head::before { content: "▾"; }
 .stat-warn .stat-value { color: var(--critical); }
 .stat-good { border-left-color: var(--good); }
 .stat-good .stat-value { color: var(--good); }
+.stat-prior-year { border-left-color: #fbbc04; }
+.stat-prior-year .stat-value { color: #fbbc04; }
 
 .stat-delta { font-size: 0.78rem; font-weight: 600; margin-top: 3px; }
 .stat-delta-up { color: var(--good); }
