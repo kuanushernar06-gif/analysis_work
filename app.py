@@ -1209,7 +1209,7 @@ def upload_results_file(week_id):
         conn.execute(
             "INSERT INTO results (week_id, import_id, curator, student, subject, topic, score, max_score) "
             "VALUES (?, ?, NULL, ?, ?, NULL, ?, ?)",
-            (week_id, import_id, entry["student"], entry["subject"], entry["score"], default_max_score),
+            (week_id, import_id, entry["student"], entry["subject"], entry["score"], entry.get("max_score", default_max_score)),
         )
     conn.execute("UPDATE imports SET row_count = ? WHERE id = ?", (len(entries), import_id))
     conn.commit()

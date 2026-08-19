@@ -89,6 +89,26 @@ def fetch_workbook(raw_url: str):
     return sheets
 
 
+def _student_column_index(lower_header):
+    idx = _find_by_keywords(lower_header, STUDENT_KEYWORDS)
+    return idx if idx is not None else 0
+
+
+def _numeric_cell(raw):
+    """Ұяшықтан сан алады, сан шықпаса (бос, '-', мәтін) None қайтарады."""
+    if raw is None:
+        return None
+    if isinstance(raw, (int, float)):
+        return float(raw)
+    text = str(raw).strip()
+    if text in ("", "-", "—"):
+        return None
+    try:
+        return float(text.replace(",", "."))
+    except ValueError:
+        return None
+
+
 def _parse_results_sheet(ws):
     """Бір парақтың жолдарын оқиды: бірінші баған оқушының аты-жөні, одан
     кейінгі бағандар — сан болса ғана балл ретінде алынады (метадеректер
@@ -105,9 +125,7 @@ def _parse_results_sheet(ws):
     lower_header = [h.lower() for h in header]
     body = rows[1:]
 
-    student_idx = _find_by_keywords(lower_header, STUDENT_KEYWORDS)
-    if student_idx is None:
-        student_idx = 0
+    student_idx = _student_column_index(lower_header)
 
     pairs = []
     for row in body:
@@ -118,32 +136,68 @@ def _parse_results_sheet(ws):
         for i in range(len(header)):
             if i == student_idx or i >= len(row):
                 continue
-            raw = row[i]
-            if raw is None:
+            score = _numeric_cell(row[i])
+            if score is None:
                 continue
-            if isinstance(raw, (int, float)):
-                score = float(raw)
-            else:
-                text = str(raw).strip()
-                if text in ("", "-", "—"):
-                    continue
-                try:
-                    score = float(text.replace(",", "."))
-                except ValueError:
-                    continue
             pairs.append((student, score))
+    return pairs
+
+
+# 'Шығармашылық' парағында оқушы екі бөлек пәннен балл алады — Қ. Тарих
+# (20 балл) және Оқу сауаттылығы (10 балл) — соларды қосқанда жалпы
+# максимум 30 балл болады.
+CREATIVE_SUBJECT_KEYWORD = "ШЫҒАРМ"
+CREATIVE_MAX_SCORE = 30
+
+
+def _parse_creative_results_sheet(ws):
+    """'Шығармашылық' парағын оқиды: оқушы аты-жөнінен басқа әр баған
+    бөлек пәннің баллы (Қ. Тарих — 20, Оқу сауаттылығы — 10) — соларды
+    қосып, әр оқушыға БІР жол қайтарады (жалпы максимум — 30 балл), 'Ортақ
+    анализде' Шығармашылық бөлек, қосынды балл ретінде көрсетілуі үшін.
+    Кемінде бір баған толтырылған оқушылар ғана қайтарылады."""
+    rows = [list(row) for row in ws.iter_rows(values_only=True)]
+    while rows and all(cell is None or str(cell).strip() == "" for cell in rows[-1]):
+        rows.pop()
+    if len(rows) < 2:
+        return []
+
+    header = [str(h).strip() if h is not None else "" for h in rows[0]]
+    lower_header = [h.lower() for h in header]
+    body = rows[1:]
+
+    student_idx = _student_column_index(lower_header)
+
+    pairs = []
+    for row in body:
+        student_cell = row[student_idx] if student_idx < len(row) else None
+        student = str(student_cell).strip() if student_cell is not None else ""
+        if not student or is_summary_row(student):
+            continue
+        total = 0.0
+        has_score = False
+        for i in range(len(header)):
+            if i == student_idx or i >= len(row):
+                continue
+            score = _numeric_cell(row[i])
+            if score is None:
+                continue
+            total += score
+            has_score = True
+        if has_score:
+            pairs.append((student, total))
     return pairs
 
 
 def parse_results_file(file_bytes):
     """ДЕҢГЕЙЛІК/БАЙҚАУ ТЕСТ санатына жүктелген нәтиже файлын (.xlsx) оқиды.
-    Файлда бірнеше парақ (лист) болуы мүмкін — әрқайсысы бөлек пән/топ деп
-    қаралады, ПӘН АТАУЫ РЕТІНДЕ СОЛ ПАРАҚТЫҢ АТАУЫ алынады (мыс. 'Тарих
-    жалпы' және 'Шығармашылық' деген екі парақ — content бөлек, бірақ екеуі
-    де бірдей пішінде: бірінші баған оқушының аты-жөні, қалған бағандардың
-    ішінен сан шыққандары — сол пәннен алған балл). 'ҮЛГІ' парағы және
-    'Орташа балл' сияқты қорытынды жолдар өткізіп жіберіледі. Қайтарады:
-    [{"student":.., "subject":.., "score":..}, ...]."""
+    Файлда екі бөлек парақ (лист) болуы керек — 'Тарих жалпы' (әр оқушы бір
+    пәннен, 20 балл) және 'Шығармашылық' ('ШЫҒАРМ' сөзі бар парақ атауы —
+    әр оқушы Қ. Тарих (20) пен Оқу сауаттылығы (10) деген екі бөлек баған
+    бойынша балл алады, қосындысы 30 балл, бір жолға біріктіріліп
+    қайтарылады). ПӘН АТАУЫ РЕТІНДЕ СОЛ ПАРАҚТЫҢ АТАУЫ алынады. 'ҮЛГІ'
+    парағы және 'Орташа балл' сияқты қорытынды жолдар өткізіп жіберіледі.
+    Қайтарады: [{"student":.., "subject":.., "score":.., "max_score":..}, ...]."""
     try:
         wb = openpyxl.load_workbook(io.BytesIO(file_bytes), data_only=True, read_only=True)
     except Exception as e:
@@ -154,8 +208,15 @@ def parse_results_file(file_bytes):
         sheet_name = (ws.title or "").strip()
         if not sheet_name or is_template_sheet(sheet_name):
             continue
-        for student, score in _parse_results_sheet(ws):
-            entries.append({"student": student, "subject": sheet_name, "score": score})
+        if CREATIVE_SUBJECT_KEYWORD in sheet_name.upper():
+            for student, score in _parse_creative_results_sheet(ws):
+                entries.append({
+                    "student": student, "subject": sheet_name,
+                    "score": score, "max_score": CREATIVE_MAX_SCORE,
+                })
+        else:
+            for student, score in _parse_results_sheet(ws):
+                entries.append({"student": student, "subject": sheet_name, "score": score})
 
     if not entries:
         raise SheetFetchError("Файлдан бірде-бір дұрыс нәтиже табылмады.")
