@@ -846,10 +846,16 @@ def week_report(week_id):
         curator_analysis = parse_curator_analysis(week)
         curator_week_ids = [week_id]
 
-    # Ең жоғарғы/ең төменгі ортақ балл куратор — тек 2-айдан бастап: 1-айда
-    # рейтинг кестелерінде куратор аты-жөндері бірізді жазылмаған болатын.
+    # Ең жоғарғы/ең төменгі ортақ балл куратор — ТАРИХ-01 ағымының (Шілде)
+    # 1-айынан басқа әрдайым көрсетіледі: сол ағымда рейтинг кестелерінде
+    # куратор аты-жөндері бірізді жазылмаған болатын (бағдарлама алғаш
+    # іске қосылған кез), басқа барлық ағымдардың (Тамыз, Қыркүйек, т.б.)
+    # 1-айында бұл мәселе жоқ.
+    is_first_month_of_shilde = (
+        stream is not None and stream["code"] == "ТАРИХ-01" and week["month_number"] == 1
+    )
     best_curator = worst_curator = None
-    if report and report.get("has_data") and week["month_number"] is not None and week["month_number"] >= 2:
+    if report and report.get("has_data") and week["month_number"] is not None and not is_first_month_of_shilde:
         best_curator, worst_curator = compute_curator_extremes(conn, curator_week_ids)
 
     comparison = None
