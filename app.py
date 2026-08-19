@@ -31,6 +31,7 @@ from sheets import (
     parse_results_file,
     parse_prior_year_report,
     SheetFetchError,
+    CREATIVE_SUBJECT_KEYWORD,
 )
 from gdocs import (
     fetch_doc_text,
@@ -861,14 +862,15 @@ def week_report(week_id):
                 comparison["is_aylyq_test"] = bool(stream and stream["category"] == "aylyq_test")
 
     # ДЕҢГЕЙЛІК/БАЙҚАУ ТЕСТ санатында нәтиже екі бөлек топқа бөлінеді:
-    # 'Шығармашылық' (пән атауында 'ШЫҒАРМ' сөзі бар) және 'Тарих жалпы'
-    # (қалғандары) — жылдық отчеттегі 'ШЫҒАРМ' мен 'БАРЛЫҚ КОМБ ТАРИХ'
-    # парақтарына сәйкес. Тек шығармашылықтың ортақ баллы өткен жылмен
-    # салыстырылады, жалпы тарих салыстырылмайды.
+    # 'Шығармашылық' (пән атауында CREATIVE_SUBJECT_KEYWORD түбірі бар —
+    # 'Шығармашылық' немесе қысқартылған 'Шығарым' нұсқасын да қамтиды)
+    # және 'Тарих жалпы' (қалғандары) — жылдық отчеттегі 'ШЫҒАРМ' мен
+    # 'БАРЛЫҚ КОМБ ТАРИХ' парақтарына сәйкес. Тек шығармашылықтың ортақ
+    # баллы өткен жылмен салыстырылады, жалпы тарих салыстырылмайды.
     creative_report = general_report = None
     if stream and stream["category"] == "baiqau_test" and report and report.get("has_data"):
         all_subjects = [s["name"] for s in (report.get("subjects") or [])]
-        creative_subjects = [s for s in all_subjects if "ШЫҒАРМ" in s.upper()]
+        creative_subjects = [s for s in all_subjects if CREATIVE_SUBJECT_KEYWORD in s.upper()]
         general_subjects = [s for s in all_subjects if s not in creative_subjects]
         if creative_subjects:
             creative_report = compute_report(conn, week_id, subjects_filter=creative_subjects)

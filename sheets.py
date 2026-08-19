@@ -94,6 +94,22 @@ def _student_column_index(lower_header):
     return idx if idx is not None else 0
 
 
+def _strip_header_title_row(rows):
+    """Кейбір парақтарда нақты баған атаулары (Оқушының аты-жөні, Балл,
+    т.б.) орналасқан жолдың алдында тақырып жолы тұрады (мыс., '1-АЙ
+    ДЕҢГЕЙЛІК ТЕСТ' деген жалғыз ұяшық) — оны нақты header деп қабылдап
+    алсақ, содан кейінгі бағандар мүлде ескерілмей қалады. Алдыңғы 3
+    жолдың ішінен толтырылған ұяшығы 2-ден кем болатындарын (тақырып жолы
+    деп) өткізіп жібереміз де, содан кейінгі жолды header ретінде аламыз."""
+    idx = 0
+    while idx < min(len(rows) - 1, 3):
+        non_empty = sum(1 for c in rows[idx] if c is not None and str(c).strip() != "")
+        if non_empty >= 2:
+            break
+        idx += 1
+    return rows[idx:]
+
+
 def _numeric_cell(raw):
     """Ұяшықтан сан алады, сан шықпаса (бос, '-', мәтін) None қайтарады."""
     if raw is None:
@@ -118,6 +134,7 @@ def _parse_results_sheet(ws):
     rows = [list(row) for row in ws.iter_rows(values_only=True)]
     while rows and all(cell is None or str(cell).strip() == "" for cell in rows[-1]):
         rows.pop()
+    rows = _strip_header_title_row(rows)
     if len(rows) < 2:
         return []
 
@@ -143,11 +160,28 @@ def _parse_results_sheet(ws):
     return pairs
 
 
-# 'Шығармашылық' парағында оқушы екі бөлек пәннен балл алады — Қ. Тарих
+# 'Шығармашылық' парағында оқушы бөлек пәндерден балл алады — Қ. Тарих
 # (20 балл) және Оқу сауаттылығы (10 балл) — соларды қосқанда жалпы
-# максимум 30 балл болады.
-CREATIVE_SUBJECT_KEYWORD = "ШЫҒАРМ"
+# максимум 30 балл болады. Парақ атауы кейде 'Шығармашылық', кейде
+# қысқартылып 'Шығарым' деп те жазылады — екеуінің де ортақ түбірі
+# 'ШЫҒАР' болғандықтан сол бойынша анықтаймыз.
+CREATIVE_SUBJECT_KEYWORD = "ШЫҒАР"
 CREATIVE_MAX_SCORE = 30
+
+# Кейбір парақтарда әр пәннің баллынан бөлек, содан бұрын есептеп қойылған
+# 'Жалпы балл' деген қорытынды баған да болады — ондай баған болса, оны
+# қайта өз бетімізше қоспай (екі есе саналып кетпес үшін), тікелей сол
+# бағанның мәнін оқушының қосынды баллы ретінде аламыз.
+CREATIVE_TOTAL_COLUMN_KEYWORDS = ["жалпы балл", "жалпы", "қорытынды", "итого", "total", "сумма"]
+
+
+def _find_creative_total_column(lower_header, student_idx):
+    for i, h in enumerate(lower_header):
+        if i == student_idx:
+            continue
+        if any(kw in h for kw in CREATIVE_TOTAL_COLUMN_KEYWORDS):
+            return i
+    return None
 
 
 def _parse_creative_results_sheet(ws):
@@ -155,10 +189,13 @@ def _parse_creative_results_sheet(ws):
     бөлек пәннің баллы (Қ. Тарих — 20, Оқу сауаттылығы — 10) — соларды
     қосып, әр оқушыға БІР жол қайтарады (жалпы максимум — 30 балл), 'Ортақ
     анализде' Шығармашылық бөлек, қосынды балл ретінде көрсетілуі үшін.
-    Кемінде бір баған толтырылған оқушылар ғана қайтарылады."""
+    Парақта дайын 'Жалпы балл' бағаны болса, әр пәнді қайта қоспай, сол
+    бағанның өзі қолданылады. Кемінде бір баған толтырылған оқушылар ғана
+    қайтарылады."""
     rows = [list(row) for row in ws.iter_rows(values_only=True)]
     while rows and all(cell is None or str(cell).strip() == "" for cell in rows[-1]):
         rows.pop()
+    rows = _strip_header_title_row(rows)
     if len(rows) < 2:
         return []
 
@@ -167,12 +204,18 @@ def _parse_creative_results_sheet(ws):
     body = rows[1:]
 
     student_idx = _student_column_index(lower_header)
+    total_idx = _find_creative_total_column(lower_header, student_idx)
 
     pairs = []
     for row in body:
         student_cell = row[student_idx] if student_idx < len(row) else None
         student = str(student_cell).strip() if student_cell is not None else ""
         if not student or is_summary_row(student):
+            continue
+        if total_idx is not None:
+            score = _numeric_cell(row[total_idx] if total_idx < len(row) else None)
+            if score is not None:
+                pairs.append((student, score))
             continue
         total = 0.0
         has_score = False
