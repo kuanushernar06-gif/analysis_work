@@ -167,12 +167,22 @@ def _parse_results_sheet(ws):
 # 'ШЫҒАР' болғандықтан сол бойынша анықтаймыз.
 CREATIVE_SUBJECT_KEYWORD = "ШЫҒАР"
 CREATIVE_MAX_SCORE = 30
+CREATIVE_HISTORY_MAX_SCORE = 20
+CREATIVE_LITERACY_MAX_SCORE = 10
+# Қосынды баллдан бөлек, пән бойынша бөлек көрсету үшін (мыс. 'Ортақ
+# анализде' 'Тарих пәні бойынша' / 'Оқу сауаттылығы пәні бойынша' деп) —
+# осы жұрнақтармен бөлек пән ретінде сақталады.
+CREATIVE_HISTORY_SUFFIX = " — Тарих"
+CREATIVE_LITERACY_SUFFIX = " — Оқу сауаттылығы"
 
 # Кейбір парақтарда әр пәннің баллынан бөлек, содан бұрын есептеп қойылған
 # 'Жалпы балл' деген қорытынды баған да болады — ондай баған болса, оны
 # қайта өз бетімізше қоспай (екі есе саналып кетпес үшін), тікелей сол
 # бағанның мәнін оқушының қосынды баллы ретінде аламыз.
 CREATIVE_TOTAL_COLUMN_KEYWORDS = ["жалпы балл", "жалпы", "қорытынды", "итого", "total", "сумма"]
+CREATIVE_HISTORY_COLUMN_KEYWORDS = ["тарих"]
+CREATIVE_LITERACY_COLUMN_KEYWORDS = ["оқу сауат", "сауаттылығы"]
+CREATIVE_LITERACY_COLUMN_EXCLUDE_KEYWORDS = ["математик"]
 
 
 def _find_creative_total_column(lower_header, student_idx):
@@ -184,14 +194,36 @@ def _find_creative_total_column(lower_header, student_idx):
     return None
 
 
+def _find_creative_subject_columns(lower_header, student_idx):
+    """'Қазақстан тарихы' және 'Оқу сауаттылығы' бағандарын табады —
+    'Математикалық сауаттылық' сияқты ұқсас атаулармен шатаспас үшін
+    сауаттылық бағанын анықтауда 'математик' сөзі бар бағандар өткізіп
+    жіберіледі."""
+    history_idx = literacy_idx = None
+    for i, h in enumerate(lower_header):
+        if i == student_idx:
+            continue
+        if history_idx is None and any(kw in h for kw in CREATIVE_HISTORY_COLUMN_KEYWORDS):
+            history_idx = i
+        elif (
+            literacy_idx is None
+            and any(kw in h for kw in CREATIVE_LITERACY_COLUMN_KEYWORDS)
+            and not any(kw in h for kw in CREATIVE_LITERACY_COLUMN_EXCLUDE_KEYWORDS)
+        ):
+            literacy_idx = i
+    return history_idx, literacy_idx
+
+
 def _parse_creative_results_sheet(ws):
     """'Шығармашылық' парағын оқиды: оқушы аты-жөнінен басқа әр баған
-    бөлек пәннің баллы (Қ. Тарих — 20, Оқу сауаттылығы — 10) — соларды
-    қосып, әр оқушыға БІР жол қайтарады (жалпы максимум — 30 балл), 'Ортақ
-    анализде' Шығармашылық бөлек, қосынды балл ретінде көрсетілуі үшін.
-    Парақта дайын 'Жалпы балл' бағаны болса, әр пәнді қайта қоспай, сол
-    бағанның өзі қолданылады. Кемінде бір баған толтырылған оқушылар ғана
-    қайтарылады."""
+    бөлек пәннің баллы (Қ. Тарих — 20, Оқу сауаттылығы — 10). Әр оқушы
+    үшін (қосынды балл, тарих баллы, сауаттылық баллы) үштігін қайтарады —
+    қосынды 'Ортақ анализдегі' жалпы Шығармашылық көрсеткіші үшін (жалпы
+    максимум — 30 балл), ал жеке пән баллдары пән бойынша бөлек көрсету
+    үшін қолданылады. Парақта дайын 'Жалпы балл' бағаны болса, қосындыны
+    қайта есептемей, сол бағанның өзі қолданылады — бірақ жеке пән
+    баллдары әрдайым өз бағандарынан оқылады. Кемінде бір баған
+    толтырылған оқушылар ғана қайтарылады."""
     rows = [list(row) for row in ws.iter_rows(values_only=True)]
     while rows and all(cell is None or str(cell).strip() == "" for cell in rows[-1]):
         rows.pop()
@@ -205,31 +237,34 @@ def _parse_creative_results_sheet(ws):
 
     student_idx = _student_column_index(lower_header)
     total_idx = _find_creative_total_column(lower_header, student_idx)
+    history_idx, literacy_idx = _find_creative_subject_columns(lower_header, student_idx)
 
-    pairs = []
+    results = []
     for row in body:
         student_cell = row[student_idx] if student_idx < len(row) else None
         student = str(student_cell).strip() if student_cell is not None else ""
         if not student or is_summary_row(student):
             continue
+
+        history_score = _numeric_cell(row[history_idx]) if history_idx is not None and history_idx < len(row) else None
+        literacy_score = _numeric_cell(row[literacy_idx]) if literacy_idx is not None and literacy_idx < len(row) else None
+
         if total_idx is not None:
-            score = _numeric_cell(row[total_idx] if total_idx < len(row) else None)
-            if score is not None:
-                pairs.append((student, score))
+            total = _numeric_cell(row[total_idx] if total_idx < len(row) else None)
+        else:
+            total = None
+            for i in range(len(header)):
+                if i == student_idx or i >= len(row):
+                    continue
+                score = _numeric_cell(row[i])
+                if score is None:
+                    continue
+                total = (total or 0.0) + score
+
+        if total is None and history_score is None and literacy_score is None:
             continue
-        total = 0.0
-        has_score = False
-        for i in range(len(header)):
-            if i == student_idx or i >= len(row):
-                continue
-            score = _numeric_cell(row[i])
-            if score is None:
-                continue
-            total += score
-            has_score = True
-        if has_score:
-            pairs.append((student, total))
-    return pairs
+        results.append((student, total, history_score, literacy_score))
+    return results
 
 
 def parse_results_file(file_bytes):
@@ -252,11 +287,22 @@ def parse_results_file(file_bytes):
         if not sheet_name or is_template_sheet(sheet_name):
             continue
         if CREATIVE_SUBJECT_KEYWORD in sheet_name.upper():
-            for student, score in _parse_creative_results_sheet(ws):
-                entries.append({
-                    "student": student, "subject": sheet_name,
-                    "score": score, "max_score": CREATIVE_MAX_SCORE,
-                })
+            for student, total, history_score, literacy_score in _parse_creative_results_sheet(ws):
+                if total is not None:
+                    entries.append({
+                        "student": student, "subject": sheet_name,
+                        "score": total, "max_score": CREATIVE_MAX_SCORE,
+                    })
+                if history_score is not None:
+                    entries.append({
+                        "student": student, "subject": sheet_name + CREATIVE_HISTORY_SUFFIX,
+                        "score": history_score, "max_score": CREATIVE_HISTORY_MAX_SCORE,
+                    })
+                if literacy_score is not None:
+                    entries.append({
+                        "student": student, "subject": sheet_name + CREATIVE_LITERACY_SUFFIX,
+                        "score": literacy_score, "max_score": CREATIVE_LITERACY_MAX_SCORE,
+                    })
         else:
             for student, score in _parse_results_sheet(ws):
                 entries.append({"student": student, "subject": sheet_name, "score": score})

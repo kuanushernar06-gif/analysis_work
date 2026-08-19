@@ -32,6 +32,8 @@ from sheets import (
     parse_prior_year_report,
     SheetFetchError,
     CREATIVE_SUBJECT_KEYWORD,
+    CREATIVE_HISTORY_SUFFIX,
+    CREATIVE_LITERACY_SUFFIX,
 )
 from gdocs import (
     fetch_doc_text,
@@ -867,19 +869,38 @@ def week_report(week_id):
                 comparison = compare_reports(report, prev_report)
                 comparison["is_aylyq_test"] = bool(stream and stream["category"] == "aylyq_test")
 
-    # ДЕҢГЕЙЛІК/БАЙҚАУ ТЕСТ санатында нәтиже екі бөлек топқа бөлінеді:
+    # ДЕҢГЕЙЛІК/БАЙҚАУ ТЕСТ санатында нәтиже бөлек топтарға бөлінеді:
     # 'Шығармашылық' (пән атауында CREATIVE_SUBJECT_KEYWORD түбірі бар —
-    # 'Шығармашылық' немесе қысқартылған 'Шығарым' нұсқасын да қамтиды)
-    # және 'Тарих жалпы' (қалғандары) — жылдық отчеттегі 'ШЫҒАРМ' мен
-    # 'БАРЛЫҚ КОМБ ТАРИХ' парақтарына сәйкес. Тек шығармашылықтың ортақ
-    # баллы өткен жылмен салыстырылады, жалпы тарих салыстырылмайды.
+    # 'Шығармашылық' немесе қысқартылған 'Шығарым' нұсқасын да қамтиды,
+    # бірақ пән бойынша бөлек CREATIVE_HISTORY_SUFFIX/CREATIVE_LITERACY_SUFFIX
+    # жұрнағы жоқ — олар өз алдына бөлек есептеледі) және 'Тарих жалпы'
+    # (қалғандары) — жылдық отчеттегі 'ШЫҒАРМ' мен 'БАРЛЫҚ КОМБ ТАРИХ'
+    # парақтарына сәйкес. Тек шығармашылықтың қосынды баллы өткен жылмен
+    # салыстырылады, жалпы тарих салыстырылмайды.
     creative_report = general_report = None
+    creative_history_report = creative_literacy_report = None
     if stream and stream["category"] == "baiqau_test" and report and report.get("has_data"):
         all_subjects = [s["name"] for s in (report.get("subjects") or [])]
-        creative_subjects = [s for s in all_subjects if CREATIVE_SUBJECT_KEYWORD in s.upper()]
-        general_subjects = [s for s in all_subjects if s not in creative_subjects]
+        creative_history_subjects = [s for s in all_subjects if s.endswith(CREATIVE_HISTORY_SUFFIX)]
+        creative_literacy_subjects = [s for s in all_subjects if s.endswith(CREATIVE_LITERACY_SUFFIX)]
+        creative_subjects = [
+            s for s in all_subjects
+            if CREATIVE_SUBJECT_KEYWORD in s.upper()
+            and s not in creative_history_subjects
+            and s not in creative_literacy_subjects
+        ]
+        general_subjects = [
+            s for s in all_subjects
+            if s not in creative_subjects
+            and s not in creative_history_subjects
+            and s not in creative_literacy_subjects
+        ]
         if creative_subjects:
             creative_report = compute_report(conn, week_id, subjects_filter=creative_subjects)
+        if creative_history_subjects:
+            creative_history_report = compute_report(conn, week_id, subjects_filter=creative_history_subjects)
+        if creative_literacy_subjects:
+            creative_literacy_report = compute_report(conn, week_id, subjects_filter=creative_literacy_subjects)
         if general_subjects:
             general_report = compute_report(conn, week_id, subjects_filter=general_subjects)
 
@@ -911,6 +932,8 @@ def week_report(week_id):
         comparison=comparison,
         prior_year=prior_year,
         creative_report=creative_report,
+        creative_history_report=creative_history_report,
+        creative_literacy_report=creative_literacy_report,
         general_report=general_report,
     )
 

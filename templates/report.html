@@ -73,6 +73,18 @@
 {% endif %}
 {% endmacro %}
 
+{% macro subject_chip(rep, label, modifier) %}
+{% if rep and rep.has_data %}
+<div class="subject-chip subject-chip-{{ modifier }}">
+  <div class="subject-chip-name">{{ label }}</div>
+  <div class="subject-chip-value">
+    {% if rep.overall_avg_percent is not none %}{{ rep.overall_avg_percent }}%{% else %}—{% endif %}
+    <span class="subject-chip-sub">{{ rep.overall_avg_score }} балл</span>
+  </div>
+</div>
+{% endif %}
+{% endmacro %}
+
 {% if not report.has_data %}
 <div class="card">
   <p class="muted">
@@ -97,6 +109,13 @@
     <div class="stat-grid">
       {{ stat_tiles(creative_report, true, true, none, prior_year) }}
     </div>
+    {% if (creative_history_report and creative_history_report.has_data) or (creative_literacy_report and creative_literacy_report.has_data) %}
+    <p class="subject-breakdown-label">Пән бойынша</p>
+    <div class="subject-chip-row">
+      {{ subject_chip(creative_history_report, "Тарих пәні бойынша", "history") }}
+      {{ subject_chip(creative_literacy_report, "Оқу сауаттылығы пәні бойынша", "literacy") }}
+    </div>
+    {% endif %}
     {% endif %}
     {% if general_report and general_report.has_data %}
     <h3>Тарих жалпы</h3>
