@@ -406,11 +406,19 @@ _NAME_SPLIT_RE = re.compile(r"[.\s]+")
 
 # Қазақ пернетақтасы жоқ адамдар қазақ әрпінің орнына соған ең жақын орыс
 # әрпін теріп жібереді (мыс. 'Гүлжанат' орнына 'Гулжанат') — рейтинг
-# кестесінде осындай алмастырулар жиі кездеседі. Салыстыру кезінде
-# екеуін бірдей әріп деп санау үшін осы кестемен қалыпқа келтіреміз.
+# кестесінде осындай алмастырулар жиі кездеседі. Сонымен қатар латын
+# әрпі кирилл әрпіне сырты ұқсас болғандықтан (мыс. латын 'C' — кирилл
+# 'С'), пернетақта тілі кездейсоқ ауысып қалғанда осылай араласып кетеді
+# — көзге бірдей көрінгенімен, компьютер үшін бөлек таңба. Салыстыру
+# кезінде екеуін бірдей әріп деп санау үшін осы кестемен қалыпқа
+# келтіреміз.
 _LOOKALIKE_TRANSLATION = str.maketrans({
     "Ә": "А", "Ғ": "Г", "Қ": "К", "Ң": "Н",
     "Ө": "О", "Ұ": "У", "Ү": "У", "І": "И", "Һ": "Х",
+    # латын -> кирилл (сырты ұқсас әріптер)
+    "A": "А", "B": "В", "C": "С", "E": "Е", "H": "Н",
+    "K": "К", "M": "М", "O": "О", "P": "Р", "T": "Т",
+    "X": "Х", "Y": "У",
 })
 
 
@@ -430,25 +438,34 @@ def _registered_name_candidates(name):
     рейтинг парағынан ІЗДЕУ басымдығы бойынша кілт ТОПТАРЫН қайтарады —
     әр топтағы кілттердің кез келгені сәйкес келсе, сол топ 'тапты' деп
     есептеледі:
-    1-топ (қатаң, тегінің бас әрпімен): рейтинг парағында куратор аты екі
-       түрлі ретпен жазылуы мүмкін — 'Аты + Тегінің бас әрпі' (мыс.
-       'Ернар Қ') немесе 'Тегінің бас әрпі.Аты' (мыс. 'І.Нұрайым') —
-       екеуі де осы топта бірдей басымдықпен тексеріледі;
-    2-топ (бос, соңғы амал): тек 'Аты' (мыс. 'ЕРНАР') — 1-топ ешбір
+    1-топ (қатаң, бас әрпімен): рейтинг парағында куратор аты екі түрлі
+       ретпен жазылуы мүмкін — 'Аты + Тегінің бас әрпі' (мыс. 'Ернар Қ')
+       немесе 'Тегінің бас әрпі.Аты' (мыс. 'І.Нұрайым') — екеуі де осы
+       топта бірдей басымдықпен тексеріледі. Тіркеу кезінде екі сөз қай
+       ретпен жазылғаны (Тегі Аты ма, әлде Аты Тегі ме) әрдайым анық
+       болмайтындықтан, ЕКІ сөзді де кезек-кезек 'аты' деп қабылдап,
+       екеуінің комбинациясын да осы топқа қосамыз.
+    2-топ (бос, соңғы амал): тек 'Аты' (екі сөздің де) — 1-топ ешбір
        нақты атаумен сәйкес келмесе ғана қолданылады.
     Бір сөзден тұратын атаулар үшін тек сол бір кілттен тұратын жалғыз
     топ қайтарылады."""
     parts = [p for p in _NAME_SPLIT_RE.split((name or "").strip()) if p]
     if len(parts) >= 2:
-        surname, firstname = parts[0], parts[1]
-        firstname_c = _compact_name(firstname)
-        initial_c = _compact_name(surname[0])
-        forward = firstname_c + initial_c  # "Ернар Қ" пішіні
-        backward = initial_c + firstname_c  # "І.Нұрайым" пішіні
-        strict_group = [forward] if forward == backward else [forward, backward]
+        a, b = _compact_name(parts[0]), _compact_name(parts[1])
+        strict_group = []
+        fallback_group = []
+        for firstname_c, initial_c in ((b, a[:1]), (a, b[:1])):
+            forward = firstname_c + initial_c  # "Ернар Қ" пішіні
+            backward = initial_c + firstname_c  # "І.Нұрайым" пішіні
+            for key in (forward, backward):
+                if key and key not in strict_group:
+                    strict_group.append(key)
+            if firstname_c and firstname_c not in fallback_group:
+                fallback_group.append(firstname_c)
         groups = [strict_group]
-        if firstname_c and firstname_c not in strict_group:
-            groups.append([firstname_c])
+        fallback_group = [k for k in fallback_group if k not in strict_group]
+        if fallback_group:
+            groups.append(fallback_group)
         return groups
     if parts:
         return [[_compact_name(parts[0])]]
@@ -456,14 +473,26 @@ def _registered_name_candidates(name):
 
 
 _PREFIX_MIN_LEN = 4
+# Бас әрпі жоқ ('тобы'-мен ғана жазылған) кезеңде минимум ұзындықты сәл
+# босаңсытамыз — бас әрпі жоқтықтан сигнал әлсіз болғанымен, іс жүзінде
+# (нақты деректе) бұл 3 әріптен басталатын атаулар да (мыс. 'Аяу тобы' ->
+# 'Аяулым', 'Нұр тобы' -> 'Нұрасыл') әрдайым жалғыз тіркелген атпен ғана
+# сәйкес келеді екен — екіұшты болса, төмендегі тексеріс бәрібір өткізіп
+# жібереді.
+_BARE_PREFIX_MIN_LEN = 3
+_GROUP_SUFFIX_COMPACT = "ТОБЫ"
 
 
 def _split_name_initial(name):
     """Екі бөлектен тұратын атты (аты, бас әрпі) етіп бөледі — бөлектердің
     ТЕК біреуі бір әріптен тұрса ғана (мыс. 'Айым М.' -> ('АЙЫМ','М'),
-    'І.Нұрайым' -> ('НҰРАЙЫМ','І')). Сәйкес келмесе (екеуі де ұзын не
-    екеуі де бір әріп болса, немесе бөлек саны 2 болмаса) None қайтарады."""
+    'І.Нұрайым' -> ('НҰРАЙЫМ','І')). Соңында 'тобы' сөзі тұрса (мыс.
+    'Т.Сандуғаш тобы'), оны есептен шығарып тастаймыз. Сәйкес келмесе
+    (екеуі де ұзын не екеуі де бір әріп болса, немесе бөлек саны 2
+    болмаса) None қайтарады."""
     parts = [p for p in _NAME_SPLIT_RE.split((name or "").strip()) if p]
+    if parts and _compact_name(parts[-1]) == _GROUP_SUFFIX_COMPACT:
+        parts = parts[:-1]
     if len(parts) != 2:
         return None
     a, b = parts
@@ -477,12 +506,46 @@ def _split_name_initial(name):
 
 
 def _registered_firstname_and_initial(name):
-    """Мұғалім тіркеген 'Тегі Аты' атынан (аты, тегінің бас әрпі) қайтарады."""
+    """Мұғалім тіркеген екі сөзді атынан (аты, бас әрпі) жұптарын қайтарады
+    — қай сөз тегі, қай сөз аты екені әрдайым анық бола бермейтіндіктен,
+    ЕКІ бағыт бойынша да ((2-сөз, 1-сөздің бас әрпі) және (1-сөз, 2-сөздің
+    бас әрпі)) қайтарады."""
     parts = [p for p in _NAME_SPLIT_RE.split((name or "").strip()) if p]
     if len(parts) < 2:
+        return []
+    a, b = _compact_name(parts[0]), _compact_name(parts[1])
+    pairs = [(b, a[:1]), (a, b[:1])]
+    seen = []
+    for pair in pairs:
+        if pair not in seen:
+            seen.append(pair)
+    return seen
+
+
+def _actual_bare_compact(name):
+    """Нақты куратор атынан соңындағы 'тобы' сөзін алып тастап, қалған
+    ЖАЛҒЫЗ сөзді қайтарады (бас әрпінсіз, мыс. 'Аяу тобы' -> 'АЯУ').
+    Тобы алынған соң бір сөзден артық/кем қалса, None қайтарады —
+    бұл кезең тек нағыз бас әрпінсіз, жалғыз сөзді атауларға арналған."""
+    parts = [p for p in _NAME_SPLIT_RE.split((name or "").strip()) if p]
+    if parts and _compact_name(parts[-1]) == _GROUP_SUFFIX_COMPACT:
+        parts = parts[:-1]
+    if len(parts) != 1:
         return None
-    surname, firstname = parts[0], parts[1]
-    return _compact_name(firstname), _compact_name(surname[0])
+    return _compact_name(parts[0])
+
+
+def _registered_bare_names(name):
+    """Мұғалім тіркеген екі сөзді атынан (бас әріпсіз) екі сөзді де бөлек
+    қайтарады — рейтинг парағында куратор аты бас әрпінсіз, тіпті
+    қысқартылып та жазылуы мүмкін (мыс. 'Аяулым' -> 'Аяу тобы')."""
+    parts = [p for p in _NAME_SPLIT_RE.split((name or "").strip()) if p]
+    names = [_compact_name(p) for p in parts if p]
+    seen = []
+    for n in names:
+        if n and n not in seen:
+            seen.append(n)
+    return seen
 
 
 def _match_teacher_curators(teacher_curator_names_by_id, actual_curator_names):
@@ -542,33 +605,58 @@ def _match_teacher_curators(teacher_curator_names_by_id, actual_curator_names):
                     break
 
     # Соңғы амал: қысқартылған аты (мыс. 'Айымжан' -> 'Айым М.') — тегінің
-    # бас әрпі дәл сәйкес, аты бір-бірінің префиксі (кемінде 4 әріп).
+    # бас әрпі дәл сәйкес, аты бір-бірінің префиксі (кемінде 4 әріп). Тегі
+    # мен аты қай ретпен тіркелгені әрдайым анық бола бермейтіндіктен, екі
+    # бағытты да ((аты,тегінің бас әрпі) және керісінше) тексереміз.
     prefix_candidates = {}
     for teacher_id, cname, _groups in entries:
         if cname in matches_by_teacher[teacher_id]:
             continue
-        reg_parts = _registered_firstname_and_initial(cname)
-        if not reg_parts:
-            continue
-        reg_firstname_c, reg_initial_c = reg_parts
-        if len(reg_firstname_c) < _PREFIX_MIN_LEN:
-            continue
-        for actual_name in actual_curator_names:
-            if actual_name in claimed_by_actual:
+        for reg_firstname_c, reg_initial_c in _registered_firstname_and_initial(cname):
+            if len(reg_firstname_c) < _PREFIX_MIN_LEN:
                 continue
-            actual_parts = _split_name_initial(actual_name)
-            if not actual_parts:
-                continue
-            actual_firstname_c, actual_initial_c = actual_parts
-            if actual_initial_c != reg_initial_c or len(actual_firstname_c) < _PREFIX_MIN_LEN:
-                continue
-            if reg_firstname_c.startswith(actual_firstname_c) or actual_firstname_c.startswith(reg_firstname_c):
-                prefix_candidates.setdefault(actual_name, []).append((teacher_id, cname))
+            for actual_name in actual_curator_names:
+                if actual_name in claimed_by_actual:
+                    continue
+                actual_parts = _split_name_initial(actual_name)
+                if not actual_parts:
+                    continue
+                actual_firstname_c, actual_initial_c = actual_parts
+                if actual_initial_c != reg_initial_c or len(actual_firstname_c) < _PREFIX_MIN_LEN:
+                    continue
+                if reg_firstname_c.startswith(actual_firstname_c) or actual_firstname_c.startswith(reg_firstname_c):
+                    prefix_candidates.setdefault(actual_name, set()).add((teacher_id, cname))
 
     for actual_name, owners in prefix_candidates.items():
         if actual_name in claimed_by_actual or len(owners) != 1:
             continue
-        teacher_id, cname = owners[0]
+        (teacher_id, cname), = owners
+        claimed_by_actual[actual_name] = teacher_id
+        matches_by_teacher[teacher_id][cname] = actual_name
+
+    # Ең соңғы амал: бас әрпі де жоқ, тек қысқартылған жалғыз сөз (мыс.
+    # 'Аяулым' -> 'Аяу тобы', бас әрпінсіз) — өте бос кілт болғандықтан
+    # тек бір ғана тіркелген атпен сәйкес келсе ғана қолданылады.
+    bare_candidates = {}
+    for teacher_id, cname, _groups in entries:
+        if cname in matches_by_teacher[teacher_id]:
+            continue
+        for reg_bare_c in _registered_bare_names(cname):
+            if len(reg_bare_c) < _BARE_PREFIX_MIN_LEN:
+                continue
+            for actual_name in actual_curator_names:
+                if actual_name in claimed_by_actual:
+                    continue
+                actual_bare = _actual_bare_compact(actual_name)
+                if actual_bare is None or len(actual_bare) < _BARE_PREFIX_MIN_LEN:
+                    continue
+                if reg_bare_c.startswith(actual_bare) or actual_bare.startswith(reg_bare_c):
+                    bare_candidates.setdefault(actual_name, set()).add((teacher_id, cname))
+
+    for actual_name, owners in bare_candidates.items():
+        if actual_name in claimed_by_actual or len(owners) != 1:
+            continue
+        (teacher_id, cname), = owners
         claimed_by_actual[actual_name] = teacher_id
         matches_by_teacher[teacher_id][cname] = actual_name
 
