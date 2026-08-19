@@ -1008,6 +1008,30 @@ def debug_teacher_curators(week_id, teacher_id):
     return Response("\n".join(lines), mimetype="text/plain; charset=utf-8")
 
 
+@app.route("/admin/debug-week-subjects/<int:week_id>")
+def debug_week_subjects(week_id):
+    """ДТ/БТ аптасында 'Шығармашылық' парағы неге көрінбей жатқанын
+    диагностикалау үшін уақытша бет: осы аптадағы БАРЛЫҚ пән (subject)
+    атауларын, әрқайсысының жол санын және max_score-ын көрсетеді."""
+    conn = get_db()
+    week, stream, _program = get_week_context(conn, week_id)
+    if week is None:
+        return "Апта табылмады", 404
+
+    rows = conn.execute(
+        "SELECT subject, max_score, COUNT(*) AS c FROM results "
+        "WHERE week_id = ? GROUP BY subject, max_score ORDER BY subject",
+        (week_id,),
+    ).fetchall()
+
+    lines = [f"Апта ID: {week_id} ({week['title']})", f"=== Пәндер ({len(rows)}) ==="]
+    for r in rows:
+        creative = CREATIVE_SUBJECT_KEYWORD in (r["subject"] or "").upper()
+        lines.append(f"  {r['subject']!r}: {r['c']} жол, max_score={r['max_score']}, шығармашылық={creative}")
+
+    return Response("\n".join(lines), mimetype="text/plain; charset=utf-8")
+
+
 # ---------------------------------------------------------------------------
 # Actions (POST) — each redirects back to the relevant page
 # ---------------------------------------------------------------------------
