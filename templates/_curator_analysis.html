@@ -49,6 +49,23 @@
     </div>
     {% endif %}
 
+    {% if a.high_result_reasons %}
+    <div class="analysis-block">
+      <h4>Неге жоғары нәтиже көрсетті</h4>
+      <div class="barchart">
+        {% for r in a.high_result_reasons %}
+        <div class="bar-row-stacked">
+          <div class="bar-name">{{ r.name }}</div>
+          <div class="bar-line">
+            <div class="bar-track"><div class="bar-fill status-good" style="width: {{ r.percent }}%"></div></div>
+            <div class="bar-value">{{ r.percent }}%</div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
     {% if a.curator_mistakes %}
     <div class="analysis-block">
       <h4>Кураторлар жіберген негізгі қателіктер</h4>
