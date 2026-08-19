@@ -455,6 +455,36 @@ def _registered_name_candidates(name):
     return []
 
 
+_PREFIX_MIN_LEN = 4
+
+
+def _split_name_initial(name):
+    """Екі бөлектен тұратын атты (аты, бас әрпі) етіп бөледі — бөлектердің
+    ТЕК біреуі бір әріптен тұрса ғана (мыс. 'Айым М.' -> ('АЙЫМ','М'),
+    'І.Нұрайым' -> ('НҰРАЙЫМ','І')). Сәйкес келмесе (екеуі де ұзын не
+    екеуі де бір әріп болса, немесе бөлек саны 2 болмаса) None қайтарады."""
+    parts = [p for p in _NAME_SPLIT_RE.split((name or "").strip()) if p]
+    if len(parts) != 2:
+        return None
+    a, b = parts
+    if len(a) == 1 and len(b) != 1:
+        initial, firstname = a, b
+    elif len(b) == 1 and len(a) != 1:
+        firstname, initial = a, b
+    else:
+        return None
+    return _compact_name(firstname), _compact_name(initial)
+
+
+def _registered_firstname_and_initial(name):
+    """Мұғалім тіркеген 'Тегі Аты' атынан (аты, тегінің бас әрпі) қайтарады."""
+    parts = [p for p in _NAME_SPLIT_RE.split((name or "").strip()) if p]
+    if len(parts) < 2:
+        return None
+    surname, firstname = parts[0], parts[1]
+    return _compact_name(firstname), _compact_name(surname[0])
+
+
 def _match_teacher_curators(teacher_curator_names_by_id, actual_curator_names):
     """Әр мұғалімнің тіркелген куратор аттарын (teacher_id -> [cname, ...])
     рейтинг парағындағы НАҚТЫ куратор аттарымен (actual_curator_names)
@@ -467,7 +497,13 @@ def _match_teacher_curators(teacher_curator_names_by_id, actual_curator_names):
     тіркелген куратор атына бірдей сәйкес келсе (мыс. 'Советхан Мерей'
     мен 'Бактығали Мерей' екеуі де 'МЕРЕЙ' дейді), ол кілт екіұшты
     болғандықтан МҮЛДЕМ қолданылмайды — қате мұғалімге теліп қоюдан гөрі,
-    сол куратордың нәтижесі есептен тыс қалғаны дұрыс. Қайтарады:
+    сол куратордың нәтижесі есептен тыс қалғаны дұрыс. Осы екі кезеңнен
+    кейін де сәйкессіз қалғандарға соңғы амал ретінде ҚЫСҚАРТЫЛҒАН аты
+    тексеріледі — рейтинг парағында аты толық жазылмай қысқартылып
+    кетуі мүмкін (мыс. 'Айымжан' орнына 'Айым М.'): тегінің бас әрпі
+    ДӘЛ сәйкес келіп, аты бір-бірінің префиксі болса (кемінде 4 әріп)
+    сәйкес деп есептеледі — бірақ ол да бірнеше тіркелген атпен бірдей
+    сәйкес келсе, екіұшты болғандықтан өткізіп жіберіледі. Қайтарады:
     {teacher_id: {registered_cname: actual_curator_name}}."""
     actual_compact = {name: _compact_name(name) for name in actual_curator_names}
     entries = []
@@ -504,6 +540,37 @@ def _match_teacher_curators(teacher_curator_names_by_id, actual_curator_names):
                     claimed_by_actual[actual_name] = teacher_id
                     matches_by_teacher[teacher_id][cname] = actual_name
                     break
+
+    # Соңғы амал: қысқартылған аты (мыс. 'Айымжан' -> 'Айым М.') — тегінің
+    # бас әрпі дәл сәйкес, аты бір-бірінің префиксі (кемінде 4 әріп).
+    prefix_candidates = {}
+    for teacher_id, cname, _groups in entries:
+        if cname in matches_by_teacher[teacher_id]:
+            continue
+        reg_parts = _registered_firstname_and_initial(cname)
+        if not reg_parts:
+            continue
+        reg_firstname_c, reg_initial_c = reg_parts
+        if len(reg_firstname_c) < _PREFIX_MIN_LEN:
+            continue
+        for actual_name in actual_curator_names:
+            if actual_name in claimed_by_actual:
+                continue
+            actual_parts = _split_name_initial(actual_name)
+            if not actual_parts:
+                continue
+            actual_firstname_c, actual_initial_c = actual_parts
+            if actual_initial_c != reg_initial_c or len(actual_firstname_c) < _PREFIX_MIN_LEN:
+                continue
+            if reg_firstname_c.startswith(actual_firstname_c) or actual_firstname_c.startswith(reg_firstname_c):
+                prefix_candidates.setdefault(actual_name, []).append((teacher_id, cname))
+
+    for actual_name, owners in prefix_candidates.items():
+        if actual_name in claimed_by_actual or len(owners) != 1:
+            continue
+        teacher_id, cname = owners[0]
+        claimed_by_actual[actual_name] = teacher_id
+        matches_by_teacher[teacher_id][cname] = actual_name
 
     return matches_by_teacher
 
