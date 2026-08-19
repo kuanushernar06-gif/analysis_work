@@ -24,7 +24,7 @@
   <div class="stat-value">
     {% if is_baiqau %}
     {% if rep.overall_avg_percent is not none %}{{ rep.overall_avg_percent }}%{% else %}—{% endif %}
-    <span class="stat-value-sub">{{ rep.overall_avg_score }} балл</span>
+    <span class="stat-value-sub">{{ rep.overall_avg_score }}{% if rep.ref_max_score %} / {{ rep.ref_max_score|int }}{% endif %} балл</span>
     {% else %}
     {{ rep.overall_avg_score }}
     {% endif %}
@@ -79,7 +79,7 @@
   <div class="subject-chip-name">{{ label }}</div>
   <div class="subject-chip-value">
     {% if rep.overall_avg_percent is not none %}{{ rep.overall_avg_percent }}%{% else %}—{% endif %}
-    <span class="subject-chip-sub">{{ rep.overall_avg_score }} балл</span>
+    <span class="subject-chip-sub">{{ rep.overall_avg_score }}{% if rep.ref_max_score %} / {{ rep.ref_max_score|int }}{% endif %} балл</span>
   </div>
 </div>
 {% endif %}

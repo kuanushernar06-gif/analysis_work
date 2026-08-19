@@ -94,6 +94,7 @@ def compute_report(conn, week_id, combine_week_ids=None, subjects_filter=None, c
         "passing_percent": passing_percent,
         "gold_percent": gold_percent,
         "silver_percent": silver_percent,
+        "ref_max_score": ref_max_score,
         "total_entries": len(results),
         "unique_students": 0,
         "overall_avg_score": None,
