@@ -17,6 +17,24 @@
 
 <div class="card ls-filter-card no-print">
   <div class="ls-filter-row">
+    <label>Поток
+      <select id="ls-filter-stream">
+        <option value="">Барлық поток</option>
+        {% for stream_code in by_stream.keys() %}
+        <option value="{{ stream_code }}">{{ stream_code }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Мұғалім
+      <select id="ls-filter-teacher">
+        <option value="">Барлық мұғалім</option>
+        {% for stream_code, teachers in by_stream.items() %}
+        {% for t in teachers %}
+        <option value="{{ t.name }}" data-stream="{{ stream_code }}">{{ t.name }} ({{ stream_code }})</option>
+        {% endfor %}
+        {% endfor %}
+      </select>
+    </label>
     <label>Ай
       <select id="ls-filter-month">
         <option value="">Барлық ай</option>
@@ -32,11 +50,11 @@
 </div>
 
 {% for stream_code, teachers in by_stream.items() %}
-<div class="card" data-ls-stream>
+<div class="card" data-ls-stream data-stream="{{ stream_code }}">
   <h2>{{ stream_code }}</h2>
   {% for t in teachers %}
   {% set loop_teacher = loop %}
-  <div class="ls-teacher-card" id="ls-teacher-{{ stream_code }}-{{ loop_teacher.index }}" data-ls-teacher>
+  <div class="ls-teacher-card" id="ls-teacher-{{ stream_code }}-{{ loop_teacher.index }}" data-ls-teacher data-stream="{{ stream_code }}" data-teacher="{{ t.name }}">
     <div class="ls-teacher-head">
       <h3>{{ t.name }}</h3>
       <p class="muted">
@@ -59,20 +77,25 @@
         </span>
       </button>
       <div class="ls-week-body" id="{{ week_id }}" hidden>
-        <div class="ls-session-grid">
-          {% for s in w.sessions %}
-          <div class="ls-session-card">
-            <div class="ls-session-badge">
-              {% if s.like_percent is not none %}{{ '%.0f'|format(s.like_percent) }}%{% else %}—{% endif %}
+        {% for dg in w.date_groups %}
+        <div class="ls-date-row">
+          <p class="ls-date-heading">{{ dg.date_display }}</p>
+          <div class="ls-session-grid">
+            {% for s in dg.sessions %}
+            <div class="ls-session-card">
+              <div class="ls-session-badge">
+                {% if s.like_percent is not none %}{{ '%.0f'|format(s.like_percent) }}%{% else %}—{% endif %}
+              </div>
+              <div class="ls-session-body">
+                <div class="ls-session-metric">Ұнату пайызы — <b>{% if s.like_percent is not none %}{{ s.like_percent }}%{% else %}—{% endif %}</b></div>
+                <div class="ls-session-metric">Қатысым пайызы — <b>{% if s.attendance_percent is not none %}{{ s.attendance_percent }}%{% else %}—{% endif %}</b></div>
+                <div class="ls-session-label">№{{ loop.index }} LIVE САБАҚ</div>
+              </div>
             </div>
-            <div class="ls-session-body">
-              <div class="ls-session-metric">Ұнату пайызы — <b>{% if s.like_percent is not none %}{{ s.like_percent }}%{% else %}—{% endif %}</b></div>
-              <div class="ls-session-metric">Қатысым пайызы — <b>{% if s.attendance_percent is not none %}{{ s.attendance_percent }}%{% else %}—{% endif %}</b></div>
-              <div class="ls-session-label">№{{ loop.index }} LIVE САБАҚ{% if s.date_display %} · {{ s.date_display }}{% endif %}</div>
-            </div>
+            {% endfor %}
           </div>
-          {% endfor %}
         </div>
+        {% endfor %}
       </div>
     </div>
     {% endfor %}
@@ -94,6 +117,8 @@
     var weekGroups = Array.prototype.slice.call(document.querySelectorAll("[data-ls-week]"));
     if (!weekGroups.length) return;
 
+    var streamSelect = document.getElementById("ls-filter-stream");
+    var teacherSelect = document.getElementById("ls-filter-teacher");
     var monthSelect = document.getElementById("ls-filter-month");
     var weekSelect = document.getElementById("ls-filter-week");
     var resetBtn = document.getElementById("ls-filter-reset");
@@ -122,35 +147,57 @@
       weekSelect.appendChild(opt);
     });
 
+    // Поток таңдалса, тек сол ағымның мұғалімдерін ғана "Мұғалім" тізімінде көрсету.
+    var teacherOptions = Array.prototype.slice.call(teacherSelect.options);
+    function refreshTeacherOptions() {
+      var streamVal = streamSelect.value;
+      teacherOptions.forEach(function (opt) {
+        if (!opt.value) return;
+        opt.hidden = Boolean(streamVal) && opt.getAttribute("data-stream") !== streamVal;
+      });
+      if (streamVal && teacherSelect.value) {
+        var current = teacherOptions.filter(function (o) { return o.value === teacherSelect.value; })[0];
+        if (current && current.getAttribute("data-stream") !== streamVal) {
+          teacherSelect.value = "";
+        }
+      }
+    }
+
     function applyFilter() {
+      var streamVal = streamSelect.value;
+      var teacherVal = teacherSelect.value;
       var m = monthSelect.value;
       var w = weekSelect.value;
-      var active = Boolean(m || w);
-
-      weekGroups.forEach(function (el) {
-        var matches = (!m || el.getAttribute("data-month") === m) && (!w || el.getAttribute("data-week") === w);
-        var toggle = el.querySelector(".ls-week-toggle");
-        var body = el.querySelector(".ls-week-body");
-        if (!active) {
-          el.style.display = "";
-          if (body) { body.setAttribute("hidden", ""); }
-          if (toggle) { toggle.classList.remove("is-open"); }
-          return;
-        }
-        el.style.display = matches ? "" : "none";
-        if (matches && body && toggle) {
-          body.removeAttribute("hidden");
-          toggle.classList.add("is-open");
-        }
-      });
+      var active = Boolean(streamVal || teacherVal || m || w);
 
       document.querySelectorAll("[data-ls-teacher]").forEach(function (card) {
+        var teacherMatches = (!streamVal || card.getAttribute("data-stream") === streamVal)
+          && (!teacherVal || card.getAttribute("data-teacher") === teacherVal);
+
+        card.querySelectorAll("[data-ls-week]").forEach(function (el) {
+          var weekMatches = (!m || el.getAttribute("data-month") === m) && (!w || el.getAttribute("data-week") === w);
+          var toggle = el.querySelector(".ls-week-toggle");
+          var body = el.querySelector(".ls-week-body");
+          if (!active) {
+            el.style.display = "";
+            if (body) body.setAttribute("hidden", "");
+            if (toggle) toggle.classList.remove("is-open");
+            return;
+          }
+          var show = teacherMatches && weekMatches;
+          el.style.display = show ? "" : "none";
+          if (show && body && toggle) {
+            body.removeAttribute("hidden");
+            toggle.classList.add("is-open");
+          }
+        });
+
         if (!active) { card.style.display = ""; return; }
-        var visible = Array.prototype.some.call(
+        var anyVisibleWeek = Array.prototype.some.call(
           card.querySelectorAll("[data-ls-week]"),
           function (el) { return el.style.display !== "none"; }
         );
-        card.style.display = visible ? "" : "none";
+        card.style.display = teacherMatches && anyVisibleWeek ? "" : "none";
       });
 
       document.querySelectorAll("[data-ls-stream]").forEach(function (card) {
@@ -163,11 +210,16 @@
       });
     }
 
+    streamSelect.addEventListener("change", function () { refreshTeacherOptions(); applyFilter(); });
+    teacherSelect.addEventListener("change", applyFilter);
     monthSelect.addEventListener("change", applyFilter);
     weekSelect.addEventListener("change", applyFilter);
     resetBtn.addEventListener("click", function () {
+      streamSelect.value = "";
+      teacherSelect.value = "";
       monthSelect.value = "";
       weekSelect.value = "";
+      refreshTeacherOptions();
       applyFilter();
     });
   })();

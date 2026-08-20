@@ -935,6 +935,11 @@ def compute_ls_teacher_data(conn):
 
     sessions_by_key = {(name, code): [] for name, code in registered}
     for row in session_rows:
+        # Екі көрсеткіші де (ұнату/қатысым) бос жол — нақты сабақ емес,
+        # әлі бағаланбаған не бос үлгі жол (мыс. алдын ала қосылған,
+        # деректер толтырылмаған қатар) — есептен шығарамыз.
+        if row["like_percent"] is None and row["attendance_percent"] is None:
+            continue
         same_stream = compact_by_stream.get(row["stream_code"], [])
         matched = _match_ls_teacher_name(row["teacher_name"], same_stream)
         if matched is None:
@@ -952,13 +957,28 @@ def compute_ls_teacher_data(conn):
         for label in sorted(weeks_map.keys(), key=_ls_week_sort_key):
             wsessions = sorted(weeks_map[label], key=lambda s: s["id"])
             month_num, week_num = _ls_week_sort_key(label)
+
+            date_groups_map = {}
+            date_order = []
+            for s in wsessions:
+                formatted = _format_ls_session(s)
+                key_date = formatted["date_display"] or "Күні белгісіз"
+                if key_date not in date_groups_map:
+                    date_groups_map[key_date] = []
+                    date_order.append(key_date)
+                date_groups_map[key_date].append(formatted)
+            date_groups = [
+                {"date_display": key_date, "sessions": date_groups_map[key_date]}
+                for key_date in date_order
+            ]
+
             weeks.append({
                 "label": label,
                 "month": month_num,
                 "week": week_num,
                 "avg_like": _avg([s["like_percent"] for s in wsessions]),
                 "avg_attendance": _avg([s["attendance_percent"] for s in wsessions]),
-                "sessions": [_format_ls_session(s) for s in wsessions],
+                "date_groups": date_groups,
             })
         by_stream.setdefault(code, []).append({
             "name": name,
