@@ -19,6 +19,7 @@ from analysis import (
     compare_reports,
     compute_teacher_stats_for_week,
     get_prior_year_comparison,
+    compute_ls_teacher_data,
     _match_teacher_curators,
     _registered_name_candidates,
 )
@@ -30,6 +31,7 @@ from sheets import (
     is_template_sheet,
     parse_results_file,
     parse_prior_year_report,
+    parse_ls_report,
     SheetFetchError,
     CREATIVE_SUBJECT_KEYWORD,
     CREATIVE_HISTORY_SUFFIX,
@@ -273,6 +275,106 @@ def find_previous_week_with_data(conn, week, stream):
 @app.route("/")
 def index():
     return render_template("index.html")
+
+
+@app.route("/ls")
+def ls_home():
+    return redirect(url_for("ls_overview"))
+
+
+@app.route("/ls/import", methods=["GET", "POST"])
+def ls_import():
+    conn = get_db()
+    if request.method == "POST":
+        sheet_url = request.form.get("sheet_url", "").strip()
+        if not sheet_url:
+            flash("Сілтемені енгізіңіз.", "error")
+            return redirect(url_for("ls_import"))
+        try:
+            entries = parse_ls_report(sheet_url)
+        except SheetFetchError as e:
+            flash(str(e), "error")
+            return redirect(url_for("ls_import"))
+
+        conn.execute("DELETE FROM ls_sessions")
+        conn.execute("DELETE FROM ls_imports")
+        import_id = conn.execute(
+            "INSERT INTO ls_imports (sheet_url, row_count) VALUES (?, ?) RETURNING id",
+            (sheet_url, len(entries)),
+        ).fetchone()["id"]
+        for e in entries:
+            conn.execute(
+                "INSERT INTO ls_sessions "
+                "(import_id, session_date, teacher_name, stream_code, week_label, like_percent, attendance_percent) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (
+                    import_id, e["session_date"], e["teacher_name"], e["stream_code"],
+                    e["week_label"], e["like_percent"], e["attendance_percent"],
+                ),
+            )
+        conn.commit()
+        flash(f"{len(entries)} Live сабақ жазбасы импортталды.", "ok")
+        return redirect(url_for("ls_import"))
+
+    last_import = conn.execute("SELECT * FROM ls_imports ORDER BY id DESC LIMIT 1").fetchone()
+    return render_template(
+        "ls_import.html", ls_page=True, active_page="ls_import", last_import=last_import,
+    )
+
+
+@app.route("/ls/import/clear", methods=["POST"])
+def ls_import_clear():
+    conn = get_db()
+    conn.execute("DELETE FROM ls_sessions")
+    conn.execute("DELETE FROM ls_imports")
+    conn.commit()
+    flash("Live сабақ деректері тазаланды.", "ok")
+    return redirect(url_for("ls_import"))
+
+
+@app.route("/ls/overview")
+def ls_overview():
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT stream_code, like_percent, attendance_percent FROM ls_sessions"
+    ).fetchall()
+
+    overall_like = _avg_percent([r["like_percent"] for r in rows])
+    overall_attendance = _avg_percent([r["attendance_percent"] for r in rows])
+
+    by_stream = {}
+    for r in rows:
+        by_stream.setdefault(r["stream_code"], []).append(r)
+    stream_stats = []
+    for code in sorted(by_stream.keys()):
+        stream_rows = by_stream[code]
+        stream_stats.append({
+            "code": code,
+            "session_count": len(stream_rows),
+            "avg_like": _avg_percent([r["like_percent"] for r in stream_rows]),
+            "avg_attendance": _avg_percent([r["attendance_percent"] for r in stream_rows]),
+        })
+
+    last_import = conn.execute("SELECT * FROM ls_imports ORDER BY id DESC LIMIT 1").fetchone()
+    return render_template(
+        "ls_overview.html", ls_page=True, active_page="ls_overview",
+        session_count=len(rows), overall_like=overall_like, overall_attendance=overall_attendance,
+        stream_stats=stream_stats, last_import=last_import,
+    )
+
+
+@app.route("/ls/teachers")
+def ls_teachers_page():
+    conn = get_db()
+    by_stream = compute_ls_teacher_data(conn)
+    return render_template(
+        "ls_teachers.html", ls_page=True, active_page="ls_teachers", by_stream=by_stream,
+    )
+
+
+def _avg_percent(values):
+    values = [v for v in values if v is not None]
+    return round(sum(values) / len(values), 1) if values else None
 
 
 BACKUP_TABLES = ["programs", "streams", "weeks", "imports", "results"]

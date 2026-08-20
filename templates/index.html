@@ -23,6 +23,11 @@
     {% if meta.sub %}<div class="hero-card-sub">{{ meta.sub }}</div>{% endif %}
   </a>
   {% endfor %}
+  <a class="hero-card hero-card-3" href="{{ url_for('ls_home') }}">
+    <span class="hero-card-icon ic-target"></span>
+    <div class="hero-card-title">LIVE САБАҚ</div>
+    <div class="hero-card-sub">Мұғалімдердің Live сабақтарына ұнату/қатысым пайызы бойынша кері байланыс</div>
+  </a>
 </div>
 
 {% endblock %}

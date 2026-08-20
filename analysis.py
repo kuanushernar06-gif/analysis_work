@@ -832,3 +832,117 @@ def get_prior_year_comparison(conn, category_slug, stream_code, month_number):
 
     return None
 
+
+_LS_WEEK_SORT_RE = re.compile(r"(\d+)-АЙ (\d+)-АПТА")
+_LS_TEACHER_MIN_MATCH_LEN = 5
+
+
+def _ls_week_sort_key(label):
+    m = _LS_WEEK_SORT_RE.match(label or "")
+    return (int(m.group(1)), int(m.group(2))) if m else (999, 999)
+
+
+def _avg(values):
+    values = [v for v in values if v is not None]
+    return round(sum(values) / len(values), 1) if values else None
+
+
+def _compact_name_tokens(name):
+    return [_compact_name(p) for p in re.split(r"\s+", (name or "").strip()) if p]
+
+
+def _ls_names_fuzzy_equal(name_a, name_b):
+    """Екі атты сөз-сөзбен салыстырады — сөз саны бірдей болып, әр
+    жұптағы сөз я дәл бірдей, я бірі-бірінің префиксі болса (кемінде
+    _LS_TEACHER_MIN_MATCH_LEN әріп), сәйкес деп есептеледі. Мыс.
+    'Өмірзақ Саян' vs 'Өмірзақов Саян' — 'Өмірзақ'/'Өмірзақов' сөзінің
+    ортасында емес, соңында ғана айырмашылық болғанда осылай ұсталады
+    (толық аттың біріктірілген түрін салыстырғанда мұны байқау мүмкін
+    емес еді, себебі айырмашылық сөздер аралығында қалып қалады)."""
+    tokens_a = _compact_name_tokens(name_a)
+    tokens_b = _compact_name_tokens(name_b)
+    if not tokens_a or len(tokens_a) != len(tokens_b):
+        return False
+    for a, b in zip(tokens_a, tokens_b):
+        if a == b:
+            continue
+        if len(a) >= _LS_TEACHER_MIN_MATCH_LEN and len(b) >= _LS_TEACHER_MIN_MATCH_LEN and (a.startswith(b) or b.startswith(a)):
+            continue
+        return False
+    return True
+
+
+def _match_ls_teacher_name(sheet_name, same_stream_registered):
+    """'мұғалім' бағанындағы атты сол ағымға тіркелген мұғалімдердің
+    бірімен сәйкестендіреді — дәл сол атпен, немесе (аты қысқартылып
+    жазылған жағдайда, мыс. 'Өмірзақ' vs 'Өмірзақов') сөз-сөзбен
+    ұқсас болса. same_stream_registered — [(name, compact_name), ...]."""
+    compact_sheet = _compact_name(sheet_name)
+    exact = [name for name, c in same_stream_registered if c == compact_sheet]
+    if len(exact) == 1:
+        return exact[0]
+    candidates = [name for name, _c in same_stream_registered if _ls_names_fuzzy_equal(sheet_name, name)]
+    if len(candidates) == 1:
+        return candidates[0]
+    return None
+
+
+def compute_ls_teacher_data(conn):
+    """Тіркелген әр мұғалім-ағым жұбы бойынша Live сабақ (LS) статистикасын
+    жинақтайды: жалпы ортаа ұнату/қатысым пайызы + апта бойынша топталған
+    (жасырын/ашылатын) session тізімі. Ағым коды бойынша топтастырылған
+    сөздік қайтарады: {stream_code: [{"name":.., "avg_like":.., "avg_attendance":..,
+    "session_count":.., "weeks": [{"label":.., "avg_like":.., "avg_attendance":..,
+    "sessions": [...]}]}, ...]}."""
+    teacher_rows = conn.execute(
+        "SELECT DISTINCT t.name, s.code FROM teachers t "
+        "JOIN streams s ON s.id = t.stream_id "
+        "ORDER BY s.sort_order, s.code, t.name"
+    ).fetchall()
+    registered = [(r["name"], r["code"]) for r in teacher_rows]
+    compact_by_stream = {}
+    for name, code in registered:
+        compact_by_stream.setdefault(code, []).append((name, _compact_name(name)))
+
+    session_rows = conn.execute(
+        "SELECT session_date, teacher_name, stream_code, week_label, like_percent, attendance_percent "
+        "FROM ls_sessions ORDER BY session_date"
+    ).fetchall()
+
+    sessions_by_key = {(name, code): [] for name, code in registered}
+    for row in session_rows:
+        same_stream = compact_by_stream.get(row["stream_code"], [])
+        matched = _match_ls_teacher_name(row["teacher_name"], same_stream)
+        if matched is None:
+            continue
+        key = (matched, row["stream_code"])
+        if key in sessions_by_key:
+            sessions_by_key[key].append(row)
+
+    by_stream = {}
+    for (name, code), sessions in sessions_by_key.items():
+        weeks_map = {}
+        for s in sessions:
+            weeks_map.setdefault(s["week_label"] or "Апта белгісіз", []).append(s)
+        weeks = []
+        for label in sorted(weeks_map.keys(), key=_ls_week_sort_key):
+            wsessions = sorted(weeks_map[label], key=lambda s: s["session_date"] or "")
+            weeks.append({
+                "label": label,
+                "avg_like": _avg([s["like_percent"] for s in wsessions]),
+                "avg_attendance": _avg([s["attendance_percent"] for s in wsessions]),
+                "sessions": wsessions,
+            })
+        by_stream.setdefault(code, []).append({
+            "name": name,
+            "avg_like": _avg([s["like_percent"] for s in sessions]),
+            "avg_attendance": _avg([s["attendance_percent"] for s in sessions]),
+            "session_count": len(sessions),
+            "weeks": weeks,
+        })
+
+    for code, teachers in by_stream.items():
+        teachers.sort(key=lambda t: t["name"])
+
+    return by_stream
+

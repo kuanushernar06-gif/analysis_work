@@ -68,6 +68,10 @@
           </div>
           {% endif %}
           {% endif %}
+        {% elif ls_page %}
+          <a href="{{ url_for('ls_import') }}" class="{{ 'active' if active_page == 'ls_import' else '' }}"><span class="ic ic-structure"></span> LS бағалау экзелі</a>
+          <a href="{{ url_for('ls_overview') }}" class="{{ 'active' if active_page == 'ls_overview' else '' }}"><span class="ic ic-target"></span> Жалпы нәтиже</a>
+          <a href="{{ url_for('ls_teachers_page') }}" class="{{ 'active' if active_page == 'ls_teachers' else '' }}"><span class="ic ic-group"></span> Мұғалімдер</a>
         {% elif all_teachers is defined %}
           {% for stream_label, group in all_teachers|groupby('stream_label') %}
           <p class="sidebar-group-label">{{ stream_label or 'Поток тағайындалмаған' }}</p>

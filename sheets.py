@@ -542,3 +542,127 @@ def parse_prior_year_report(raw_url):
     if not out:
         raise SheetFetchError("Жылдық отчеттен СТ/ДТ/БТ парақтары табылмады.")
     return out
+
+
+LS_SHEET_NAME = "ТАРИХ"
+_LS_WEEK_LABEL_RE = re.compile(r"^\d+-АЙ \d+-АПТА$")
+
+
+def _find_column_by_name(header, name):
+    target = name.strip().lower()
+    for i, h in enumerate(header):
+        if (h or "").strip().lower() == target:
+            return i
+    return None
+
+
+def _normalize_ls_stream_code(raw_potok):
+    """'01'/'11'/11.0 сияқты 'поток' мәнінен 'ТАРИХ-01' сияқты толық ағым
+    кодын жасайды."""
+    if raw_potok is None:
+        return None
+    text = str(raw_potok).strip()
+    if not text:
+        return None
+    try:
+        num = int(float(text))
+    except ValueError:
+        return None
+    return f"ТАРИХ-{num:02d}"
+
+
+def parse_ls_report(raw_url):
+    """Live сабақ бағалау кестесінің 'ТАРИХ' парағын оқиды. Парақ жол-жол
+    'N-АЙ M-АПТА' деген жалғыз ұяшықты апта белгісімен бөлінген (одан
+    кейінгі session жолдарының бәрі сол аптаға жатады, келесі белгі жолы
+    кездескенше). Әр session жолынан күні/мұғалім/поток/ҰНАУ ПАЙЫЗЫ/
+    қатысым пайызы алынады, 'поток' ('01'/'11') 'ТАРИХ-01' сияқты толық
+    ағым кодына айналдырылады. Қайтарады: [{"session_date":.., "teacher_name":..,
+    "stream_code":.., "week_label":.., "like_percent":.., "attendance_percent":..}, ...]."""
+    export_url = _export_url(raw_url)
+    try:
+        with urlopen(export_url, timeout=30) as resp:
+            raw_bytes = resp.read()
+    except urllib.error.HTTPError as e:
+        if e.code in (401, 403):
+            raise SheetFetchError(
+                "Кестеге қол жеткізе алмадым (рұқсат жоқ). Google Sheets-те "
+                "'Файл → Ортаққа бөлу → Сілтемесі бар кез келген адам → Көруші' "
+                "етіп кестені ашық етіп қойыңыз."
+            ) from e
+        raise SheetFetchError(f"Кестені жүктеу сәтсіз аяқталды (HTTP {e.code}).") from e
+    except urllib.error.URLError as e:
+        raise SheetFetchError(f"Кестені жүктеу сәтсіз аяқталды: {e.reason}") from e
+
+    try:
+        wb = openpyxl.load_workbook(io.BytesIO(raw_bytes), data_only=True, read_only=True)
+    except Exception as e:
+        raise SheetFetchError(f"Кестені оқу сәтсіз аяқталды: {e}") from e
+
+    if LS_SHEET_NAME not in wb.sheetnames:
+        raise SheetFetchError(f"Кестеде '{LS_SHEET_NAME}' парағы табылмады.")
+    ws = wb[LS_SHEET_NAME]
+
+    rows = [list(row) for row in ws.iter_rows(values_only=True)]
+    if not rows:
+        raise SheetFetchError(f"'{LS_SHEET_NAME}' парағы бос.")
+
+    header = [str(h).strip() if h is not None else "" for h in rows[0]]
+    body = rows[1:]
+
+    date_idx = _find_column_by_name(header, "күні")
+    teacher_idx = _find_column_by_name(header, "мұғалім")
+    stream_idx = _find_column_by_name(header, "поток")
+    like_idx = _find_column_by_name(header, "ҰНАУ ПАЙЫЗЫ")
+    attendance_idx = _find_column_by_name(header, "қатысым пайызы")
+    if None in (date_idx, teacher_idx, stream_idx, like_idx, attendance_idx):
+        raise SheetFetchError(
+            f"'{LS_SHEET_NAME}' парағында керек бағандар табылмады "
+            "(күні / мұғалім / поток / ҰНАУ ПАЙЫЗЫ / қатысым пайызы)."
+        )
+
+    entries = []
+    current_week_label = None
+    for row in body:
+        first_cell = row[0] if row else None
+        teacher = row[teacher_idx] if teacher_idx < len(row) else None
+        potok = row[stream_idx] if stream_idx < len(row) else None
+        kuni = row[date_idx] if date_idx < len(row) else None
+
+        if teacher is None and potok is None and kuni is None:
+            if isinstance(first_cell, str) and _LS_WEEK_LABEL_RE.match(first_cell.strip()):
+                current_week_label = first_cell.strip()
+            continue
+
+        teacher_name = str(teacher).strip() if teacher is not None else ""
+        if not teacher_name:
+            continue
+
+        stream_code = _normalize_ls_stream_code(potok)
+        if not stream_code:
+            continue
+
+        like_score = _numeric_cell(row[like_idx] if like_idx < len(row) else None)
+        attendance_score = _numeric_cell(row[attendance_idx] if attendance_idx < len(row) else None)
+
+        if hasattr(kuni, "date"):
+            session_date = kuni.date().isoformat()
+        elif hasattr(kuni, "isoformat"):
+            session_date = kuni.isoformat()
+        elif kuni is not None:
+            session_date = str(kuni).strip()
+        else:
+            session_date = None
+
+        entries.append({
+            "session_date": session_date,
+            "teacher_name": teacher_name,
+            "stream_code": stream_code,
+            "week_label": current_week_label,
+            "like_percent": round(like_score * 100, 1) if like_score is not None else None,
+            "attendance_percent": round(attendance_score * 100, 1) if attendance_score is not None else None,
+        })
+
+    if not entries:
+        raise SheetFetchError(f"'{LS_SHEET_NAME}' парағынан бірде-бір дұрыс жол табылмады.")
+    return entries

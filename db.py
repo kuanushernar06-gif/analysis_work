@@ -183,11 +183,31 @@ CREATE TABLE IF NOT EXISTS prior_year_stats (
     UNIQUE(academic_year, category, stream_code, month_number)
 );
 
+CREATE TABLE IF NOT EXISTS ls_imports (
+    id SERIAL PRIMARY KEY,
+    sheet_url TEXT,
+    row_count INTEGER,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS ls_sessions (
+    id SERIAL PRIMARY KEY,
+    import_id INTEGER REFERENCES ls_imports(id) ON DELETE CASCADE,
+    session_date TEXT,
+    teacher_name TEXT NOT NULL,
+    stream_code TEXT NOT NULL,
+    week_label TEXT,
+    like_percent REAL,
+    attendance_percent REAL
+);
+
 CREATE INDEX IF NOT EXISTS idx_streams_program ON streams(program_id);
 CREATE INDEX IF NOT EXISTS idx_results_week ON results(week_id);
 CREATE INDEX IF NOT EXISTS idx_notes_week ON curator_notes(week_id);
 CREATE INDEX IF NOT EXISTS idx_imports_week ON imports(week_id);
 CREATE INDEX IF NOT EXISTS idx_teacher_curators_teacher ON teacher_curators(teacher_id);
+CREATE INDEX IF NOT EXISTS idx_ls_sessions_import ON ls_sessions(import_id);
+CREATE INDEX IF NOT EXISTS idx_ls_sessions_stream ON ls_sessions(stream_code);
 """
 
 # SQLite диалектісі — DATABASE_URL қойылмаған кезде локальді дамыту үшін
@@ -298,11 +318,31 @@ CREATE TABLE IF NOT EXISTS prior_year_stats (
     UNIQUE(academic_year, category, stream_code, month_number)
 );
 
+CREATE TABLE IF NOT EXISTS ls_imports (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    sheet_url TEXT,
+    row_count INTEGER,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS ls_sessions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    import_id INTEGER REFERENCES ls_imports(id) ON DELETE CASCADE,
+    session_date TEXT,
+    teacher_name TEXT NOT NULL,
+    stream_code TEXT NOT NULL,
+    week_label TEXT,
+    like_percent REAL,
+    attendance_percent REAL
+);
+
 CREATE INDEX IF NOT EXISTS idx_streams_program ON streams(program_id);
 CREATE INDEX IF NOT EXISTS idx_results_week ON results(week_id);
 CREATE INDEX IF NOT EXISTS idx_notes_week ON curator_notes(week_id);
 CREATE INDEX IF NOT EXISTS idx_imports_week ON imports(week_id);
 CREATE INDEX IF NOT EXISTS idx_teacher_curators_teacher ON teacher_curators(teacher_id);
+CREATE INDEX IF NOT EXISTS idx_ls_sessions_import ON ls_sessions(import_id);
+CREATE INDEX IF NOT EXISTS idx_ls_sessions_stream ON ls_sessions(stream_code);
 """
 
 

@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Жалпы нәтиже — Live сабақ{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <h1>Жалпы нәтиже</h1>
+    <p class="muted">Барлық Live сабақтардың жиынтық көрсеткіштері.</p>
+  </div>
+</div>
+
+{% if not session_count %}
+<div class="card">
+  <p class="muted">Әзірге дерек жоқ.</p>
+  <a class="btn btn-primary" href="{{ url_for('ls_import') }}">LS бағалау экзелін жүктеу</a>
+</div>
+{% else %}
+
+<div class="card">
+  <h2>Талдау</h2>
+  <div class="stat-grid">
+    <div class="stat-tile">
+      <div class="stat-value">{{ session_count }}</div>
+      <div class="stat-label">Барлық Live сабақ саны</div>
+    </div>
+    <div class="stat-tile stat-good">
+      <div class="stat-value">{% if overall_like is not none %}{{ overall_like }}%{% else %}—{% endif %}</div>
+      <div class="stat-label">Ортақ ұнату пайызы</div>
+    </div>
+    <div class="stat-tile stat-good">
+      <div class="stat-value">{% if overall_attendance is not none %}{{ overall_attendance }}%{% else %}—{% endif %}</div>
+      <div class="stat-label">Ортақ қатысым пайызы</div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Ағым бойынша</h2>
+  <div class="table-scroll">
+    <table class="table">
+      <thead><tr><th>Ағым</th><th>Live сабақ саны</th><th>Ұнату пайызы</th><th>Қатысым пайызы</th></tr></thead>
+      <tbody>
+        {% for s in stream_stats %}
+        <tr>
+          <td>{{ s.code }}</td>
+          <td>{{ s.session_count }}</td>
+          <td>{% if s.avg_like is not none %}{{ s.avg_like }}%{% else %}—{% endif %}</td>
+          <td>{% if s.avg_attendance is not none %}{{ s.avg_attendance }}%{% else %}—{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endif %}
+
+{% endblock %}

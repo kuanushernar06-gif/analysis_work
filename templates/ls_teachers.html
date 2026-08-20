@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Мұғалімдер — Live сабақ{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <h1>Мұғалімдер</h1>
+    <p class="muted">Әр мұғалімнің әр ағымдағы Live сабақтары бойынша ұнату/қатысым пайызы.</p>
+  </div>
+</div>
+
+{% if not by_stream %}
+<div class="card">
+  <p class="muted">Әзірге тіркелген мұғалім немесе Live сабақ дерегі жоқ.</p>
+</div>
+{% else %}
+
+{% for stream_code, teachers in by_stream.items() %}
+<div class="card">
+  <h2>{{ stream_code }}</h2>
+  {% for t in teachers %}
+  {% set loop_teacher = loop %}
+  <div class="ls-teacher-card" id="ls-teacher-{{ stream_code }}-{{ loop_teacher.index }}">
+    <div class="ls-teacher-head">
+      <h3>{{ t.name }}</h3>
+      <p class="muted">
+        Ұнату пайызы: {% if t.avg_like is not none %}{{ t.avg_like }}%{% else %}—{% endif %}
+        · Қатысым пайызы: {% if t.avg_attendance is not none %}{{ t.avg_attendance }}%{% else %}—{% endif %}
+        · Live сабақ саны: {{ t.session_count }}
+      </p>
+    </div>
+
+    {% if t.weeks %}
+    {% for w in t.weeks %}
+    {% set week_id = "ls-week-" ~ stream_code ~ "-" ~ loop_teacher.index ~ "-" ~ loop.index %}
+    <button type="button" class="ls-week-toggle" data-teacher-toggle="{{ week_id }}">
+      <span class="teacher-curators-arrow" aria-hidden="true">▸</span>
+      {{ w.label }}
+      <span class="ls-week-meta">
+        Ұнату: {% if w.avg_like is not none %}{{ w.avg_like }}%{% else %}—{% endif %}
+        · Қатысым: {% if w.avg_attendance is not none %}{{ w.avg_attendance }}%{% else %}—{% endif %}
+      </span>
+    </button>
+    <div class="ls-week-body" id="{{ week_id }}" hidden>
+      <div class="ls-session-grid">
+        {% for s in w.sessions %}
+        <div class="ls-session-card">
+          <div class="ls-session-badge">
+            {% if s['like_percent'] is not none %}{{ '%.0f'|format(s['like_percent']) }}%{% else %}—{% endif %}
+          </div>
+          <div class="ls-session-body">
+            <div class="ls-session-metric">Ұнату пайызы — <b>{% if s['like_percent'] is not none %}{{ s['like_percent'] }}%{% else %}—{% endif %}</b></div>
+            <div class="ls-session-metric">Қатысым пайызы — <b>{% if s['attendance_percent'] is not none %}{{ s['attendance_percent'] }}%{% else %}—{% endif %}</b></div>
+            <div class="ls-session-label">№{{ loop.index }} LIVE САБАҚ{% if s['session_date'] %} · {{ s['session_date'] }}{% endif %}</div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endfor %}
+    {% else %}
+    <p class="muted">Бұл мұғалім бойынша Live сабақ дерегі әлі жоқ.</p>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% endfor %}
+
+{% endif %}
+
+{% endblock %}

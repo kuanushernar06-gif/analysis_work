@@ -1003,6 +1003,82 @@ input[type="number"]::-webkit-outer-spin-button {
 .teacher-student-group h4 { margin: 0 0 8px; font-size: 0.85rem; }
 .teacher-student-group .teacher-curators-list { grid-template-columns: 1fr; }
 
+/* ---------- Live сабақ: мұғалімдер беті ---------- */
+.ls-teacher-card {
+  padding: 16px 0;
+  border-top: 1px solid var(--border);
+}
+.ls-teacher-card:first-of-type { border-top: none; padding-top: 0; }
+.ls-teacher-head { margin-bottom: 4px; }
+.ls-teacher-head h3 { margin: 0 0 4px; font-size: 1.05rem; }
+.ls-teacher-head p { margin: 0; }
+
+.ls-week-toggle {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  width: 100%;
+  border: none;
+  background: none;
+  padding: 10px 0;
+  margin-top: 4px;
+  border-top: 1px dashed var(--border);
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  font-weight: 700;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.ls-week-toggle:hover { color: var(--accent); }
+.ls-week-toggle .teacher-curators-arrow { font-size: 0.65rem; }
+.ls-week-toggle.is-open .teacher-curators-arrow { transform: rotate(90deg); }
+.ls-week-meta { font-size: 0.78rem; font-weight: 500; color: var(--text-muted); margin-left: auto; }
+.ls-week-body { padding: 4px 0 10px; }
+.ls-week-body[hidden] { display: none; }
+
+.ls-session-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+}
+.ls-session-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-glass);
+}
+.ls-session-badge {
+  flex-shrink: 0;
+  width: 68px;
+  height: 68px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 1rem;
+  letter-spacing: -0.02em;
+  color: #fff;
+  background: linear-gradient(150deg, var(--accent-2) 0%, var(--accent) 100%);
+}
+.ls-session-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ls-session-metric { font-size: 0.78rem; color: var(--text-secondary); }
+.ls-session-metric b { color: var(--text-primary); }
+.ls-session-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-top: 4px;
+}
+
 .teacher-actions { display: flex; align-items: center; gap: 6px; }
 .teacher-actions .teacher-delete-confirm { display: none; align-items: center; gap: 6px; margin: 0; }
 .teacher-actions .teacher-delete-confirm .muted { font-size: 0.78rem; white-space: nowrap; }

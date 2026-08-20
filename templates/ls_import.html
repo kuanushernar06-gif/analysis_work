@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}LS бағалау экзелі — JUZ40{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <h1>LS бағалау экзелі</h1>
+    <p class="muted">Live сабақ бағалау кестесін (Google Sheets) осында жүктеңіз.</p>
+  </div>
+</div>
+
+<div class="card">
+  <p class="section-intro">
+    Сілтемені (Google Sheets кестесін) «Файл → Ортаққа бөлу → Сілтемесі бар кез келген адам →
+    Көруші» етіп ашық қылып қойыңыз да, осында қойыңыз. Сайт кестенің «ТАРИХ» парағын оқып, әр
+    Live сабақ жолынан күні, мұғалім, поток, ҰНАУ ПАЙЫЗЫ және ҚАТЫСЫМ ПАЙЫЗЫ бағандарын алады.
+    Жаңадан жүктегенде ескі деректің орнына жаңасы қойылады.
+  </p>
+  <form method="post" action="{{ url_for('ls_import') }}" class="form-grid">
+    <label class="col-span-2">
+      Google Sheets сілтемесі
+      <input type="text" name="sheet_url" required value="{{ last_import['sheet_url'] if last_import else '' }}"
+             placeholder="https://docs.google.com/spreadsheets/d/...">
+    </label>
+    <div class="col-span-2">
+      <button type="submit" class="btn btn-primary">Жүктеу</button>
+    </div>
+  </form>
+</div>
+
+<div class="card">
+  <h2>Соңғы импорт</h2>
+  {% if last_import %}
+  <p class="muted">
+    {{ last_import['row_count'] }} жол импортталды
+    {% if last_import['created_at'] %}({{ last_import['created_at'] }}){% endif %}.
+  </p>
+  <form method="post" action="{{ url_for('ls_import_clear') }}" onsubmit="return confirm('Барлық Live сабақ деректерін тазалау керек пе?');">
+    <button type="submit" class="btn btn-danger btn-small">Барлық деректерді тазалау</button>
+  </form>
+  {% else %}
+  <p class="muted">Әзірге дерек жүктелмеген.</p>
+  {% endif %}
+</div>
+
+{% endblock %}
