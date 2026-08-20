@@ -1067,6 +1067,17 @@ input[type="number"]::-webkit-outer-spin-button {
   user-select: text;
   cursor: text;
 }
+.ls-week-progress {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  font-size: 0.76rem;
+  color: var(--text-muted);
+  padding: 0 0 6px;
+}
+.ls-week-progress-item { display: inline-flex; align-items: center; gap: 4px; }
+.ls-week-progress .stat-delta { margin-top: 0; }
 .ls-week-body { padding: 4px 0 10px; }
 .ls-week-body[hidden] { display: none; }
 

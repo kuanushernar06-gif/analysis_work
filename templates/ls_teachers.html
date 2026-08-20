@@ -86,14 +86,29 @@
         <span class="ls-week-meta">
           Ұнату: {% if w.avg_like is not none %}{{ w.avg_like }}%{% else %}—{% endif %}
           · Қатысым: {% if w.avg_attendance is not none %}{{ w.avg_attendance }}%{% else %}—{% endif %}
-          {% if w.comparison %}
-          <span class="stat-delta stat-delta-{{ w.comparison.state }}">
-            {{ '▲' if w.comparison.state == 'up' else ('▼' if w.comparison.state == 'down' else '—') }}
-            {{ '%+.1f'|format(w.comparison.delta) }}
-          </span>
-          {% endif %}
         </span>
       </div>
+      {% if w.like_comparison or w.attendance_comparison %}
+      <div class="ls-week-progress">
+        Алдыңғы аптамен салыстырғанда:
+        {% if w.like_comparison %}
+        <span class="ls-week-progress-item">Ұнату
+          <span class="stat-delta stat-delta-{{ w.like_comparison.state }}">
+            {{ '▲' if w.like_comparison.state == 'up' else ('▼' if w.like_comparison.state == 'down' else '—') }}
+            {{ '%+.1f'|format(w.like_comparison.delta) }}
+          </span>
+        </span>
+        {% endif %}
+        {% if w.attendance_comparison %}
+        <span class="ls-week-progress-item">Қатысым
+          <span class="stat-delta stat-delta-{{ w.attendance_comparison.state }}">
+            {{ '▲' if w.attendance_comparison.state == 'up' else ('▼' if w.attendance_comparison.state == 'down' else '—') }}
+            {{ '%+.1f'|format(w.attendance_comparison.delta) }}
+          </span>
+        </span>
+        {% endif %}
+      </div>
+      {% endif %}
       <div class="ls-week-body" id="{{ week_id }}" hidden>
         {% for dg in w.date_groups %}
         <div class="ls-date-row">

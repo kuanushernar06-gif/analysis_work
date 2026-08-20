@@ -1017,13 +1017,15 @@ def compute_ls_teacher_data(conn):
                 "date_groups": date_groups,
             })
 
-        # Алдыңғы аптамен салыстырғанда прогресс/регресс — тек ортақ
-        # (ұнату+қатысымның орташасы) көрсеткіш бойынша, апта реті
-        # хронологиялық (label бойынша сұрыпталған) болғандықтан тізімдегі
-        # алдыңғы элемент әрдайым шын мәнінде алдыңғы апта.
+        # Алдыңғы аптамен салыстырғанда прогресс/регресс — ұнату мен
+        # қатысым ЕКЕУІ ДЕ БӨЛЕК-БӨЛЕК салыстырылады (біреуін ғана емес),
+        # апта реті хронологиялық (label бойынша сұрыпталған) болғандықтан
+        # тізімдегі алдыңғы элемент әрдайым шын мәнінде алдыңғы апта.
         for i, w in enumerate(weeks):
-            prior = weeks[i - 1]["combined_avg"] if i > 0 else None
-            w["comparison"] = _ls_delta(w["combined_avg"], prior)
+            prior_like = weeks[i - 1]["avg_like"] if i > 0 else None
+            prior_attendance = weeks[i - 1]["avg_attendance"] if i > 0 else None
+            w["like_comparison"] = _ls_delta(w["avg_like"], prior_like)
+            w["attendance_comparison"] = _ls_delta(w["avg_attendance"], prior_attendance)
 
         by_stream.setdefault(code, []).append({
             "name": name,
@@ -1035,6 +1037,47 @@ def compute_ls_teacher_data(conn):
 
     for code, teachers in by_stream.items():
         teachers.sort(key=lambda t: t["name"])
+
+    return by_stream
+
+
+def compute_ls_stream_week_stats(conn):
+    """Мұғалімге қарамай, тек ағым (stream_code) және апта бойынша
+    жинақталған LS статистикасы — 'Жалпы нәтиже' бетіндегі диаграмма мен
+    ай/апта бойынша сүзгі үшін. Апта реті хронологиялық. Қайтарады:
+    {stream_code: [{"label":.., "month":.., "week":.., "avg_like":..,
+    "avg_attendance":.., "combined_avg":.., "session_count":..}, ...]}."""
+    rows = conn.execute(
+        "SELECT stream_code, week_label, like_percent, attendance_percent FROM ls_sessions"
+    ).fetchall()
+    rows = [r for r in rows if not (r["like_percent"] is None and r["attendance_percent"] is None)]
+
+    grouped = {}
+    for r in rows:
+        key = (r["stream_code"], r["week_label"] or "Апта белгісіз")
+        grouped.setdefault(key, []).append(r)
+
+    by_stream = {}
+    for (code, label), group_rows in grouped.items():
+        month_num, week_num = _ls_week_sort_key(label)
+        avg_like = _avg([r["like_percent"] for r in group_rows])
+        avg_attendance = _avg([r["attendance_percent"] for r in group_rows])
+        if avg_like is not None and avg_attendance is not None:
+            combined_avg = round((avg_like + avg_attendance) / 2, 1)
+        else:
+            combined_avg = avg_like if avg_like is not None else avg_attendance
+        by_stream.setdefault(code, []).append({
+            "label": label,
+            "month": month_num,
+            "week": week_num,
+            "avg_like": avg_like,
+            "avg_attendance": avg_attendance,
+            "combined_avg": combined_avg,
+            "session_count": len(group_rows),
+        })
+
+    for code, weeks in by_stream.items():
+        weeks.sort(key=lambda w: _ls_week_sort_key(w["label"]))
 
     return by_stream
 
