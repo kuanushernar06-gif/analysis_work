@@ -20,6 +20,7 @@ from analysis import (
     compute_teacher_stats_for_week,
     get_prior_year_comparison,
     compute_ls_teacher_data,
+    compute_ls_stream_week_stats,
     _match_teacher_curators,
     _registered_name_candidates,
     _compact_name,
@@ -363,18 +364,19 @@ def ls_import_clear():
 def ls_overview():
     conn = get_db()
     rows = conn.execute(
-        "SELECT stream_code, like_percent, attendance_percent FROM ls_sessions"
+        "SELECT stream_code, week_label, like_percent, attendance_percent FROM ls_sessions"
     ).fetchall()
+    rows = [r for r in rows if not (r["like_percent"] is None and r["attendance_percent"] is None)]
 
     overall_like = _avg_percent([r["like_percent"] for r in rows])
     overall_attendance = _avg_percent([r["attendance_percent"] for r in rows])
 
-    by_stream = {}
+    by_stream_rows = {}
     for r in rows:
-        by_stream.setdefault(r["stream_code"], []).append(r)
+        by_stream_rows.setdefault(r["stream_code"], []).append(r)
     stream_stats = []
-    for code in sorted(by_stream.keys()):
-        stream_rows = by_stream[code]
+    for code in sorted(by_stream_rows.keys()):
+        stream_rows = by_stream_rows[code]
         stream_stats.append({
             "code": code,
             "session_count": len(stream_rows),
@@ -382,11 +384,28 @@ def ls_overview():
             "avg_attendance": _avg_percent([r["attendance_percent"] for r in stream_rows]),
         })
 
+    stream_week_stats = compute_ls_stream_week_stats(conn)
+    # JS диаграммасына тікелей беру үшін — {stream_code: [{label, month, week, avg_like, avg_attendance}, ...]}
+    chart_data = {
+        code: [
+            {
+                "label": w["label"], "month": w["month"], "week": w["week"],
+                "avg_like": w["avg_like"], "avg_attendance": w["avg_attendance"],
+                "session_count": w["session_count"],
+            }
+            for w in weeks
+        ]
+        for code, weeks in stream_week_stats.items()
+    }
+
     last_import = conn.execute("SELECT * FROM ls_imports ORDER BY id DESC LIMIT 1").fetchone()
     return render_template(
         "ls_overview.html", ls_page=True, active_page="ls_overview",
         session_count=len(rows), overall_like=overall_like, overall_attendance=overall_attendance,
-        stream_stats=stream_stats, last_import=last_import,
+        stream_stats=stream_stats,
+        chart_data_json=json.dumps(chart_data, ensure_ascii=False),
+        stream_stats_json=json.dumps(stream_stats, ensure_ascii=False),
+        last_import=last_import,
     )
 
 

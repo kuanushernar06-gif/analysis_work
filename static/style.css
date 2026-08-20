@@ -1139,6 +1139,23 @@ input[type="number"]::-webkit-outer-spin-button {
 .ls-filter-row label { min-width: 160px; }
 .ls-filter-row .btn { margin-bottom: 1px; }
 
+/* ---------- Live сабақ: Жалпы нәтиже диаграммасы ---------- */
+.ls-chart-container { width: 100%; overflow-x: auto; }
+.ls-chart-svg { width: 100%; height: auto; min-width: 480px; display: block; }
+.ls-chart-gridline { stroke: var(--border); stroke-width: 1; }
+.ls-chart-axis-label { fill: var(--text-muted); font-size: 11px; font-family: inherit; }
+.ls-chart-bar-like { fill: var(--accent); }
+.ls-chart-bar-attendance { fill: var(--card-1); }
+.ls-chart-line-like { fill: none; stroke: var(--accent); stroke-width: 2.5; }
+.ls-chart-line-attendance { fill: none; stroke: var(--card-1); stroke-width: 2.5; }
+.ls-chart-dot-like { fill: var(--accent); stroke: var(--surface-raised); stroke-width: 1.5; }
+.ls-chart-dot-attendance { fill: var(--card-1); stroke: var(--surface-raised); stroke-width: 1.5; }
+.ls-chart-legend { display: flex; gap: 18px; margin-top: 10px; }
+.ls-chart-legend-item { display: inline-flex; align-items: center; gap: 6px; font-size: 0.8rem; color: var(--text-secondary); }
+.ls-chart-swatch { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.ls-chart-swatch-like { background: var(--accent); }
+.ls-chart-swatch-attendance { background: var(--card-1); }
+
 .teacher-actions { display: flex; align-items: center; gap: 6px; }
 .teacher-actions .teacher-delete-confirm { display: none; align-items: center; gap: 6px; margin: 0; }
 .teacher-actions .teacher-delete-confirm .muted { font-size: 0.78rem; white-space: nowrap; }
