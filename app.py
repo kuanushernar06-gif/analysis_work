@@ -282,6 +282,31 @@ def ls_home():
     return redirect(url_for("ls_overview"))
 
 
+def _run_ls_import(conn, sheet_url):
+    """Берілген Google Sheets сілтемесінен LS деректерін оқып, ескісінің
+    орнына жаңасын сақтайды. Сәтті болса жазба санын, сәтсіз болса
+    SheetFetchError қайтарады (шақырушы флэш хабарды өзі көрсетеді)."""
+    entries = parse_ls_report(sheet_url)
+    conn.execute("DELETE FROM ls_sessions")
+    conn.execute("DELETE FROM ls_imports")
+    import_id = conn.execute(
+        "INSERT INTO ls_imports (sheet_url, row_count) VALUES (?, ?) RETURNING id",
+        (sheet_url, len(entries)),
+    ).fetchone()["id"]
+    for e in entries:
+        conn.execute(
+            "INSERT INTO ls_sessions "
+            "(import_id, session_date, teacher_name, stream_code, week_label, like_percent, attendance_percent) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (
+                import_id, e["session_date"], e["teacher_name"], e["stream_code"],
+                e["week_label"], e["like_percent"], e["attendance_percent"],
+            ),
+        )
+    conn.commit()
+    return len(entries)
+
+
 @app.route("/ls/import", methods=["GET", "POST"])
 def ls_import():
     conn = get_db()
@@ -291,35 +316,36 @@ def ls_import():
             flash("Сілтемені енгізіңіз.", "error")
             return redirect(url_for("ls_import"))
         try:
-            entries = parse_ls_report(sheet_url)
+            count = _run_ls_import(conn, sheet_url)
         except SheetFetchError as e:
             flash(str(e), "error")
             return redirect(url_for("ls_import"))
-
-        conn.execute("DELETE FROM ls_sessions")
-        conn.execute("DELETE FROM ls_imports")
-        import_id = conn.execute(
-            "INSERT INTO ls_imports (sheet_url, row_count) VALUES (?, ?) RETURNING id",
-            (sheet_url, len(entries)),
-        ).fetchone()["id"]
-        for e in entries:
-            conn.execute(
-                "INSERT INTO ls_sessions "
-                "(import_id, session_date, teacher_name, stream_code, week_label, like_percent, attendance_percent) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (
-                    import_id, e["session_date"], e["teacher_name"], e["stream_code"],
-                    e["week_label"], e["like_percent"], e["attendance_percent"],
-                ),
-            )
-        conn.commit()
-        flash(f"{len(entries)} Live сабақ жазбасы импортталды.", "ok")
+        flash(f"{count} Live сабақ жазбасы импортталды.", "ok")
         return redirect(url_for("ls_import"))
 
     last_import = conn.execute("SELECT * FROM ls_imports ORDER BY id DESC LIMIT 1").fetchone()
     return render_template(
         "ls_import.html", ls_page=True, active_page="ls_import", last_import=last_import,
     )
+
+
+@app.route("/ls/import/refresh", methods=["POST"])
+def ls_import_refresh():
+    """Соңғы жүктелген сілтемені қайта оқып, деректі жаңартады — экзельге
+    жаңа нәтиже қосылған сайын, пайдаланушы сілтемені қайта теріп
+    жатпай, осы батырманы басу арқылы жаңартады."""
+    conn = get_db()
+    last_import = conn.execute("SELECT sheet_url FROM ls_imports ORDER BY id DESC LIMIT 1").fetchone()
+    if last_import is None or not last_import["sheet_url"]:
+        flash("Алдымен LS бағалау экзелінің сілтемесін жүктеңіз.", "error")
+        return redirect(url_for("ls_import"))
+    try:
+        count = _run_ls_import(conn, last_import["sheet_url"])
+    except SheetFetchError as e:
+        flash(str(e), "error")
+        return redirect(request.referrer or url_for("ls_teachers_page"))
+    flash(f"Жаңартылды: {count} Live сабақ жазбасы.", "ok")
+    return redirect(request.referrer or url_for("ls_teachers_page"))
 
 
 @app.route("/ls/import/clear", methods=["POST"])

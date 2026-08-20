@@ -7,6 +7,9 @@
     <h1>Мұғалімдер</h1>
     <p class="muted">Әр мұғалімнің әр ағымдағы Live сабақтары бойынша ұнату/қатысым пайызы.</p>
   </div>
+  <form method="post" action="{{ url_for('ls_import_refresh') }}" class="no-print">
+    <button type="submit" class="btn btn-outline">Жаңарту</button>
+  </form>
 </div>
 
 {% if not by_stream %}
@@ -170,45 +173,60 @@
       var teacherVal = teacherSelect.value;
       var m = monthSelect.value;
       var w = weekSelect.value;
-      var active = Boolean(streamVal || teacherVal || m || w);
+      var teacherFilterActive = Boolean(streamVal || teacherVal);
+      var weekFilterActive = Boolean(m || w);
+      var anyActive = teacherFilterActive || weekFilterActive;
 
       document.querySelectorAll("[data-ls-teacher]").forEach(function (card) {
         var teacherMatches = (!streamVal || card.getAttribute("data-stream") === streamVal)
           && (!teacherVal || card.getAttribute("data-teacher") === teacherVal);
 
         card.querySelectorAll("[data-ls-week]").forEach(function (el) {
+          if (!weekFilterActive) {
+            // Ай/апта таңдалмаған — апталардың ашық/жабық күйін өзгертпейміз.
+            el.style.display = "";
+            return;
+          }
           var weekMatches = (!m || el.getAttribute("data-month") === m) && (!w || el.getAttribute("data-week") === w);
           var toggle = el.querySelector(".ls-week-toggle");
           var body = el.querySelector(".ls-week-body");
-          if (!active) {
-            el.style.display = "";
-            if (body) body.setAttribute("hidden", "");
-            if (toggle) toggle.classList.remove("is-open");
-            return;
-          }
-          var show = teacherMatches && weekMatches;
-          el.style.display = show ? "" : "none";
-          if (show && body && toggle) {
+          el.style.display = weekMatches ? "" : "none";
+          if (weekMatches && body && toggle) {
             body.removeAttribute("hidden");
             toggle.classList.add("is-open");
           }
         });
 
-        if (!active) { card.style.display = ""; return; }
+        if (!anyActive) { card.style.display = ""; return; }
+        if (!teacherMatches) { card.style.display = "none"; return; }
+        if (!weekFilterActive) { card.style.display = ""; return; }
         var anyVisibleWeek = Array.prototype.some.call(
           card.querySelectorAll("[data-ls-week]"),
           function (el) { return el.style.display !== "none"; }
         );
-        card.style.display = teacherMatches && anyVisibleWeek ? "" : "none";
+        card.style.display = anyVisibleWeek ? "" : "none";
       });
 
       document.querySelectorAll("[data-ls-stream]").forEach(function (card) {
-        if (!active) { card.style.display = ""; return; }
+        if (!anyActive) { card.style.display = ""; return; }
         var visible = Array.prototype.some.call(
           card.querySelectorAll("[data-ls-teacher]"),
           function (el) { return el.style.display !== "none"; }
         );
         card.style.display = visible ? "" : "none";
+      });
+    }
+
+    function collapseAllWeeks() {
+      weekGroups.forEach(function (el) {
+        el.style.display = "";
+        var toggle = el.querySelector(".ls-week-toggle");
+        var body = el.querySelector(".ls-week-body");
+        if (body) body.setAttribute("hidden", "");
+        if (toggle) toggle.classList.remove("is-open");
+      });
+      document.querySelectorAll("[data-ls-teacher], [data-ls-stream]").forEach(function (card) {
+        card.style.display = "";
       });
     }
 
@@ -222,7 +240,7 @@
       monthSelect.value = "";
       weekSelect.value = "";
       refreshTeacherOptions();
-      applyFilter();
+      collapseAllWeeks();
     });
   })();
 </script>

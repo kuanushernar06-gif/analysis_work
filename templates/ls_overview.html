@@ -7,6 +7,11 @@
     <h1>Жалпы нәтиже</h1>
     <p class="muted">Барлық Live сабақтардың жиынтық көрсеткіштері.</p>
   </div>
+  {% if last_import %}
+  <form method="post" action="{{ url_for('ls_import_refresh') }}" class="no-print">
+    <button type="submit" class="btn btn-outline">Жаңарту</button>
+  </form>
+  {% endif %}
 </div>
 
 {% if not session_count %}
