@@ -1144,6 +1144,9 @@ input[type="number"]::-webkit-outer-spin-button {
 .ls-chart-svg { width: 100%; height: auto; min-width: 480px; display: block; }
 .ls-chart-gridline { stroke: var(--border); stroke-width: 1; }
 .ls-chart-axis-label { fill: var(--text-muted); font-size: 11px; font-family: inherit; }
+.ls-chart-value-label { font-size: 10.5px; font-weight: 700; font-family: inherit; }
+.ls-chart-value-like { fill: var(--accent); }
+.ls-chart-value-attendance { fill: var(--card-1); }
 .ls-chart-bar-like { fill: var(--accent); }
 .ls-chart-bar-attendance { fill: var(--card-1); }
 .ls-chart-line-like { fill: none; stroke: var(--accent); stroke-width: 2.5; }
