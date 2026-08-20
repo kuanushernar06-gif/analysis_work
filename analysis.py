@@ -897,7 +897,7 @@ def compute_ls_teacher_data(conn):
     teacher_rows = conn.execute(
         "SELECT DISTINCT t.name, s.code FROM teachers t "
         "JOIN streams s ON s.id = t.stream_id "
-        "ORDER BY s.sort_order, s.code, t.name"
+        "ORDER BY s.code, t.name"
     ).fetchall()
     registered = [(r["name"], r["code"]) for r in teacher_rows]
     compact_by_stream = {}
