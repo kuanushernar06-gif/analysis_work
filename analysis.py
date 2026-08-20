@@ -2,6 +2,7 @@
 
 import re
 from collections import Counter
+from datetime import datetime
 
 DEFAULT_PASSING_PERCENT = 50.0
 DEFAULT_GOLD_PERCENT = 90.0
@@ -847,6 +848,25 @@ def _avg(values):
     return round(sum(values) / len(values), 1) if values else None
 
 
+def _format_ls_session(row):
+    """ls_sessions жолын шаблонға дайын сөздікке айналдырады — күнін
+    'ДД.ММ.ЖЖЖЖ' пішінінде көрсету үшін бөлек өріс қосады (сұрыптау
+    әлі толық ISO мәні бойынша, уақыт бөлігін қоса, жасалғандықтан бір
+    күнде бірнеше session болса да реті дұрыс сақталады)."""
+    date_display = None
+    raw = row["session_date"]
+    if raw:
+        try:
+            date_display = datetime.fromisoformat(raw).strftime("%d.%m.%Y")
+        except ValueError:
+            date_display = raw
+    return {
+        "like_percent": row["like_percent"],
+        "attendance_percent": row["attendance_percent"],
+        "date_display": date_display,
+    }
+
+
 def _compact_name_tokens(name):
     return [_compact_name(p) for p in re.split(r"\s+", (name or "").strip()) if p]
 
@@ -904,9 +924,13 @@ def compute_ls_teacher_data(conn):
     for name, code in registered:
         compact_by_stream.setdefault(code, []).append((name, _compact_name(name)))
 
+    # 'күні' бағанында сағат-минут жоқ (тек күн), сондықтан бір күнде
+    # бірнеше session болса, олардың нақты реті осы бағанмен анықталмайды —
+    # оның орнына id (жол қосылған рет, парақтағы қатардың өз ретімен
+    # сәйкес келеді) бойынша сұрыптаймыз.
     session_rows = conn.execute(
-        "SELECT session_date, teacher_name, stream_code, week_label, like_percent, attendance_percent "
-        "FROM ls_sessions ORDER BY session_date"
+        "SELECT id, session_date, teacher_name, stream_code, week_label, like_percent, attendance_percent "
+        "FROM ls_sessions ORDER BY id"
     ).fetchall()
 
     sessions_by_key = {(name, code): [] for name, code in registered}
@@ -926,12 +950,15 @@ def compute_ls_teacher_data(conn):
             weeks_map.setdefault(s["week_label"] or "Апта белгісіз", []).append(s)
         weeks = []
         for label in sorted(weeks_map.keys(), key=_ls_week_sort_key):
-            wsessions = sorted(weeks_map[label], key=lambda s: s["session_date"] or "")
+            wsessions = sorted(weeks_map[label], key=lambda s: s["id"])
+            month_num, week_num = _ls_week_sort_key(label)
             weeks.append({
                 "label": label,
+                "month": month_num,
+                "week": week_num,
                 "avg_like": _avg([s["like_percent"] for s in wsessions]),
                 "avg_attendance": _avg([s["attendance_percent"] for s in wsessions]),
-                "sessions": wsessions,
+                "sessions": [_format_ls_session(s) for s in wsessions],
             })
         by_stream.setdefault(code, []).append({
             "name": name,

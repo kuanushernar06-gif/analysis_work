@@ -1079,6 +1079,16 @@ input[type="number"]::-webkit-outer-spin-button {
   margin-top: 4px;
 }
 
+.ls-filter-card { padding: 16px 20px; }
+.ls-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 14px;
+}
+.ls-filter-row label { min-width: 160px; }
+.ls-filter-row .btn { margin-bottom: 1px; }
+
 .teacher-actions { display: flex; align-items: center; gap: 6px; }
 .teacher-actions .teacher-delete-confirm { display: none; align-items: center; gap: 6px; margin: 0; }
 .teacher-actions .teacher-delete-confirm .muted { font-size: 0.78rem; white-space: nowrap; }

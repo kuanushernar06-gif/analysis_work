@@ -645,9 +645,10 @@ def parse_ls_report(raw_url):
         like_score = _numeric_cell(row[like_idx] if like_idx < len(row) else None)
         attendance_score = _numeric_cell(row[attendance_idx] if attendance_idx < len(row) else None)
 
-        if hasattr(kuni, "date"):
-            session_date = kuni.date().isoformat()
-        elif hasattr(kuni, "isoformat"):
+        # datetime мәнінің уақыт бөлігін де сақтаймыз (тек күнін алмай) —
+        # бір күнде бірнеше session болса, солардың реті (уақыты бойынша)
+        # осыдан кейін дұрыс сұрыпталуы үшін қажет.
+        if hasattr(kuni, "isoformat"):
             session_date = kuni.isoformat()
         elif kuni is not None:
             session_date = str(kuni).strip()

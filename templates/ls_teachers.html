@@ -15,12 +15,28 @@
 </div>
 {% else %}
 
+<div class="card ls-filter-card no-print">
+  <div class="ls-filter-row">
+    <label>Ай
+      <select id="ls-filter-month">
+        <option value="">Барлық ай</option>
+      </select>
+    </label>
+    <label>Апта
+      <select id="ls-filter-week">
+        <option value="">Барлық апта</option>
+      </select>
+    </label>
+    <button type="button" class="btn btn-outline btn-small" id="ls-filter-reset">Тазалау</button>
+  </div>
+</div>
+
 {% for stream_code, teachers in by_stream.items() %}
-<div class="card">
+<div class="card" data-ls-stream>
   <h2>{{ stream_code }}</h2>
   {% for t in teachers %}
   {% set loop_teacher = loop %}
-  <div class="ls-teacher-card" id="ls-teacher-{{ stream_code }}-{{ loop_teacher.index }}">
+  <div class="ls-teacher-card" id="ls-teacher-{{ stream_code }}-{{ loop_teacher.index }}" data-ls-teacher>
     <div class="ls-teacher-head">
       <h3>{{ t.name }}</h3>
       <p class="muted">
@@ -33,28 +49,30 @@
     {% if t.weeks %}
     {% for w in t.weeks %}
     {% set week_id = "ls-week-" ~ stream_code ~ "-" ~ loop_teacher.index ~ "-" ~ loop.index %}
-    <button type="button" class="ls-week-toggle" data-teacher-toggle="{{ week_id }}">
-      <span class="teacher-curators-arrow" aria-hidden="true">▸</span>
-      {{ w.label }}
-      <span class="ls-week-meta">
-        Ұнату: {% if w.avg_like is not none %}{{ w.avg_like }}%{% else %}—{% endif %}
-        · Қатысым: {% if w.avg_attendance is not none %}{{ w.avg_attendance }}%{% else %}—{% endif %}
-      </span>
-    </button>
-    <div class="ls-week-body" id="{{ week_id }}" hidden>
-      <div class="ls-session-grid">
-        {% for s in w.sessions %}
-        <div class="ls-session-card">
-          <div class="ls-session-badge">
-            {% if s['like_percent'] is not none %}{{ '%.0f'|format(s['like_percent']) }}%{% else %}—{% endif %}
+    <div class="ls-week-group" data-ls-week data-month="{{ w.month }}" data-week="{{ w.week }}">
+      <button type="button" class="ls-week-toggle" data-teacher-toggle="{{ week_id }}">
+        <span class="teacher-curators-arrow" aria-hidden="true">▸</span>
+        {{ w.label }}
+        <span class="ls-week-meta">
+          Ұнату: {% if w.avg_like is not none %}{{ w.avg_like }}%{% else %}—{% endif %}
+          · Қатысым: {% if w.avg_attendance is not none %}{{ w.avg_attendance }}%{% else %}—{% endif %}
+        </span>
+      </button>
+      <div class="ls-week-body" id="{{ week_id }}" hidden>
+        <div class="ls-session-grid">
+          {% for s in w.sessions %}
+          <div class="ls-session-card">
+            <div class="ls-session-badge">
+              {% if s.like_percent is not none %}{{ '%.0f'|format(s.like_percent) }}%{% else %}—{% endif %}
+            </div>
+            <div class="ls-session-body">
+              <div class="ls-session-metric">Ұнату пайызы — <b>{% if s.like_percent is not none %}{{ s.like_percent }}%{% else %}—{% endif %}</b></div>
+              <div class="ls-session-metric">Қатысым пайызы — <b>{% if s.attendance_percent is not none %}{{ s.attendance_percent }}%{% else %}—{% endif %}</b></div>
+              <div class="ls-session-label">№{{ loop.index }} LIVE САБАҚ{% if s.date_display %} · {{ s.date_display }}{% endif %}</div>
+            </div>
           </div>
-          <div class="ls-session-body">
-            <div class="ls-session-metric">Ұнату пайызы — <b>{% if s['like_percent'] is not none %}{{ s['like_percent'] }}%{% else %}—{% endif %}</b></div>
-            <div class="ls-session-metric">Қатысым пайызы — <b>{% if s['attendance_percent'] is not none %}{{ s['attendance_percent'] }}%{% else %}—{% endif %}</b></div>
-            <div class="ls-session-label">№{{ loop.index }} LIVE САБАҚ{% if s['session_date'] %} · {{ s['session_date'] }}{% endif %}</div>
-          </div>
+          {% endfor %}
         </div>
-        {% endfor %}
       </div>
     </div>
     {% endfor %}
@@ -68,4 +86,90 @@
 
 {% endif %}
 
+{% endblock %}
+
+{% block scripts %}
+<script>
+  (function () {
+    var weekGroups = Array.prototype.slice.call(document.querySelectorAll("[data-ls-week]"));
+    if (!weekGroups.length) return;
+
+    var monthSelect = document.getElementById("ls-filter-month");
+    var weekSelect = document.getElementById("ls-filter-week");
+    var resetBtn = document.getElementById("ls-filter-reset");
+
+    var months = [];
+    var weeks = [];
+    weekGroups.forEach(function (el) {
+      var m = el.getAttribute("data-month");
+      var w = el.getAttribute("data-week");
+      if (m && months.indexOf(m) === -1) months.push(m);
+      if (w && weeks.indexOf(w) === -1) weeks.push(w);
+    });
+    months.sort(function (a, b) { return Number(a) - Number(b); });
+    weeks.sort(function (a, b) { return Number(a) - Number(b); });
+
+    months.forEach(function (m) {
+      var opt = document.createElement("option");
+      opt.value = m;
+      opt.textContent = m + "-АЙ";
+      monthSelect.appendChild(opt);
+    });
+    weeks.forEach(function (w) {
+      var opt = document.createElement("option");
+      opt.value = w;
+      opt.textContent = w + "-АПТА";
+      weekSelect.appendChild(opt);
+    });
+
+    function applyFilter() {
+      var m = monthSelect.value;
+      var w = weekSelect.value;
+      var active = Boolean(m || w);
+
+      weekGroups.forEach(function (el) {
+        var matches = (!m || el.getAttribute("data-month") === m) && (!w || el.getAttribute("data-week") === w);
+        var toggle = el.querySelector(".ls-week-toggle");
+        var body = el.querySelector(".ls-week-body");
+        if (!active) {
+          el.style.display = "";
+          if (body) { body.setAttribute("hidden", ""); }
+          if (toggle) { toggle.classList.remove("is-open"); }
+          return;
+        }
+        el.style.display = matches ? "" : "none";
+        if (matches && body && toggle) {
+          body.removeAttribute("hidden");
+          toggle.classList.add("is-open");
+        }
+      });
+
+      document.querySelectorAll("[data-ls-teacher]").forEach(function (card) {
+        if (!active) { card.style.display = ""; return; }
+        var visible = Array.prototype.some.call(
+          card.querySelectorAll("[data-ls-week]"),
+          function (el) { return el.style.display !== "none"; }
+        );
+        card.style.display = visible ? "" : "none";
+      });
+
+      document.querySelectorAll("[data-ls-stream]").forEach(function (card) {
+        if (!active) { card.style.display = ""; return; }
+        var visible = Array.prototype.some.call(
+          card.querySelectorAll("[data-ls-teacher]"),
+          function (el) { return el.style.display !== "none"; }
+        );
+        card.style.display = visible ? "" : "none";
+      });
+    }
+
+    monthSelect.addEventListener("change", applyFilter);
+    weekSelect.addEventListener("change", applyFilter);
+    resetBtn.addEventListener("click", function () {
+      monthSelect.value = "";
+      weekSelect.value = "";
+      applyFilter();
+    });
+  })();
+</script>
 {% endblock %}
