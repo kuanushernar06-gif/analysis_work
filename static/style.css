@@ -1013,17 +1013,23 @@ input[type="number"]::-webkit-outer-spin-button {
 .ls-teacher-head h3 { margin: 0 0 4px; font-size: 1.05rem; }
 .ls-teacher-head p { margin: 0; }
 
-.ls-week-toggle {
+.ls-week-row {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
   width: 100%;
-  border: none;
-  background: none;
   padding: 10px 0;
   margin-top: 4px;
   border-top: 1px dashed var(--border);
+}
+.ls-week-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: none;
+  background: none;
+  padding: 0;
   color: var(--text-primary);
   font-size: 0.9rem;
   font-weight: 700;
@@ -1034,7 +1040,14 @@ input[type="number"]::-webkit-outer-spin-button {
 .ls-week-toggle:hover { color: var(--accent); }
 .ls-week-toggle .teacher-curators-arrow { font-size: 0.65rem; }
 .ls-week-toggle.is-open .teacher-curators-arrow { transform: rotate(90deg); }
-.ls-week-meta { font-size: 0.78rem; font-weight: 500; color: var(--text-muted); margin-left: auto; }
+.ls-week-meta {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  margin-left: auto;
+  user-select: text;
+  cursor: text;
+}
 .ls-week-body { padding: 4px 0 10px; }
 .ls-week-body[hidden] { display: none; }
 

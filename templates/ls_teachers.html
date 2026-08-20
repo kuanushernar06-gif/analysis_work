@@ -68,14 +68,16 @@
     {% for w in t.weeks %}
     {% set week_id = "ls-week-" ~ stream_code ~ "-" ~ loop_teacher.index ~ "-" ~ loop.index %}
     <div class="ls-week-group" data-ls-week data-month="{{ w.month }}" data-week="{{ w.week }}">
-      <button type="button" class="ls-week-toggle" data-teacher-toggle="{{ week_id }}">
-        <span class="teacher-curators-arrow" aria-hidden="true">▸</span>
-        {{ w.label }}
+      <div class="ls-week-row">
+        <button type="button" class="ls-week-toggle" data-teacher-toggle="{{ week_id }}">
+          <span class="teacher-curators-arrow" aria-hidden="true">▸</span>
+          {{ w.label }}
+        </button>
         <span class="ls-week-meta">
           Ұнату: {% if w.avg_like is not none %}{{ w.avg_like }}%{% else %}—{% endif %}
           · Қатысым: {% if w.avg_attendance is not none %}{{ w.avg_attendance }}%{% else %}—{% endif %}
         </span>
-      </button>
+      </div>
       <div class="ls-week-body" id="{{ week_id }}" hidden>
         {% for dg in w.date_groups %}
         <div class="ls-date-row">
@@ -84,7 +86,7 @@
             {% for s in dg.sessions %}
             <div class="ls-session-card">
               <div class="ls-session-badge">
-                {% if s.like_percent is not none %}{{ '%.0f'|format(s.like_percent) }}%{% else %}—{% endif %}
+                {% if s.combined_percent is not none %}{{ s.combined_percent }}%{% else %}—{% endif %}
               </div>
               <div class="ls-session-body">
                 <div class="ls-session-metric">Ұнату пайызы — <b>{% if s.like_percent is not none %}{{ s.like_percent }}%{% else %}—{% endif %}</b></div>

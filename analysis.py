@@ -852,7 +852,10 @@ def _format_ls_session(row):
     """ls_sessions жолын шаблонға дайын сөздікке айналдырады — күнін
     'ДД.ММ.ЖЖЖЖ' пішінінде көрсету үшін бөлек өріс қосады (сұрыптау
     әлі толық ISO мәні бойынша, уақыт бөлігін қоса, жасалғандықтан бір
-    күнде бірнеше session болса да реті дұрыс сақталады)."""
+    күнде бірнеше session болса да реті дұрыс сақталады). combined_percent —
+    ұнату мен қатысымның ортақ (екеуінің орташасы) пайызы, домалақ
+    белгіде көрсету үшін — екеуі де бар болса орташасы, тек бірі болса
+    сол, дәлдігі бұзылмайды (бүтін санға дейін дөңгеленбейді)."""
     date_display = None
     raw = row["session_date"]
     if raw:
@@ -860,9 +863,18 @@ def _format_ls_session(row):
             date_display = datetime.fromisoformat(raw).strftime("%d.%m.%Y")
         except ValueError:
             date_display = raw
+
+    like = row["like_percent"]
+    attendance = row["attendance_percent"]
+    if like is not None and attendance is not None:
+        combined = round((like + attendance) / 2, 1)
+    else:
+        combined = like if like is not None else attendance
+
     return {
-        "like_percent": row["like_percent"],
-        "attendance_percent": row["attendance_percent"],
+        "like_percent": like,
+        "attendance_percent": attendance,
+        "combined_percent": combined,
         "date_display": date_display,
     }
 
@@ -892,38 +904,36 @@ def _ls_names_fuzzy_equal(name_a, name_b):
     return True
 
 
-def _match_ls_teacher_name(sheet_name, same_stream_registered):
-    """'мұғалім' бағанындағы атты сол ағымға тіркелген мұғалімдердің
-    бірімен сәйкестендіреді — дәл сол атпен, немесе (аты қысқартылып
-    жазылған жағдайда, мыс. 'Өмірзақ' vs 'Өмірзақов') сөз-сөзбен
-    ұқсас болса. same_stream_registered — [(name, compact_name), ...]."""
-    compact_sheet = _compact_name(sheet_name)
-    exact = [name for name, c in same_stream_registered if c == compact_sheet]
-    if len(exact) == 1:
-        return exact[0]
-    candidates = [name for name, _c in same_stream_registered if _ls_names_fuzzy_equal(sheet_name, name)]
-    if len(candidates) == 1:
-        return candidates[0]
-    return None
+def _merge_ls_teacher_names(raw_names):
+    """Бір ағымдағы нақты (экзельдегі) 'мұғалім' атауларының жиынын
+    топтастырады — сырты ғана бөлек жазылған (мыс. 'Өмірзақ Саян' vs
+    'Өмірзақов Саян') аттар бір адам ретінде бір қанондық атқа
+    бірігеді (соның ішіндегі ең ұзын жазылуы қанондық ат болады).
+    Тіркелген мұғалім тізімі ЕМЕС, дәл экзельде жазылған кураторлар
+    негізінде — ауыстырылған (замена) мұғалім болса да, оның нәтижесі
+    осылай өз атымен көрінеді. Қайтарады: {raw_name: canonical_name}."""
+    names = sorted({(n or "").strip() for n in raw_names if n and n.strip()}, key=len, reverse=True)
+    canon_list = []
+    mapping = {}
+    for name in names:
+        match = next((c for c in canon_list if _ls_names_fuzzy_equal(name, c)), None)
+        if match is None:
+            canon_list.append(name)
+            mapping[name] = name
+        else:
+            mapping[name] = match
+    return mapping
 
 
 def compute_ls_teacher_data(conn):
-    """Тіркелген әр мұғалім-ағым жұбы бойынша Live сабақ (LS) статистикасын
-    жинақтайды: жалпы ортаа ұнату/қатысым пайызы + апта бойынша топталған
+    """Live сабақ (LS) статистикасын жинақтайды — мұғалім тізімі ТІРКЕЛГЕН
+    мұғалімдер емес, дәл экзельдегі 'мұғалім' бағанынан алынады (ауыстырылған/
+    замена мұғалімдердің нәтижесі де осылай көрінеді үшін). Әр мұғалім-ағым
+    жұбы бойынша жалпы ортаа ұнату/қатысым пайызы + апта бойынша топталған
     (жасырын/ашылатын) session тізімі. Ағым коды бойынша топтастырылған
     сөздік қайтарады: {stream_code: [{"name":.., "avg_like":.., "avg_attendance":..,
     "session_count":.., "weeks": [{"label":.., "avg_like":.., "avg_attendance":..,
     "sessions": [...]}]}, ...]}."""
-    teacher_rows = conn.execute(
-        "SELECT DISTINCT t.name, s.code FROM teachers t "
-        "JOIN streams s ON s.id = t.stream_id "
-        "ORDER BY s.code, t.name"
-    ).fetchall()
-    registered = [(r["name"], r["code"]) for r in teacher_rows]
-    compact_by_stream = {}
-    for name, code in registered:
-        compact_by_stream.setdefault(code, []).append((name, _compact_name(name)))
-
     # 'күні' бағанында сағат-минут жоқ (тек күн), сондықтан бір күнде
     # бірнеше session болса, олардың нақты реті осы бағанмен анықталмайды —
     # оның орнына id (жол қосылған рет, парақтағы қатардың өз ретімен
@@ -933,20 +943,22 @@ def compute_ls_teacher_data(conn):
         "FROM ls_sessions ORDER BY id"
     ).fetchall()
 
-    sessions_by_key = {(name, code): [] for name, code in registered}
-    for row in session_rows:
-        # Екі көрсеткіші де (ұнату/қатысым) бос жол — нақты сабақ емес,
-        # әлі бағаланбаған не бос үлгі жол (мыс. алдын ала қосылған,
-        # деректер толтырылмаған қатар) — есептен шығарамыз.
-        if row["like_percent"] is None and row["attendance_percent"] is None:
+    # Екі көрсеткіші де (ұнату/қатысым) бос жол — нақты сабақ емес, әлі
+    # бағаланбаған не бос үлгі жол — есептен шығарамыз.
+    rows = [r for r in session_rows if not (r["like_percent"] is None and r["attendance_percent"] is None)]
+
+    raw_names_by_stream = {}
+    for r in rows:
+        raw_names_by_stream.setdefault(r["stream_code"], set()).add((r["teacher_name"] or "").strip())
+    name_map_by_stream = {code: _merge_ls_teacher_names(names) for code, names in raw_names_by_stream.items()}
+
+    sessions_by_key = {}
+    for row in rows:
+        canonical = name_map_by_stream.get(row["stream_code"], {}).get((row["teacher_name"] or "").strip())
+        if not canonical:
             continue
-        same_stream = compact_by_stream.get(row["stream_code"], [])
-        matched = _match_ls_teacher_name(row["teacher_name"], same_stream)
-        if matched is None:
-            continue
-        key = (matched, row["stream_code"])
-        if key in sessions_by_key:
-            sessions_by_key[key].append(row)
+        key = (canonical, row["stream_code"])
+        sessions_by_key.setdefault(key, []).append(row)
 
     by_stream = {}
     for (name, code), sessions in sessions_by_key.items():
