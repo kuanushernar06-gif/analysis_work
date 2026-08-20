@@ -848,6 +848,22 @@ def _avg(values):
     return round(sum(values) / len(values), 1) if values else None
 
 
+def _ls_delta(current, prior):
+    """app.py-дегі _delta-мен бірдей пішінде (delta, state) қайтарады —
+    LS аптасының алдыңғы аптамен салыстырғандағы прогресс/регресін
+    белгілеу үшін."""
+    if current is None or prior is None:
+        return None
+    delta = round(current - prior, 1)
+    if delta == 0:
+        state = "same"
+    elif delta > 0:
+        state = "up"
+    else:
+        state = "down"
+    return {"delta": delta, "state": state}
+
+
 def _format_ls_session(row):
     """ls_sessions жолын шаблонға дайын сөздікке айналдырады — күнін
     'ДД.ММ.ЖЖЖЖ' пішінінде көрсету үшін бөлек өріс қосады (сұрыптау
@@ -984,14 +1000,31 @@ def compute_ls_teacher_data(conn):
                 for key_date in date_order
             ]
 
+            avg_like = _avg([s["like_percent"] for s in wsessions])
+            avg_attendance = _avg([s["attendance_percent"] for s in wsessions])
+            if avg_like is not None and avg_attendance is not None:
+                combined_avg = round((avg_like + avg_attendance) / 2, 1)
+            else:
+                combined_avg = avg_like if avg_like is not None else avg_attendance
+
             weeks.append({
                 "label": label,
                 "month": month_num,
                 "week": week_num,
-                "avg_like": _avg([s["like_percent"] for s in wsessions]),
-                "avg_attendance": _avg([s["attendance_percent"] for s in wsessions]),
+                "avg_like": avg_like,
+                "avg_attendance": avg_attendance,
+                "combined_avg": combined_avg,
                 "date_groups": date_groups,
             })
+
+        # Алдыңғы аптамен салыстырғанда прогресс/регресс — тек ортақ
+        # (ұнату+қатысымның орташасы) көрсеткіш бойынша, апта реті
+        # хронологиялық (label бойынша сұрыпталған) болғандықтан тізімдегі
+        # алдыңғы элемент әрдайым шын мәнінде алдыңғы апта.
+        for i, w in enumerate(weeks):
+            prior = weeks[i - 1]["combined_avg"] if i > 0 else None
+            w["comparison"] = _ls_delta(w["combined_avg"], prior)
+
         by_stream.setdefault(code, []).append({
             "name": name,
             "avg_like": _avg([s["like_percent"] for s in sessions]),

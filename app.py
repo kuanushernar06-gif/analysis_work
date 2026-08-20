@@ -22,6 +22,7 @@ from analysis import (
     compute_ls_teacher_data,
     _match_teacher_curators,
     _registered_name_candidates,
+    _compact_name,
 )
 from sheets import (
     fetch_workbook,
@@ -389,10 +390,28 @@ def ls_overview():
     )
 
 
+# Мұғалімнің LS суреті — атымен сәйкестендіріледі (register_teacher/LS
+# экзеліндегі мұғалім атауы сәл өзгеше жазылуы мүмкін болғандықтан,
+# _compact_name арқылы салыстырамыз).
+LS_TEACHER_PHOTOS = {
+    "Шора Абай": "shora-abay.jpg",
+    "Әбдіразақ Бердібек": "abdirazak-berdibek.jpg",
+    "Әмірханов Әділет": "amirkhanov-adilet.jpg",
+    "Өмірзақов Саян": "omirzakov-sayan.jpg",
+    "Дарханбек Ермұхамед": "darkhanbek-ermukhamed.jpg",
+    "Рзатаев Жантілек": "rzataev-zhantilek.jpg",
+}
+_LS_TEACHER_PHOTOS_COMPACT = {_compact_name(name): fname for name, fname in LS_TEACHER_PHOTOS.items()}
+
+
 @app.route("/ls/teachers")
 def ls_teachers_page():
     conn = get_db()
     by_stream = compute_ls_teacher_data(conn)
+    for teachers in by_stream.values():
+        for t in teachers:
+            fname = _LS_TEACHER_PHOTOS_COMPACT.get(_compact_name(t["name"]))
+            t["photo_url"] = url_for("static", filename=f"img/teachers/{fname}") if fname else None
     return render_template(
         "ls_teachers.html", ls_page=True, active_page="ls_teachers", by_stream=by_stream,
     )

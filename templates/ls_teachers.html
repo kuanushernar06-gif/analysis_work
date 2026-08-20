@@ -59,12 +59,19 @@
   {% set loop_teacher = loop %}
   <div class="ls-teacher-card" id="ls-teacher-{{ stream_code }}-{{ loop_teacher.index }}" data-ls-teacher data-stream="{{ stream_code }}" data-teacher="{{ t.name }}">
     <div class="ls-teacher-head">
-      <h3>{{ t.name }}</h3>
-      <p class="muted">
-        Ұнату пайызы: {% if t.avg_like is not none %}{{ t.avg_like }}%{% else %}—{% endif %}
-        · Қатысым пайызы: {% if t.avg_attendance is not none %}{{ t.avg_attendance }}%{% else %}—{% endif %}
-        · Live сабақ саны: {{ t.session_count }}
-      </p>
+      {% if t.photo_url %}
+      <img class="ls-teacher-avatar" src="{{ t.photo_url }}" alt="{{ t.name }}">
+      {% else %}
+      <div class="ls-teacher-avatar ls-teacher-avatar-placeholder" aria-hidden="true">{{ t.name[0] }}</div>
+      {% endif %}
+      <div>
+        <h3>{{ t.name }}</h3>
+        <p class="muted">
+          Ұнату пайызы: {% if t.avg_like is not none %}{{ t.avg_like }}%{% else %}—{% endif %}
+          · Қатысым пайызы: {% if t.avg_attendance is not none %}{{ t.avg_attendance }}%{% else %}—{% endif %}
+          · Live сабақ саны: {{ t.session_count }}
+        </p>
+      </div>
     </div>
 
     {% if t.weeks %}
@@ -79,6 +86,12 @@
         <span class="ls-week-meta">
           Ұнату: {% if w.avg_like is not none %}{{ w.avg_like }}%{% else %}—{% endif %}
           · Қатысым: {% if w.avg_attendance is not none %}{{ w.avg_attendance }}%{% else %}—{% endif %}
+          {% if w.comparison %}
+          <span class="stat-delta stat-delta-{{ w.comparison.state }}">
+            {{ '▲' if w.comparison.state == 'up' else ('▼' if w.comparison.state == 'down' else '—') }}
+            {{ '%+.1f'|format(w.comparison.delta) }}
+          </span>
+          {% endif %}
         </span>
       </div>
       <div class="ls-week-body" id="{{ week_id }}" hidden>
