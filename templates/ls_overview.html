@@ -222,14 +222,21 @@
         if (s.avg_attendance !== null) allVals.push(s.avg_attendance);
       });
       var scale = niceScale(allVals);
-      var W = 700, H = 320, padL = 46, padR = 16, padT = 30, padB = 44;
-      var plotW = W - padL - padR, plotH = H - padT - padB;
+      // Санат (ағым/мұғалім) саны көбейген сайын әр топқа кемінде осыншы
+      // ен керек — әйтпесе аты/пайыз мәтіндері бір-бірінің үстіне шығып
+      // кетеді (мыс. 7 мұғалім тұрақты 700px-ке сыймай қалғанда болған).
+      var MIN_GROUP_W = 130;
+      var H = 320, padL = 46, padR = 16, padT = 30, padB = 44;
+      var plotW = Math.max(700 - padL - padR, valid.length * MIN_GROUP_W);
+      var W = plotW + padL + padR;
+      var plotH = H - padT - padB;
       var groupW = plotW / valid.length;
-      var barW = Math.min(38, groupW / 3);
+      var barW = Math.min(32, groupW / 3);
+      var barGap = 14;
 
       function y(v) { return padT + plotH - ((v - scale[0]) / (scale[1] - scale[0])) * plotH; }
 
-      var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" class="ls-chart-svg" role="img">';
+      var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:' + W + 'px" class="ls-chart-svg" role="img">';
       [0, 0.25, 0.5, 0.75, 1].forEach(function (t) {
         var v = scale[0] + t * (scale[1] - scale[0]);
         var yy = y(v);
@@ -240,12 +247,12 @@
       valid.forEach(function (s, i) {
         var cx = padL + groupW * i + groupW / 2;
         if (s.avg_like !== null) {
-          var lx = cx - barW / 2 - 2, ly = y(s.avg_like);
+          var lx = cx - barW / 2 - barGap / 2, ly = y(s.avg_like);
           svg += '<rect x="' + lx + '" y="' + ly + '" width="' + (barW / 2) + '" height="' + (padT + plotH - ly) + '" rx="3" class="ls-chart-bar-like"><title>' + escapeHtml(s.code) + ' — Ұнату: ' + s.avg_like + '%</title></rect>';
           svg += '<text x="' + (lx + barW / 4) + '" y="' + (ly - 6) + '" class="ls-chart-value-label ls-chart-value-like" text-anchor="middle">' + s.avg_like + '%</text>';
         }
         if (s.avg_attendance !== null) {
-          var ax = cx + 2, ay = y(s.avg_attendance);
+          var ax = cx + barGap / 2, ay = y(s.avg_attendance);
           svg += '<rect x="' + ax + '" y="' + ay + '" width="' + (barW / 2) + '" height="' + (padT + plotH - ay) + '" rx="3" class="ls-chart-bar-attendance"><title>' + escapeHtml(s.code) + ' — Қатысым: ' + s.avg_attendance + '%</title></rect>';
           svg += '<text x="' + (ax + barW / 4) + '" y="' + (ay - 6) + '" class="ls-chart-value-label ls-chart-value-attendance" text-anchor="middle">' + s.avg_attendance + '%</text>';
         }
