@@ -69,6 +69,19 @@
   </div>
 </div>
 
+<div class="card">
+  <h2>Мұғалімдер бойынша</h2>
+  <p class="muted" id="ov-teacher-sub">Әр мұғалімнің барлық уақыттағы ортақ ұнату/қатысым пайызы. Жоғарыдағы ай/апта сүзгісі мұнда да қолданылады.</p>
+  <div class="ls-teacher-overall-grid" id="ov-teacher-cards"></div>
+
+  <h3 class="ls-subsection-title">Мұғалімдерді салыстыру</h3>
+  <div id="ov-teacher-chart-container" class="ls-chart-container"></div>
+  <div class="ls-chart-legend">
+    <span class="ls-chart-legend-item"><span class="ls-chart-swatch ls-chart-swatch-like"></span> Ұнату пайызы</span>
+    <span class="ls-chart-legend-item"><span class="ls-chart-swatch ls-chart-swatch-attendance"></span> Қатысым пайызы</span>
+  </div>
+</div>
+
 {% endif %}
 
 {% endblock %}
@@ -79,6 +92,8 @@
   (function () {
     var CHART_DATA = {{ chart_data_json|safe }};
     var STREAM_STATS = {{ stream_stats_json|safe }};
+    var TEACHER_CHART_DATA = {{ teacher_chart_data_json|safe }};
+    var TEACHER_STATS = {{ teacher_stats_json|safe }};
     var OVERALL_LIKE = {{ overall_like if overall_like is not none else 'null' }};
     var OVERALL_ATTENDANCE = {{ overall_attendance if overall_attendance is not none else 'null' }};
 
@@ -87,6 +102,8 @@
     var weekSelect = document.getElementById("ov-filter-week");
     var resetBtn = document.getElementById("ov-filter-reset");
     var chartContainer = document.getElementById("ov-chart-container");
+    var teacherCardsContainer = document.getElementById("ov-teacher-cards");
+    var teacherChartContainer = document.getElementById("ov-teacher-chart-container");
     var chartTitle = document.getElementById("ov-chart-title");
     var chartSub = document.getElementById("ov-chart-sub");
 
@@ -195,9 +212,10 @@
       return [min, max];
     }
 
-    function renderBarChart(stats) {
+    function renderBarChart(stats, container) {
+      container = container || chartContainer;
       var valid = stats.filter(function (s) { return s.avg_like !== null || s.avg_attendance !== null; });
-      if (!valid.length) { chartContainer.innerHTML = '<p class="muted">Дерек жоқ.</p>'; return; }
+      if (!valid.length) { container.innerHTML = '<p class="muted">Дерек жоқ.</p>'; return; }
       var allVals = [];
       valid.forEach(function (s) {
         if (s.avg_like !== null) allVals.push(s.avg_like);
@@ -235,17 +253,18 @@
       });
 
       svg += '</svg>';
-      chartContainer.innerHTML = svg;
+      container.innerHTML = svg;
     }
 
-    function renderLineChart(rows) {
-      if (!rows.length) { chartContainer.innerHTML = '<p class="muted">Дерек жоқ.</p>'; return; }
+    function renderLineChart(rows, container) {
+      container = container || chartContainer;
+      if (!rows.length) { container.innerHTML = '<p class="muted">Дерек жоқ.</p>'; return; }
       var allVals = [];
       rows.forEach(function (r) {
         if (r.avg_like !== null) allVals.push(r.avg_like);
         if (r.avg_attendance !== null) allVals.push(r.avg_attendance);
       });
-      if (!allVals.length) { chartContainer.innerHTML = '<p class="muted">Дерек жоқ.</p>'; return; }
+      if (!allVals.length) { container.innerHTML = '<p class="muted">Дерек жоқ.</p>'; return; }
       var scale = niceScale(allVals);
       var W = 700, H = 320, padL = 46, padR = 16, padT = 26, padB = 54;
       var plotW = W - padL - padR, plotH = H - padT - padB;
@@ -293,11 +312,70 @@
       });
 
       svg += '</svg>';
-      chartContainer.innerHTML = svg;
+      container.innerHTML = svg;
+    }
+
+    function renderTeacherCards() {
+      var m = monthSelect.value ? Number(monthSelect.value) : null;
+      var w = weekSelect.value ? Number(weekSelect.value) : null;
+      if (!TEACHER_STATS.length) { teacherCardsContainer.innerHTML = '<p class="muted">Дерек жоқ.</p>'; return; }
+
+      var html = "";
+      TEACHER_STATS.forEach(function (t) {
+        var like, attendance;
+        if (!m && !w) {
+          like = t.avg_like;
+          attendance = t.avg_attendance;
+        } else {
+          var rows = (TEACHER_CHART_DATA[t.key] || []).filter(function (r) {
+            return (!m || r.month === m) && (!w || r.week === w);
+          });
+          like = avg(rows.map(function (r) { return r.avg_like; }));
+          attendance = avg(rows.map(function (r) { return r.avg_attendance; }));
+        }
+        html += '<div class="ls-teacher-overall-card">' +
+          '<div class="ls-teacher-overall-name">' + escapeHtml(t.name) + '</div>' +
+          '<div class="ls-teacher-overall-stream">' + escapeHtml(t.stream_code) + '</div>' +
+          '<div class="ls-teacher-overall-values">' +
+            '<div class="ls-teacher-overall-value-block">' +
+              '<div class="ls-teacher-overall-value ls-teacher-overall-value-like">' + fmtPct(like) + '</div>' +
+              '<div class="ls-teacher-overall-value-label">Ұнату</div>' +
+            '</div>' +
+            '<div class="ls-teacher-overall-value-block">' +
+              '<div class="ls-teacher-overall-value ls-teacher-overall-value-attendance">' + fmtPct(attendance) + '</div>' +
+              '<div class="ls-teacher-overall-value-label">Қатысым</div>' +
+            '</div>' +
+          '</div>' +
+        '</div>';
+      });
+      teacherCardsContainer.innerHTML = html;
+    }
+
+    function renderTeacherChart() {
+      var m = monthSelect.value ? Number(monthSelect.value) : null;
+      var w = weekSelect.value ? Number(weekSelect.value) : null;
+      var stats;
+      if (!m && !w) {
+        stats = TEACHER_STATS.map(function (t) { return { code: t.name, avg_like: t.avg_like, avg_attendance: t.avg_attendance }; });
+      } else {
+        stats = TEACHER_STATS.map(function (t) {
+          var rows = (TEACHER_CHART_DATA[t.key] || []).filter(function (r) {
+            return (!m || r.month === m) && (!w || r.week === w);
+          });
+          return {
+            code: t.name,
+            avg_like: avg(rows.map(function (r) { return r.avg_like; })),
+            avg_attendance: avg(rows.map(function (r) { return r.avg_attendance; })),
+          };
+        });
+      }
+      renderBarChart(stats, teacherChartContainer);
     }
 
     function refresh() {
       updateSummary();
+      renderTeacherCards();
+      renderTeacherChart();
       renderChart();
     }
 

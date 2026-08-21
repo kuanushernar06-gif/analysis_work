@@ -398,6 +398,26 @@ def ls_overview():
         for code, weeks in stream_week_stats.items()
     }
 
+    # Мұғалім бойынша (ағымға қарамай, барлық потоктағы мұғалімдер бір
+    # тізімде) — Жалпы нәтиже бетіндегі 'Мұғалімдер бойынша' салыстыру
+    # диаграммасы мен әр мұғалімнің үлкен ортақ көрсеткіші үшін.
+    teacher_by_stream = compute_ls_teacher_data(conn)
+    teacher_stats = []
+    teacher_chart_data = {}
+    for stream_code, teachers in teacher_by_stream.items():
+        for t in teachers:
+            key = f"{t['name']} ({stream_code})"
+            teacher_stats.append({
+                "key": key, "name": t["name"], "stream_code": stream_code,
+                "avg_like": t["avg_like"], "avg_attendance": t["avg_attendance"],
+                "session_count": t["session_count"],
+            })
+            teacher_chart_data[key] = [
+                {"month": w["month"], "week": w["week"], "avg_like": w["avg_like"], "avg_attendance": w["avg_attendance"]}
+                for w in t["weeks"]
+            ]
+    teacher_stats.sort(key=lambda t: (t["stream_code"], t["name"]))
+
     last_import = conn.execute("SELECT * FROM ls_imports ORDER BY id DESC LIMIT 1").fetchone()
     return render_template(
         "ls_overview.html", ls_page=True, active_page="ls_overview",
@@ -405,6 +425,9 @@ def ls_overview():
         stream_stats=stream_stats,
         chart_data_json=json.dumps(chart_data, ensure_ascii=False),
         stream_stats_json=json.dumps(stream_stats, ensure_ascii=False),
+        teacher_stats=teacher_stats,
+        teacher_chart_data_json=json.dumps(teacher_chart_data, ensure_ascii=False),
+        teacher_stats_json=json.dumps(teacher_stats, ensure_ascii=False),
         last_import=last_import,
     )
 

@@ -1159,6 +1159,28 @@ input[type="number"]::-webkit-outer-spin-button {
 .ls-chart-swatch-like { background: var(--accent); }
 .ls-chart-swatch-attendance { background: var(--card-1); }
 
+.ls-subsection-title { margin: 22px 0 12px; font-size: 1rem; }
+.ls-teacher-overall-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 14px;
+}
+.ls-teacher-overall-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-glass);
+  padding: 16px 18px;
+  background: var(--surface-raised);
+}
+.ls-teacher-overall-name { font-weight: 700; font-size: 0.98rem; }
+.ls-teacher-overall-stream { font-size: 0.78rem; color: var(--text-muted); margin-top: 2px; }
+.ls-teacher-overall-values { display: flex; gap: 22px; margin-top: 12px; }
+.ls-teacher-overall-value-block { display: flex; flex-direction: column; }
+.ls-teacher-overall-value { font-size: 1.6rem; font-weight: 800; letter-spacing: -0.03em; line-height: 1.1; }
+.ls-teacher-overall-value-like { color: var(--accent); }
+.ls-teacher-overall-value-attendance { color: var(--card-1); }
+.ls-teacher-overall-value-label { font-size: 0.75rem; color: var(--text-muted); margin-top: 2px; }
+
 .teacher-actions { display: flex; align-items: center; gap: 6px; }
 .teacher-actions .teacher-delete-confirm { display: none; align-items: center; gap: 6px; margin: 0; }
 .teacher-actions .teacher-delete-confirm .muted { font-size: 0.78rem; white-space: nowrap; }
