@@ -96,7 +96,7 @@
     </div>
     {% else %}
       <div class="top-right-actions no-print">
-        {% if request.endpoint != 'index' %}
+        {% if request.endpoint == 'index' %}
         <a class="top-right-chip" href="{{ url_for('teachers_list') }}">МҰҒАЛІМДЕР</a>
         {% endif %}
         {% if request.endpoint != 'index' %}
