@@ -16,7 +16,13 @@ import urllib.request
 from gdocs import count_curator_entries
 from netfetch import SSL_CONTEXT, USER_AGENT
 
-MODEL = "gemini-flash-latest"
+# 'gemini-flash-latest' тегін тарифте жиі "high demand" (503) қатесімен
+# қайтарылып, MAX_RETRIES/DEFAULT_RETRY_SECONDS арқылы бірнеше минутқа
+# созылатын. 'gemini-flash-lite-latest' сынақта әрдайым ~2 секундта, қатесіз
+# жауап берді (thinking режимі жоқ, сол себепті де жылдам) — бұл тапсырма
+# (құрылымды деректерді бөліп алу/қысқа қорытынды) терең "ойлануды" қажет
+# етпейді.
+MODEL = "gemini-flash-lite-latest"
 API_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent"
 REQUEST_TIMEOUT = 120
 
