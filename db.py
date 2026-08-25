@@ -187,6 +187,7 @@ CREATE TABLE IF NOT EXISTS ls_imports (
     id SERIAL PRIMARY KEY,
     sheet_url TEXT,
     row_count INTEGER,
+    program TEXT,
     created_at TIMESTAMPTZ DEFAULT now()
 );
 
@@ -322,6 +323,7 @@ CREATE TABLE IF NOT EXISTS ls_imports (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     sheet_url TEXT,
     row_count INTEGER,
+    program TEXT,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -498,6 +500,11 @@ def _migrate(conn):
     _migrate_month_summary_titles(conn)
     _migrate_program_score_defaults(conn)
     _migrate_aylyq_test_monthly(conn)
+    if not _column_exists(conn, "ls_imports", "program"):
+        conn.execute("ALTER TABLE ls_imports ADD COLUMN program TEXT")
+        conn.commit()
+    conn.execute("UPDATE ls_imports SET program = 'smart' WHERE program IS NULL")
+    conn.commit()
 
 
 _STREAM_CODE_RENAMES = {

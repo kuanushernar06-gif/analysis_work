@@ -12,11 +12,17 @@
 <div class="card">
   <p class="section-intro">
     Сілтемені (Google Sheets кестесін) «Файл → Ортаққа бөлу → Сілтемесі бар кез келген адам →
-    Көруші» етіп ашық қылып қойыңыз да, осында қойыңыз. Сайт кестенің «ТАРИХ» парағын оқып, әр
-    Live сабақ жолынан күні, мұғалім, поток, ҰНАУ ПАЙЫЗЫ және ҚАТЫСЫМ ПАЙЫЗЫ бағандарын алады.
-    Жаңадан жүктегенде ескі деректің орнына жаңасы қойылады.
+    Көруші» етіп ашық қылып қойыңыз да, тиісті бөлімге қойыңыз. Сайт кестенің күні, мұғалім,
+    поток, ҰНАУ ПАЙЫЗЫ және ҚАТЫСЫМ ПАЙЫЗЫ бағандары бар парағын оқиды. Смарт пен Джуниордың
+    экзельдері бөлек-бөлек жүктеледі — біреуін жаңартқанда екіншісінің деректері өзгермейді.
   </p>
+</div>
+
+{% for program, label, last_import in [("smart", "Смарт", last_import_smart), ("junior", "Джуниор", last_import_junior)] %}
+<div class="card">
+  <h2>{{ label }}</h2>
   <form method="post" action="{{ url_for('ls_import') }}" class="form-grid">
+    <input type="hidden" name="program" value="{{ program }}">
     <label class="col-span-2">
       Google Sheets сілтемесі
       <input type="text" name="sheet_url" required value="{{ last_import['sheet_url'] if last_import else '' }}"
@@ -26,21 +32,20 @@
       <button type="submit" class="btn btn-primary">Жүктеу</button>
     </div>
   </form>
-</div>
 
-<div class="card">
-  <h2>Соңғы импорт</h2>
   {% if last_import %}
   <p class="muted">
     {{ last_import['row_count'] }} жол импортталды
     {% if last_import['created_at'] %}({{ last_import['created_at'] }}){% endif %}.
   </p>
-  <form method="post" action="{{ url_for('ls_import_clear') }}" onsubmit="return confirm('Барлық Live сабақ деректерін тазалау керек пе?');">
-    <button type="submit" class="btn btn-danger btn-small">Барлық деректерді тазалау</button>
+  <form method="post" action="{{ url_for('ls_import_clear') }}" onsubmit="return confirm('{{ label }} бөлімінің Live сабақ деректерін тазалау керек пе?');">
+    <input type="hidden" name="program" value="{{ program }}">
+    <button type="submit" class="btn btn-danger btn-small">{{ label }} деректерін тазалау</button>
   </form>
   {% else %}
   <p class="muted">Әзірге дерек жүктелмеген.</p>
   {% endif %}
 </div>
+{% endfor %}
 
 {% endblock %}

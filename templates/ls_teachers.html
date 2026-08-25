@@ -20,11 +20,18 @@
 
 <div class="card ls-filter-card no-print">
   <div class="ls-filter-row">
+    <label>Бөлім
+      <select id="ls-filter-program">
+        <option value="">Барлық бөлім</option>
+        <option value="smart">Смарт</option>
+        <option value="junior">Джуниор</option>
+      </select>
+    </label>
     <label>Поток
       <select id="ls-filter-stream">
         <option value="">Барлық поток</option>
         {% for stream_code in by_stream.keys() %}
-        <option value="{{ stream_code }}">{{ stream_code }}</option>
+        <option value="{{ stream_code }}" data-program="{{ 'junior' if stream_code.startswith('JUNIOR') else 'smart' }}">{{ stream_code }}</option>
         {% endfor %}
       </select>
     </label>
@@ -33,7 +40,7 @@
         <option value="">Барлық мұғалім</option>
         {% for stream_code, teachers in by_stream.items() %}
         {% for t in teachers %}
-        <option value="{{ t.name }}" data-stream="{{ stream_code }}">{{ t.name }} ({{ stream_code }})</option>
+        <option value="{{ t.name }}" data-stream="{{ stream_code }}" data-program="{{ 'junior' if stream_code.startswith('JUNIOR') else 'smart' }}">{{ t.name }} ({{ stream_code }})</option>
         {% endfor %}
         {% endfor %}
       </select>
@@ -53,11 +60,12 @@
 </div>
 
 {% for stream_code, teachers in by_stream.items() %}
-<div class="card" data-ls-stream data-stream="{{ stream_code }}">
+{% set stream_program = 'junior' if stream_code.startswith('JUNIOR') else 'smart' %}
+<div class="card" data-ls-stream data-stream="{{ stream_code }}" data-program="{{ stream_program }}">
   <h2>{{ stream_code }}</h2>
   {% for t in teachers %}
   {% set loop_teacher = loop %}
-  <div class="ls-teacher-card" id="ls-teacher-{{ stream_code }}-{{ loop_teacher.index }}" data-ls-teacher data-stream="{{ stream_code }}" data-teacher="{{ t.name }}">
+  <div class="ls-teacher-card" id="ls-teacher-{{ stream_code }}-{{ loop_teacher.index }}" data-ls-teacher data-stream="{{ stream_code }}" data-program="{{ stream_program }}" data-teacher="{{ t.name }}">
     <div class="ls-teacher-head">
       {% if t.photo_url %}
       <img class="ls-teacher-avatar" src="{{ t.photo_url }}" alt="{{ t.name }}">
@@ -150,6 +158,7 @@
     var weekGroups = Array.prototype.slice.call(document.querySelectorAll("[data-ls-week]"));
     if (!weekGroups.length) return;
 
+    var programSelect = document.getElementById("ls-filter-program");
     var streamSelect = document.getElementById("ls-filter-stream");
     var teacherSelect = document.getElementById("ls-filter-teacher");
     var monthSelect = document.getElementById("ls-filter-month");
@@ -180,33 +189,59 @@
       weekSelect.appendChild(opt);
     });
 
-    // Поток таңдалса, тек сол ағымның мұғалімдерін ғана "Мұғалім" тізімінде көрсету.
+    // Бөлім таңдалса, тек сол бөлімнің потоктарын ғана "Поток" тізімінде көрсету.
+    var streamOptions = Array.prototype.slice.call(streamSelect.options);
+    function refreshStreamOptions() {
+      var programVal = programSelect.value;
+      streamOptions.forEach(function (opt) {
+        if (!opt.value) return;
+        opt.hidden = Boolean(programVal) && opt.getAttribute("data-program") !== programVal;
+      });
+      if (programVal && streamSelect.value) {
+        var current = streamOptions.filter(function (o) { return o.value === streamSelect.value; })[0];
+        if (current && current.getAttribute("data-program") !== programVal) {
+          streamSelect.value = "";
+        }
+      }
+    }
+
+    // Поток (немесе, ол жоқ болса, бөлім) таңдалса, тек соған сай мұғалімдерді
+    // ғана "Мұғалім" тізімінде көрсету.
     var teacherOptions = Array.prototype.slice.call(teacherSelect.options);
     function refreshTeacherOptions() {
       var streamVal = streamSelect.value;
+      var programVal = programSelect.value;
       teacherOptions.forEach(function (opt) {
         if (!opt.value) return;
-        opt.hidden = Boolean(streamVal) && opt.getAttribute("data-stream") !== streamVal;
+        var mismatch = streamVal
+          ? opt.getAttribute("data-stream") !== streamVal
+          : Boolean(programVal) && opt.getAttribute("data-program") !== programVal;
+        opt.hidden = mismatch;
       });
-      if (streamVal && teacherSelect.value) {
+      if (teacherSelect.value) {
         var current = teacherOptions.filter(function (o) { return o.value === teacherSelect.value; })[0];
-        if (current && current.getAttribute("data-stream") !== streamVal) {
-          teacherSelect.value = "";
+        if (current) {
+          var stillValid = streamVal
+            ? current.getAttribute("data-stream") === streamVal
+            : (!programVal || current.getAttribute("data-program") === programVal);
+          if (!stillValid) teacherSelect.value = "";
         }
       }
     }
 
     function applyFilter() {
+      var programVal = programSelect.value;
       var streamVal = streamSelect.value;
       var teacherVal = teacherSelect.value;
       var m = monthSelect.value;
       var w = weekSelect.value;
-      var teacherFilterActive = Boolean(streamVal || teacherVal);
+      var teacherFilterActive = Boolean(programVal || streamVal || teacherVal);
       var weekFilterActive = Boolean(m || w);
       var anyActive = teacherFilterActive || weekFilterActive;
 
       document.querySelectorAll("[data-ls-teacher]").forEach(function (card) {
-        var teacherMatches = (!streamVal || card.getAttribute("data-stream") === streamVal)
+        var teacherMatches = (!programVal || card.getAttribute("data-program") === programVal)
+          && (!streamVal || card.getAttribute("data-stream") === streamVal)
           && (!teacherVal || card.getAttribute("data-teacher") === teacherVal);
 
         card.querySelectorAll("[data-ls-week]").forEach(function (el) {
@@ -258,15 +293,18 @@
       });
     }
 
+    programSelect.addEventListener("change", function () { refreshStreamOptions(); refreshTeacherOptions(); applyFilter(); });
     streamSelect.addEventListener("change", function () { refreshTeacherOptions(); applyFilter(); });
     teacherSelect.addEventListener("change", applyFilter);
     monthSelect.addEventListener("change", applyFilter);
     weekSelect.addEventListener("change", applyFilter);
     resetBtn.addEventListener("click", function () {
+      programSelect.value = "";
       streamSelect.value = "";
       teacherSelect.value = "";
       monthSelect.value = "";
       weekSelect.value = "";
+      refreshStreamOptions();
       refreshTeacherOptions();
       collapseAllWeeks();
     });

@@ -23,11 +23,18 @@
 
 <div class="card ls-filter-card no-print">
   <div class="ls-filter-row">
+    <label>Бөлім
+      <select id="ov-filter-program">
+        <option value="">Барлық бөлім</option>
+        <option value="smart">Смарт</option>
+        <option value="junior">Джуниор</option>
+      </select>
+    </label>
     <label>Поток
       <select id="ov-filter-stream">
         <option value="">Барлық поток</option>
         {% for s in stream_stats %}
-        <option value="{{ s.code }}">{{ s.code }}</option>
+        <option value="{{ s.code }}" data-program="{{ 'junior' if s.code.startswith('JUNIOR') else 'smart' }}">{{ s.code }}</option>
         {% endfor %}
       </select>
     </label>
@@ -97,6 +104,10 @@
     var OVERALL_LIKE = {{ overall_like if overall_like is not none else 'null' }};
     var OVERALL_ATTENDANCE = {{ overall_attendance if overall_attendance is not none else 'null' }};
 
+    var PROGRAM_LABELS = { smart: "Смарт", junior: "Джуниор" };
+    function programOf(code) { return code.indexOf("JUNIOR") === 0 ? "junior" : "smart"; }
+
+    var programSelect = document.getElementById("ov-filter-program");
     var streamSelect = document.getElementById("ov-filter-stream");
     var monthSelect = document.getElementById("ov-filter-month");
     var weekSelect = document.getElementById("ov-filter-week");
@@ -106,6 +117,22 @@
     var teacherChartContainer = document.getElementById("ov-teacher-chart-container");
     var chartTitle = document.getElementById("ov-chart-title");
     var chartSub = document.getElementById("ov-chart-sub");
+
+    // Бөлім таңдалса, тек сол бөлімнің потоктарын ғана "Поток" тізімінде көрсету.
+    var streamOptions = Array.prototype.slice.call(streamSelect.options);
+    function refreshStreamOptions() {
+      var programVal = programSelect.value;
+      streamOptions.forEach(function (opt) {
+        if (!opt.value) return;
+        opt.hidden = Boolean(programVal) && opt.getAttribute("data-program") !== programVal;
+      });
+      if (programVal && streamSelect.value) {
+        var current = streamOptions.filter(function (o) { return o.value === streamSelect.value; })[0];
+        if (current && current.getAttribute("data-program") !== programVal) {
+          streamSelect.value = "";
+        }
+      }
+    }
 
     // Ай/апта селекттерін бүкіл деректен жинап толтырамыз.
     var months = [], weeks = [];
@@ -139,16 +166,29 @@
 
     function updateSummary() {
       var streamVal = streamSelect.value;
+      var programVal = programSelect.value;
       var m = monthSelect.value ? Number(monthSelect.value) : null;
       var w = weekSelect.value ? Number(weekSelect.value) : null;
 
-      if (!streamVal && !m && !w) {
+      if (!streamVal && !programVal && !m && !w) {
         document.getElementById("ov-like-value").textContent = fmtPct(OVERALL_LIKE);
         document.getElementById("ov-attendance-value").textContent = fmtPct(OVERALL_ATTENDANCE);
         return;
       }
 
-      var codes = streamVal ? [streamVal] : Object.keys(CHART_DATA);
+      var codes = streamVal ? [streamVal] : Object.keys(CHART_DATA).filter(function (c) {
+        return !programVal || programOf(c) === programVal;
+      });
+
+      if (!m && !w) {
+        // Ай/апта таңдалмаған — поток/бөлімге сай потоктардың жалпы (барлық
+        // уақыт) орташасын STREAM_STATS-тан аламыз.
+        var relevant = STREAM_STATS.filter(function (s) { return codes.indexOf(s.code) !== -1; });
+        document.getElementById("ov-like-value").textContent = fmtPct(avg(relevant.map(function (s) { return s.avg_like; })));
+        document.getElementById("ov-attendance-value").textContent = fmtPct(avg(relevant.map(function (s) { return s.avg_attendance; })));
+        return;
+      }
+
       var likeVals = [], attendanceVals = [];
       codes.forEach(function (code) {
         (CHART_DATA[code] || []).forEach(function (row) {
@@ -158,14 +198,6 @@
           if (row.avg_attendance !== null) attendanceVals.push(row.avg_attendance);
         });
       });
-
-      if (!m && !w) {
-        // Тек поток таңдалған — оның жалпы (барлық уақыт) орташасын STREAM_STATS-тан аламыз.
-        var found = STREAM_STATS.filter(function (s) { return s.code === streamVal; })[0];
-        document.getElementById("ov-like-value").textContent = fmtPct(found ? found.avg_like : null);
-        document.getElementById("ov-attendance-value").textContent = fmtPct(found ? found.avg_attendance : null);
-        return;
-      }
 
       document.getElementById("ov-like-value").textContent = fmtPct(avg(likeVals));
       document.getElementById("ov-attendance-value").textContent = fmtPct(avg(attendanceVals));
@@ -179,14 +211,16 @@
 
     function renderChart() {
       var streamVal = streamSelect.value;
+      var programVal = programSelect.value;
       if (streamVal) {
         chartTitle.textContent = streamVal;
         chartSub.textContent = "Апта бойынша ұнату/қатысым пайызының өзгерісі.";
         renderLineChart(CHART_DATA[streamVal] || []);
       } else {
-        chartTitle.textContent = "Ағым бойынша";
+        chartTitle.textContent = programVal ? PROGRAM_LABELS[programVal] + " ағымдары бойынша" : "Ағым бойынша";
         chartSub.textContent = "Барлық потоктың ортақ ұнату/қатысым пайызы.";
-        renderBarChart(STREAM_STATS);
+        var stats = programVal ? STREAM_STATS.filter(function (s) { return programOf(s.code) === programVal; }) : STREAM_STATS;
+        renderBarChart(stats);
       }
     }
 
@@ -322,13 +356,20 @@
       container.innerHTML = svg;
     }
 
+    function filteredTeacherStats() {
+      var programVal = programSelect.value;
+      if (!programVal) return TEACHER_STATS;
+      return TEACHER_STATS.filter(function (t) { return programOf(t.stream_code) === programVal; });
+    }
+
     function renderTeacherCards() {
       var m = monthSelect.value ? Number(monthSelect.value) : null;
       var w = weekSelect.value ? Number(weekSelect.value) : null;
-      if (!TEACHER_STATS.length) { teacherCardsContainer.innerHTML = '<p class="muted">Дерек жоқ.</p>'; return; }
+      var teacherStats = filteredTeacherStats();
+      if (!teacherStats.length) { teacherCardsContainer.innerHTML = '<p class="muted">Дерек жоқ.</p>'; return; }
 
       var html = "";
-      TEACHER_STATS.forEach(function (t) {
+      teacherStats.forEach(function (t) {
         var like, attendance;
         if (!m && !w) {
           like = t.avg_like;
@@ -361,11 +402,12 @@
     function renderTeacherChart() {
       var m = monthSelect.value ? Number(monthSelect.value) : null;
       var w = weekSelect.value ? Number(weekSelect.value) : null;
+      var teacherStats = filteredTeacherStats();
       var stats;
       if (!m && !w) {
-        stats = TEACHER_STATS.map(function (t) { return { code: t.name, avg_like: t.avg_like, avg_attendance: t.avg_attendance }; });
+        stats = teacherStats.map(function (t) { return { code: t.name, avg_like: t.avg_like, avg_attendance: t.avg_attendance }; });
       } else {
-        stats = TEACHER_STATS.map(function (t) {
+        stats = teacherStats.map(function (t) {
           var rows = (TEACHER_CHART_DATA[t.key] || []).filter(function (r) {
             return (!m || r.month === m) && (!w || r.week === w);
           });
@@ -386,13 +428,16 @@
       renderChart();
     }
 
+    programSelect.addEventListener("change", function () { refreshStreamOptions(); refresh(); });
     streamSelect.addEventListener("change", refresh);
     monthSelect.addEventListener("change", refresh);
     weekSelect.addEventListener("change", refresh);
     resetBtn.addEventListener("click", function () {
+      programSelect.value = "";
       streamSelect.value = "";
       monthSelect.value = "";
       weekSelect.value = "";
+      refreshStreamOptions();
       refresh();
     });
 

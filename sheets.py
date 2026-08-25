@@ -546,6 +546,13 @@ def parse_prior_year_report(raw_url):
 
 LS_SHEET_NAME = "ТАРИХ"
 _LS_WEEK_LABEL_RE = re.compile(r"^\d+-АЙ \d+-АПТА$")
+_LS_REQUIRED_COLUMNS = ["күні", "мұғалім", "поток", "ұнау пайызы", "қатысым пайызы"]
+
+# Live сабақ импорты бағдарлама бойынша бөлек жүреді — Smart-тың потоктары
+# 'ТАРИХ-XX', Junior-дікі 'JUNIOR-XX' болатын бекітілген атаумен сәйкес
+# келу үшін (streams кестесіндегі кодтармен бірдей, DEFAULT_PROGRAMS-те
+# анықталған).
+LS_STREAM_PREFIX_BY_PROGRAM = {"smart": "ТАРИХ", "junior": "JUNIOR"}
 
 
 def _find_column_by_name(header, name):
@@ -556,9 +563,28 @@ def _find_column_by_name(header, name):
     return None
 
 
-def _normalize_ls_stream_code(raw_potok):
-    """'01'/'11'/11.0 сияқты 'поток' мәнінен 'ТАРИХ-01' сияқты толық ағым
-    кодын жасайды."""
+def _find_ls_worksheet(wb):
+    """Керек 5 бағаны (күні/мұғалім/поток/ҰНАУ ПАЙЫЗЫ/қатысым пайызы) бар
+    парақты іздейді — алдымен '{LS_SHEET_NAME}' атымен, таппаса кестенің
+    басқа парақтарынан да іздейді (Junior кестесінде парақ басқаша
+    аталуы мүмкін болғандықтан)."""
+    candidates = [LS_SHEET_NAME] + [n for n in wb.sheetnames if n != LS_SHEET_NAME]
+    for name in candidates:
+        if name not in wb.sheetnames:
+            continue
+        ws = wb[name]
+        first_row = next(ws.iter_rows(min_row=1, max_row=1, values_only=True), None)
+        if not first_row:
+            continue
+        header = [str(h).strip().lower() if h is not None else "" for h in first_row]
+        if all(col in header for col in _LS_REQUIRED_COLUMNS):
+            return name
+    return None
+
+
+def _normalize_ls_stream_code(raw_potok, program):
+    """'01'/'11'/11.0 сияқты 'поток' мәнінен, бағдарламаға сай 'ТАРИХ-01'
+    немесе 'JUNIOR-01' сияқты толық ағым кодын жасайды."""
     if raw_potok is None:
         return None
     text = str(raw_potok).strip()
@@ -568,16 +594,19 @@ def _normalize_ls_stream_code(raw_potok):
         num = int(float(text))
     except ValueError:
         return None
-    return f"ТАРИХ-{num:02d}"
+    prefix = LS_STREAM_PREFIX_BY_PROGRAM[program]
+    return f"{prefix}-{num:02d}"
 
 
-def parse_ls_report(raw_url):
-    """Live сабақ бағалау кестесінің 'ТАРИХ' парағын оқиды. Парақ жол-жол
-    'N-АЙ M-АПТА' деген жалғыз ұяшықты апта белгісімен бөлінген (одан
-    кейінгі session жолдарының бәрі сол аптаға жатады, келесі белгі жолы
-    кездескенше). Әр session жолынан күні/мұғалім/поток/ҰНАУ ПАЙЫЗЫ/
-    қатысым пайызы алынады, 'поток' ('01'/'11') 'ТАРИХ-01' сияқты толық
-    ағым кодына айналдырылады. Қайтарады: [{"session_date":.., "teacher_name":..,
+def parse_ls_report(raw_url, program):
+    """Live сабақ бағалау кестесінің тиісті парағын оқиды (алдымен 'ТАРИХ'
+    атымен, таппаса керек бағандары бар кез келген парақтан). Парақ
+    жол-жол 'N-АЙ M-АПТА' деген жалғыз ұяшықты апта белгісімен бөлінген
+    (одан кейінгі session жолдарының бәрі сол аптаға жатады, келесі
+    белгі жолы кездескенше). Әр session жолынан күні/мұғалім/поток/
+    ҰНАУ ПАЙЫЗЫ/қатысым пайызы алынады, 'поток' ('01'/'11') program-ға
+    сай ('smart' → 'ТАРИХ-01', 'junior' → 'JUNIOR-01') толық ағым
+    кодына айналдырылады. Қайтарады: [{"session_date":.., "teacher_name":..,
     "stream_code":.., "week_label":.., "like_percent":.., "attendance_percent":..}, ...]."""
     export_url = _export_url(raw_url)
     try:
@@ -599,13 +628,17 @@ def parse_ls_report(raw_url):
     except Exception as e:
         raise SheetFetchError(f"Кестені оқу сәтсіз аяқталды: {e}") from e
 
-    if LS_SHEET_NAME not in wb.sheetnames:
-        raise SheetFetchError(f"Кестеде '{LS_SHEET_NAME}' парағы табылмады.")
-    ws = wb[LS_SHEET_NAME]
+    sheet_name = _find_ls_worksheet(wb)
+    if sheet_name is None:
+        raise SheetFetchError(
+            "Кестеден керек бағандары бар парақ табылмады "
+            "(күні / мұғалім / поток / ҰНАУ ПАЙЫЗЫ / қатысым пайызы)."
+        )
+    ws = wb[sheet_name]
 
     rows = [list(row) for row in ws.iter_rows(values_only=True)]
     if not rows:
-        raise SheetFetchError(f"'{LS_SHEET_NAME}' парағы бос.")
+        raise SheetFetchError(f"'{sheet_name}' парағы бос.")
 
     header = [str(h).strip() if h is not None else "" for h in rows[0]]
     body = rows[1:]
@@ -617,7 +650,7 @@ def parse_ls_report(raw_url):
     attendance_idx = _find_column_by_name(header, "қатысым пайызы")
     if None in (date_idx, teacher_idx, stream_idx, like_idx, attendance_idx):
         raise SheetFetchError(
-            f"'{LS_SHEET_NAME}' парағында керек бағандар табылмады "
+            f"'{sheet_name}' парағында керек бағандар табылмады "
             "(күні / мұғалім / поток / ҰНАУ ПАЙЫЗЫ / қатысым пайызы)."
         )
 
@@ -638,7 +671,7 @@ def parse_ls_report(raw_url):
         if not teacher_name:
             continue
 
-        stream_code = _normalize_ls_stream_code(potok)
+        stream_code = _normalize_ls_stream_code(potok, program)
         if not stream_code:
             continue
 
@@ -665,5 +698,5 @@ def parse_ls_report(raw_url):
         })
 
     if not entries:
-        raise SheetFetchError(f"'{LS_SHEET_NAME}' парағынан бірде-бір дұрыс жол табылмады.")
+        raise SheetFetchError(f"'{sheet_name}' парағынан бірде-бір дұрыс жол табылмады.")
     return entries

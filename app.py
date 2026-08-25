@@ -284,16 +284,20 @@ def ls_home():
     return redirect(url_for("ls_overview"))
 
 
-def _run_ls_import(conn, sheet_url):
-    """Берілген Google Sheets сілтемесінен LS деректерін оқып, ескісінің
-    орнына жаңасын сақтайды. Сәтті болса жазба санын, сәтсіз болса
-    SheetFetchError қайтарады (шақырушы флэш хабарды өзі көрсетеді)."""
-    entries = parse_ls_report(sheet_url)
-    conn.execute("DELETE FROM ls_sessions")
-    conn.execute("DELETE FROM ls_imports")
+LS_PROGRAM_LABELS = {"smart": "Смарт", "junior": "Джуниор"}
+
+
+def _run_ls_import(conn, sheet_url, program):
+    """Берілген Google Sheets сілтемесінен, көрсетілген бағдарламаға (smart/
+    junior) арналған LS деректерін оқып, сол бағдарламаның ескі деректерінің
+    орнына жаңасын сақтайды (басқа бағдарламаның деректерін қозғамайды).
+    Сәтті болса жазба санын, сәтсіз болса SheetFetchError қайтарады
+    (шақырушы флэш хабарды өзі көрсетеді)."""
+    entries = parse_ls_report(sheet_url, program)
+    conn.execute("DELETE FROM ls_imports WHERE program = ?", (program,))
     import_id = conn.execute(
-        "INSERT INTO ls_imports (sheet_url, row_count) VALUES (?, ?) RETURNING id",
-        (sheet_url, len(entries)),
+        "INSERT INTO ls_imports (sheet_url, row_count, program) VALUES (?, ?, ?) RETURNING id",
+        (sheet_url, len(entries), program),
     ).fetchone()["id"]
     for e in entries:
         conn.execute(
@@ -313,50 +317,74 @@ def _run_ls_import(conn, sheet_url):
 def ls_import():
     conn = get_db()
     if request.method == "POST":
+        program = request.form.get("program", "").strip()
+        if program not in LS_PROGRAM_LABELS:
+            flash("Бөлім анықталмады.", "error")
+            return redirect(url_for("ls_import"))
         sheet_url = request.form.get("sheet_url", "").strip()
         if not sheet_url:
             flash("Сілтемені енгізіңіз.", "error")
             return redirect(url_for("ls_import"))
         try:
-            count = _run_ls_import(conn, sheet_url)
+            count = _run_ls_import(conn, sheet_url, program)
         except SheetFetchError as e:
             flash(str(e), "error")
             return redirect(url_for("ls_import"))
-        flash(f"{count} Live сабақ жазбасы импортталды.", "ok")
+        flash(f"{LS_PROGRAM_LABELS[program]}: {count} Live сабақ жазбасы импортталды.", "ok")
         return redirect(url_for("ls_import"))
 
-    last_import = conn.execute("SELECT * FROM ls_imports ORDER BY id DESC LIMIT 1").fetchone()
+    last_imports = {}
+    for program in LS_PROGRAM_LABELS:
+        last_imports[program] = conn.execute(
+            "SELECT * FROM ls_imports WHERE program = ? ORDER BY id DESC LIMIT 1", (program,)
+        ).fetchone()
     return render_template(
-        "ls_import.html", ls_page=True, active_page="ls_import", last_import=last_import,
+        "ls_import.html", ls_page=True, active_page="ls_import",
+        last_import_smart=last_imports["smart"], last_import_junior=last_imports["junior"],
     )
 
 
 @app.route("/ls/import/refresh", methods=["POST"])
 def ls_import_refresh():
-    """Соңғы жүктелген сілтемені қайта оқып, деректі жаңартады — экзельге
-    жаңа нәтиже қосылған сайын, пайдаланушы сілтемені қайта теріп
-    жатпай, осы батырманы басу арқылы жаңартады."""
+    """Смарт пен джуниордың соңғы жүктелген сілтемелерін қайта оқып,
+    деректерін жаңартады — экзельге жаңа нәтиже қосылған сайын, пайдаланушы
+    сілтемені қайта теріп жатпай, осы батырманы басу арқылы жаңартады."""
     conn = get_db()
-    last_import = conn.execute("SELECT sheet_url FROM ls_imports ORDER BY id DESC LIMIT 1").fetchone()
-    if last_import is None or not last_import["sheet_url"]:
+    updated, errors = [], []
+    for program, label in LS_PROGRAM_LABELS.items():
+        row = conn.execute(
+            "SELECT sheet_url FROM ls_imports WHERE program = ? ORDER BY id DESC LIMIT 1", (program,)
+        ).fetchone()
+        if row is None or not row["sheet_url"]:
+            continue
+        try:
+            count = _run_ls_import(conn, row["sheet_url"], program)
+            updated.append(f"{label}: {count}")
+        except SheetFetchError as e:
+            errors.append(f"{label}: {e}")
+
+    if not updated and not errors:
         flash("Алдымен LS бағалау экзелінің сілтемесін жүктеңіз.", "error")
         return redirect(url_for("ls_import"))
-    try:
-        count = _run_ls_import(conn, last_import["sheet_url"])
-    except SheetFetchError as e:
-        flash(str(e), "error")
-        return redirect(request.referrer or url_for("ls_teachers_page"))
-    flash(f"Жаңартылды: {count} Live сабақ жазбасы.", "ok")
+    if updated:
+        flash("Жаңартылды — " + "; ".join(updated), "ok")
+    if errors:
+        flash("Қате — " + "; ".join(errors), "error")
     return redirect(request.referrer or url_for("ls_teachers_page"))
 
 
 @app.route("/ls/import/clear", methods=["POST"])
 def ls_import_clear():
     conn = get_db()
-    conn.execute("DELETE FROM ls_sessions")
-    conn.execute("DELETE FROM ls_imports")
+    program = request.form.get("program", "").strip()
+    if program in LS_PROGRAM_LABELS:
+        conn.execute("DELETE FROM ls_imports WHERE program = ?", (program,))
+        flash(f"{LS_PROGRAM_LABELS[program]} Live сабақ деректері тазаланды.", "ok")
+    else:
+        conn.execute("DELETE FROM ls_sessions")
+        conn.execute("DELETE FROM ls_imports")
+        flash("Live сабақ деректері тазаланды.", "ok")
     conn.commit()
-    flash("Live сабақ деректері тазаланды.", "ok")
     return redirect(url_for("ls_import"))
 
 
