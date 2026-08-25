@@ -31,6 +31,7 @@ from sheets import (
     guess_columns,
     is_summary_row,
     is_template_sheet,
+    is_template_row,
     parse_results_file,
     parse_prior_year_report,
     parse_ls_report,
@@ -1406,7 +1407,7 @@ def import_sheet(week_id):
                     return row[idx].strip()
 
                 student = cell(idx_student)
-                if not student or is_summary_row(student):
+                if not student or is_summary_row(student) or is_template_row(student):
                     continue
 
                 score_raw = cell(idx_score)

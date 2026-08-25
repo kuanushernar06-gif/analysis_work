@@ -148,7 +148,7 @@ def _parse_results_sheet(ws):
     for row in body:
         student_cell = row[student_idx] if student_idx < len(row) else None
         student = str(student_cell).strip() if student_cell is not None else ""
-        if not student or is_summary_row(student):
+        if not student or is_summary_row(student) or is_template_row(student):
             continue
         for i in range(len(header)):
             if i == student_idx or i >= len(row):
@@ -243,7 +243,7 @@ def _parse_creative_results_sheet(ws):
     for row in body:
         student_cell = row[student_idx] if student_idx < len(row) else None
         student = str(student_cell).strip() if student_cell is not None else ""
-        if not student or is_summary_row(student):
+        if not student or is_summary_row(student) or is_template_row(student):
             continue
 
         history_score = _numeric_cell(row[history_idx]) if history_idx is not None and history_idx < len(row) else None
@@ -353,10 +353,32 @@ def is_summary_row(name: str) -> bool:
     return any(kw in lower for kw in SUMMARY_ROW_KEYWORDS)
 
 
+_TEMPLATE_WORD_RE = re.compile(r"[a-zа-яёіңғүұқөһ]+", re.IGNORECASE)
+
+
+def _has_template_word(text) -> bool:
+    """Мәтінде 'үлгі' деген жеке сөз бар-жоғын тексереді (толық сөз ретінде
+    ғана — 'Үлгібек' сияқты нақты есімдермен шатаспас үшін жай substring
+    емес, сөз шекарасы бойынша салыстырады)."""
+    if not text:
+        return False
+    return "үлгі" in _TEMPLATE_WORD_RE.findall(str(text).lower())
+
+
 def is_template_sheet(name: str) -> bool:
     """Кураторларға парақты қалай толтыру керектігін көрсету үшін қалдырылған
-    'ҮЛГІ' атты парақты (нақты куратор емес) анықтайды — импортқа қосылмайды."""
-    return (name or "").strip().lower() == "үлгі"
+    'ҮЛГІ' атты парақты (нақты куратор емес) анықтайды — импортқа қосылмайды.
+    Дәл 'ҮЛГІ' атаумен қатар, 'ҮЛГІ 1', 'ҮЛГІ (мысал)' сияқты құрамында
+    'үлгі' сөзі бар атауларды да таниды."""
+    return _has_template_word(name)
+
+
+def is_template_row(name: str) -> bool:
+    """Парақ ІШІНДЕ, жеке жол/оқушы ретінде қалдырылған 'ҮЛГІ' деп
+    белгіленген мысал жазбаны анықтайды (нақты оқушы/куратор емес) —
+    is_template_sheet парақтың ТҮГЕЛ атауын тексерсе, бұл нақты жол
+    ішіндегі оқушы/куратор атын тексереді."""
+    return _has_template_word(name)
 
 
 def _find_by_keywords(lower_header, keywords, exclude=()):
