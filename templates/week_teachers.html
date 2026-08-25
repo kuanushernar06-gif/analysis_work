@@ -67,7 +67,7 @@
     </button>
     <div class="teacher-student-breakdown" id="teacher-students-{{ t.id }}" hidden>
       <div class="teacher-student-group">
-        <h4>Нашар оқушылар (0–3 балл)</h4>
+        <h4>Нашар оқушылар (0–{{ t.weak_max_score }} балл)</h4>
         {% if t.weak_students %}
         <ul class="teacher-curators-list">
           {% for s in t.weak_students %}
@@ -79,7 +79,7 @@
         {% endif %}
       </div>
       <div class="teacher-student-group">
-        <h4>Мықты оқушылар (13–15 балл)</h4>
+        <h4>Мықты оқушылар ({{ t.strong_min_score }}–{{ t.program_max_score }} балл)</h4>
         {% if t.strong_students %}
         <ul class="teacher-curators-list">
           {% for s in t.strong_students %}

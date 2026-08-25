@@ -4,6 +4,8 @@ import re
 from collections import Counter
 from datetime import datetime
 
+from db import PROGRAM_MAX_SCORE
+
 DEFAULT_PASSING_PERCENT = 50.0
 DEFAULT_GOLD_PERCENT = 90.0
 DEFAULT_SILVER_PERCENT = 70.0
@@ -667,6 +669,9 @@ def _match_teacher_curators(teacher_curator_names_by_id, actual_curator_names):
 
 WEAK_STUDENT_MAX_SCORE = 3
 STRONG_STUDENT_MIN_SCORE = 13
+# Junior бағдарламасының максимум баллы 15 емес, 10 (PROGRAM_MAX_SCORE) —
+# сондықтан 'мықты оқушы' шегі де бөлек, төмендеу (7-10 аралығы).
+STRONG_STUDENT_MIN_SCORE_BY_PROGRAM = {"junior": 7}
 
 
 def compute_teacher_stats_for_week(conn, week_id, combine_week_ids=None):
@@ -688,6 +693,14 @@ def compute_teacher_stats_for_week(conn, week_id, combine_week_ids=None):
     week = conn.execute("SELECT stream_id FROM weeks WHERE id = ?", (week_id,)).fetchone()
     if week is None or week["stream_id"] is None:
         return []
+
+    program_row = conn.execute(
+        "SELECT p.slug FROM streams s JOIN programs p ON p.id = s.program_id WHERE s.id = ?",
+        (week["stream_id"],),
+    ).fetchone()
+    program_slug = program_row["slug"] if program_row else None
+    strong_min_score = STRONG_STUDENT_MIN_SCORE_BY_PROGRAM.get(program_slug, STRONG_STUDENT_MIN_SCORE)
+    program_max_score = PROGRAM_MAX_SCORE.get(program_slug, 15)
 
     week_ids = combine_week_ids if combine_week_ids else [week_id]
     placeholders = ",".join("?" * len(week_ids))
@@ -747,7 +760,7 @@ def compute_teacher_stats_for_week(conn, week_id, combine_week_ids=None):
             entry = {"student": student, "curator": student_curator[student], "avg_score": round(avg, 2)}
             if avg <= WEAK_STUDENT_MAX_SCORE:
                 weak_students.append(entry)
-            elif avg >= STRONG_STUDENT_MIN_SCORE:
+            elif avg >= strong_min_score:
                 strong_students.append(entry)
         weak_students.sort(key=lambda e: e["avg_score"])
         strong_students.sort(key=lambda e: e["avg_score"], reverse=True)
@@ -778,6 +791,9 @@ def compute_teacher_stats_for_week(conn, week_id, combine_week_ids=None):
                 "total_curators": len(curator_names),
                 "weak_students": weak_students,
                 "strong_students": strong_students,
+                "weak_max_score": WEAK_STUDENT_MAX_SCORE,
+                "strong_min_score": strong_min_score,
+                "program_max_score": program_max_score,
                 "report": teacher_report,
                 "best_curator": teacher_best_curator,
                 "worst_curator": teacher_worst_curator,
