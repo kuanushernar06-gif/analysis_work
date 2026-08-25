@@ -4,7 +4,7 @@ import re
 from collections import Counter
 from datetime import datetime
 
-from db import PROGRAM_MAX_SCORE
+from db import PROGRAM_MAX_SCORE, DEFAULT_CATEGORY
 
 DEFAULT_PASSING_PERCENT = 50.0
 DEFAULT_GOLD_PERCENT = 90.0
@@ -694,11 +694,23 @@ def compute_teacher_stats_for_week(conn, week_id, combine_week_ids=None):
     if week is None or week["stream_id"] is None:
         return []
 
-    program_row = conn.execute(
-        "SELECT p.slug FROM streams s JOIN programs p ON p.id = s.program_id WHERE s.id = ?",
-        (week["stream_id"],),
+    # Мұғалімдер әрдайым СТ (sabaq_tapsyru) санатының ағынына тіркеледі
+    # (_teacher_stream_picker_data-дегідей — "кодтары ортақ" болғандықтан
+    # СТ жағы жеткілікті), ал осы функция АТ/ДТ-БТ санатының ағыны үшін де
+    # шақырылуы мүмкін. Сол себепті мұғалім іздеу үшін әрдайым осы ағынның
+    # кодына сәйкес келетін СТ-санаттағы 'канондық' stream_id қолданылады —
+    # әйтпесе АТ/ДТ-БТ аптасында, СТ-ға тіркелген мұғалім мүлде табылмай
+    # қалады, дегенмен куратор тізімі екеуінде де бірдей.
+    canonical_row = conn.execute(
+        "SELECT p.slug AS program_slug, canonical.id AS canonical_stream_id "
+        "FROM streams s JOIN programs p ON p.id = s.program_id "
+        "JOIN streams canonical ON canonical.program_id = s.program_id "
+        "AND canonical.code = s.code AND canonical.category = ? "
+        "WHERE s.id = ?",
+        (DEFAULT_CATEGORY, week["stream_id"]),
     ).fetchone()
-    program_slug = program_row["slug"] if program_row else None
+    program_slug = canonical_row["program_slug"] if canonical_row else None
+    teacher_stream_id = canonical_row["canonical_stream_id"] if canonical_row else week["stream_id"]
     strong_min_score = STRONG_STUDENT_MIN_SCORE_BY_PROGRAM.get(program_slug, STRONG_STUDENT_MIN_SCORE)
     program_max_score = PROGRAM_MAX_SCORE.get(program_slug, 15)
 
@@ -720,13 +732,13 @@ def compute_teacher_stats_for_week(conn, week_id, combine_week_ids=None):
     curator_avg = {name: sum(vals) / len(vals) for name, vals in curator_scores.items() if vals}
 
     teacher_rows = conn.execute(
-        "SELECT id, name FROM teachers WHERE stream_id = ? ORDER BY name", (week["stream_id"],)
+        "SELECT id, name FROM teachers WHERE stream_id = ? ORDER BY name", (teacher_stream_id,)
     ).fetchall()
     curator_names_by_teacher = {}
     for r in conn.execute(
         "SELECT tc.teacher_id, tc.curator_name FROM teacher_curators tc "
         "JOIN teachers t ON t.id = tc.teacher_id WHERE t.stream_id = ?",
-        (week["stream_id"],),
+        (teacher_stream_id,),
     ).fetchall():
         curator_names_by_teacher.setdefault(r["teacher_id"], []).append(r["curator_name"])
     # Барлық мұғалім үшін бос жазба (curator тізімі жоқ) болса да, глобал
