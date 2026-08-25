@@ -262,7 +262,12 @@
       // ен керек — әйтпесе аты/пайыз мәтіндері бір-бірінің үстіне шығып
       // кетеді (мыс. 7 мұғалім тұрақты 700px-ке сыймай қалғанда болған).
       var MIN_GROUP_W = 130;
-      var H = 320, padL = 46, padR = 16, padT = 30, padB = 44;
+      // Мұғалімдерді салыстыру диаграммасында аттас мұғалім бірнеше потокта
+      // қайталанып шығуы мүмкін (мыс. бір мұғалім екі топты жүргізсе) — сол
+      // үшін атының астына поток атауын да (sublabel) көрсетеміз, ол болса
+      // төменгі жиек биіктігін ұлғайтамыз.
+      var hasSublabels = valid.some(function (s) { return s.sublabel; });
+      var H = 320, padL = 46, padR = 16, padT = 30, padB = hasSublabels ? 58 : 44;
       var plotW = Math.max(700 - padL - padR, valid.length * MIN_GROUP_W);
       var W = plotW + padL + padR;
       var plotH = H - padT - padB;
@@ -294,6 +299,9 @@
           svg += '<text x="' + (ax + barW / 4) + '" y="' + (ay - 6) + '" class="ls-chart-value-label ls-chart-value-attendance" text-anchor="middle">' + s.avg_attendance + '%</text>';
         }
         svg += '<text x="' + cx + '" y="' + (H - padB + 20) + '" class="ls-chart-axis-label" text-anchor="middle">' + escapeHtml(label) + '</text>';
+        if (s.sublabel) {
+          svg += '<text x="' + cx + '" y="' + (H - padB + 33) + '" class="ls-chart-axis-sublabel" text-anchor="middle">' + escapeHtml(s.sublabel) + '</text>';
+        }
       });
 
       svg += '</svg>';
@@ -408,7 +416,9 @@
       var teacherStats = filteredTeacherStats();
       var stats;
       if (!m && !w) {
-        stats = teacherStats.map(function (t) { return { code: t.name, avg_like: t.avg_like, avg_attendance: t.avg_attendance }; });
+        stats = teacherStats.map(function (t) {
+          return { code: t.name, sublabel: streamLabel(t.stream_code), avg_like: t.avg_like, avg_attendance: t.avg_attendance };
+        });
       } else {
         stats = teacherStats.map(function (t) {
           var rows = (TEACHER_CHART_DATA[t.key] || []).filter(function (r) {
@@ -416,6 +426,7 @@
           });
           return {
             code: t.name,
+            sublabel: streamLabel(t.stream_code),
             avg_like: avg(rows.map(function (r) { return r.avg_like; })),
             avg_attendance: avg(rows.map(function (r) { return r.avg_attendance; })),
           };
