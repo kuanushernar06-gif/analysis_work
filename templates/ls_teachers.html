@@ -31,7 +31,7 @@
       <select id="ls-filter-stream">
         <option value="">Барлық поток</option>
         {% for stream_code in by_stream.keys() %}
-        <option value="{{ stream_code }}" data-program="{{ 'junior' if stream_code.startswith('JUNIOR') else 'smart' }}">{{ stream_code }}</option>
+        <option value="{{ stream_code }}" data-program="{{ 'junior' if stream_code.startswith('JUNIOR') else 'smart' }}">{{ stream_code|ls_stream_label }}</option>
         {% endfor %}
       </select>
     </label>
@@ -40,7 +40,7 @@
         <option value="">Барлық мұғалім</option>
         {% for stream_code, teachers in by_stream.items() %}
         {% for t in teachers %}
-        <option value="{{ t.name }}" data-stream="{{ stream_code }}" data-program="{{ 'junior' if stream_code.startswith('JUNIOR') else 'smart' }}">{{ t.name }} ({{ stream_code }})</option>
+        <option value="{{ t.name }}" data-stream="{{ stream_code }}" data-program="{{ 'junior' if stream_code.startswith('JUNIOR') else 'smart' }}">{{ t.name }} ({{ stream_code|ls_stream_label }})</option>
         {% endfor %}
         {% endfor %}
       </select>
@@ -62,7 +62,7 @@
 {% for stream_code, teachers in by_stream.items() %}
 {% set stream_program = 'junior' if stream_code.startswith('JUNIOR') else 'smart' %}
 <div class="card" data-ls-stream data-stream="{{ stream_code }}" data-program="{{ stream_program }}">
-  <h2>{{ stream_code }}</h2>
+  <h2>{{ stream_code|ls_stream_label }}</h2>
   {% for t in teachers %}
   {% set loop_teacher = loop %}
   <div class="ls-teacher-card" id="ls-teacher-{{ stream_code }}-{{ loop_teacher.index }}" data-ls-teacher data-stream="{{ stream_code }}" data-program="{{ stream_program }}" data-teacher="{{ t.name }}">

@@ -554,6 +554,15 @@ _LS_REQUIRED_COLUMNS = ["күні", "мұғалім", "поток", "ұнау п
 # анықталған).
 LS_STREAM_PREFIX_BY_PROGRAM = {"smart": "ТАРИХ", "junior": "JUNIOR"}
 
+# Junior-дың кейбір потоктары LS кестесінің 'поток' бағанында сандық код
+# емес, брендтік атаумен жазылады (мыс. 'ZEREK' — JUNIOR-01, 'USHQYN' —
+# JUNIOR-11 потогінің баламасы, екеуі бір поток). Тек Junior бағдарламасына
+# қатысты — Smart-та мұндай балама атаулар жоқ.
+LS_JUNIOR_STREAM_NAME_ALIASES = {"ZEREK": "JUNIOR-01", "USHQYN": "JUNIOR-11"}
+# Ағым кодынан LS интерфейсінде көрсетілетін атауға (керісінше бағыт) —
+# осы потоктар LS бетінде де кестедегідей 'ZEREK'/'USHQYN' болып көрінуі үшін.
+LS_STREAM_DISPLAY_NAMES = {code: name for name, code in LS_JUNIOR_STREAM_NAME_ALIASES.items()}
+
 
 def _find_column_by_name(header, name):
     target = name.strip().lower()
@@ -584,12 +593,18 @@ def _find_ls_worksheet(wb):
 
 def _normalize_ls_stream_code(raw_potok, program):
     """'01'/'11'/11.0 сияқты 'поток' мәнінен, бағдарламаға сай 'ТАРИХ-01'
-    немесе 'JUNIOR-01' сияқты толық ағым кодын жасайды."""
+    немесе 'JUNIOR-01' сияқты толық ағым кодын жасайды. Junior-да 'ZEREK'/
+    'USHQYN' сияқты брендтік атаулар да LS_JUNIOR_STREAM_NAME_ALIASES
+    арқылы тиісті ағым кодына сәйкестендіріледі."""
     if raw_potok is None:
         return None
     text = str(raw_potok).strip()
     if not text:
         return None
+    if program == "junior":
+        alias = LS_JUNIOR_STREAM_NAME_ALIASES.get(text.upper())
+        if alias:
+            return alias
     try:
         num = int(float(text))
     except ValueError:

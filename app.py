@@ -38,6 +38,7 @@ from sheets import (
     CREATIVE_SUBJECT_KEYWORD,
     CREATIVE_HISTORY_SUFFIX,
     CREATIVE_LITERACY_SUFFIX,
+    LS_STREAM_DISPLAY_NAMES,
 )
 from gdocs import (
     fetch_doc_text,
@@ -85,6 +86,14 @@ def format_summary_html(text):
         else:
             lines.append(str(escape(line)))
     return Markup("<br>".join(lines))
+
+
+@app.template_filter("ls_stream_label")
+def ls_stream_label(stream_code):
+    """LS беттерінде ағым кодын көрсету үшін — Junior-дың кейбір потоктары
+    ('ZEREK'/'USHQYN') LS кестесінде брендтік атаумен жазылатындықтан,
+    ішкі кодтың (JUNIOR-01/JUNIOR-11) орнына сол атауды көрсетеді."""
+    return LS_STREAM_DISPLAY_NAMES.get(stream_code, stream_code)
 
 
 @app.context_processor
@@ -456,6 +465,7 @@ def ls_overview():
         teacher_stats=teacher_stats,
         teacher_chart_data_json=json.dumps(teacher_chart_data, ensure_ascii=False),
         teacher_stats_json=json.dumps(teacher_stats, ensure_ascii=False),
+        stream_display_names_json=json.dumps(LS_STREAM_DISPLAY_NAMES, ensure_ascii=False),
         last_import=last_import,
     )
 
