@@ -187,6 +187,14 @@ def _join_plain_names(names):
     return "; ".join(names) if names else "Жоқ"
 
 
+def _kk_num(value):
+    """Ондық бөлшекті '.' емес, қазақша/орысша дәстүр бойынша ',' арқылы
+    көрсету үшін — app.py-дегі 'kk_num' Jinja-фильтрімен бірдей ереже."""
+    if value is None:
+        return "—"
+    return str(value).replace(".", ",")
+
+
 def build_summary_text(report, analysis: dict, label: str = "СТ") -> str:
     """Апта қорытындысын қолданушы белгілеген нақты үлгі бойынша құрастырады:
     сандық бөлігі есептелген report-тан (сенімді), сапалы бөлігі AI талдауынан алынады.
@@ -195,9 +203,9 @@ def build_summary_text(report, analysis: dict, label: str = "СТ") -> str:
     report = report or {}
     analysis = analysis or {}
 
-    lines = [f"{label} ортақ балл: {report.get('overall_avg_score')}"]
+    lines = [f"{label} ортақ балл: {_kk_num(report.get('overall_avg_score'))}"]
     if report.get("has_targets") and report.get("target_achievement_percent") is not None:
-        lines.append(f"{label} мақсат орындалу пайызы: {report['target_achievement_percent']}%")
+        lines.append(f"{label} мақсат орындалу пайызы: {_kk_num(report['target_achievement_percent'])}%")
     lines += [
         f"Макс балл алған оқушы саны: {report.get('max_achiever_students')}",
         f"0 алған оқушы саны: {report.get('zero_students')}",

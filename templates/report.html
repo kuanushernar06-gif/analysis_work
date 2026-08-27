@@ -14,7 +14,7 @@
 {% if cmp %}
 <div class="stat-delta stat-delta-{{ cmp.state }}">
   {{ '▲' if cmp.state == 'up' else ('▼' if cmp.state == 'down' else '—') }}
-  {{ '%+.2f'|format(cmp.delta) }}
+  {{ '%+.2f'|format(cmp.delta)|kk_num }}
 </div>
 {% endif %}
 {% endmacro %}
@@ -23,10 +23,10 @@
 <div class="stat-tile">
   <div class="stat-value">
     {% if is_baiqau %}
-    {% if rep.overall_avg_percent is not none %}{{ rep.overall_avg_percent }}%{% else %}—{% endif %}
-    <span class="stat-value-sub">{{ rep.overall_avg_score }}{% if rep.ref_max_score %} / {{ rep.ref_max_score|int }}{% endif %} балл</span>
+    {% if rep.overall_avg_percent is not none %}{{ rep.overall_avg_percent|kk_num }}%{% else %}—{% endif %}
+    <span class="stat-value-sub">{{ rep.overall_avg_score|kk_num }}{% if rep.ref_max_score %} / {{ rep.ref_max_score|int }}{% endif %} балл</span>
     {% else %}
-    {{ rep.overall_avg_score }}
+    {{ rep.overall_avg_score|kk_num }}
     {% endif %}
   </div>
   {{ delta(cmp.avg_score if cmp else none) }}
@@ -35,21 +35,21 @@
 {% if prior %}
   {% if prior.sabaq_tapsyru %}
   <div class="stat-tile stat-prior-year">
-    <div class="stat-value">{% if prior.sabaq_tapsyru.avg_score is not none %}{{ '%.2f'|format(prior.sabaq_tapsyru.avg_score) }}{% else %}—{% endif %}</div>
+    <div class="stat-value">{% if prior.sabaq_tapsyru.avg_score is not none %}{{ '%.2f'|format(prior.sabaq_tapsyru.avg_score)|kk_num }}{% else %}—{% endif %}</div>
     {{ delta(prior.sabaq_tapsyru.delta) }}
     <div class="stat-label">Өткен жыл ({{ prior.sabaq_tapsyru.academic_year }}) ортақ баллы</div>
   </div>
   {% endif %}
   {% if prior.dt %}
   <div class="stat-tile stat-prior-year">
-    <div class="stat-value">{% if prior.dt.avg_score is not none %}{{ '%.2f'|format(prior.dt.avg_score) }}{% else %}—{% endif %}</div>
+    <div class="stat-value">{% if prior.dt.avg_score is not none %}{{ '%.2f'|format(prior.dt.avg_score)|kk_num }}{% else %}—{% endif %}</div>
     {{ delta(prior.dt.delta) }}
     <div class="stat-label">Өткен жыл ({{ prior.dt.academic_year }}) ДТ ортақ баллы</div>
   </div>
   {% endif %}
   {% if prior.bt %}
   <div class="stat-tile stat-prior-year">
-    <div class="stat-value">{% if prior.bt.avg_score is not none %}{{ '%.2f'|format(prior.bt.avg_score) }}{% else %}—{% endif %}</div>
+    <div class="stat-value">{% if prior.bt.avg_score is not none %}{{ '%.2f'|format(prior.bt.avg_score)|kk_num }}{% else %}—{% endif %}</div>
     {{ delta(prior.bt.delta) }}
     <div class="stat-label">Өткен жыл ({{ prior.bt.academic_year }}) БТ ортақ баллы</div>
   </div>
@@ -78,8 +78,8 @@
 <div class="subject-chip subject-chip-{{ modifier }}">
   <div class="subject-chip-name">{{ label }}</div>
   <div class="subject-chip-value">
-    {% if rep.overall_avg_percent is not none %}{{ rep.overall_avg_percent }}%{% else %}—{% endif %}
-    <span class="subject-chip-sub">{{ rep.overall_avg_score }}{% if rep.ref_max_score %} / {{ rep.ref_max_score|int }}{% endif %} балл</span>
+    {% if rep.overall_avg_percent is not none %}{{ rep.overall_avg_percent|kk_num }}%{% else %}—{% endif %}
+    <span class="subject-chip-sub">{{ rep.overall_avg_score|kk_num }}{% if rep.ref_max_score %} / {{ rep.ref_max_score|int }}{% endif %} балл</span>
   </div>
 </div>
 {% endif %}
@@ -128,22 +128,22 @@
     {% if report.has_targets %}
     <div class="stat-tile {{ 'stat-good' if report.target_achievement_percent is not none and report.target_achievement_percent >= 100 else 'stat-warn' }}">
       <div class="stat-value">
-        {% if report.target_achievement_percent is not none %}{{ report.target_achievement_percent }}%{% else %}—{% endif %}
+        {% if report.target_achievement_percent is not none %}{{ report.target_achievement_percent|kk_num }}%{% else %}—{% endif %}
       </div>
       {{ delta(comparison.target_achievement if comparison else none) }}
-      <div class="stat-label">Мақсат орындалу пайызы (мақсат: {{ week['target_score'] }})</div>
+      <div class="stat-label">Мақсат орындалу пайызы (мақсат: {{ week['target_score']|kk_num }})</div>
     </div>
     {% endif %}
     {{ stat_tiles(report, stream and stream['category'] == 'baiqau_test', stream and stream['category'] == 'baiqau_test', comparison, prior_year) }}
     {% if best_curator %}
     <div class="stat-tile stat-good">
-      <div class="stat-value">{{ '%.2f'|format(best_curator.avg_score) }}</div>
+      <div class="stat-value">{{ '%.2f'|format(best_curator.avg_score)|kk_num }}</div>
       <div class="stat-label">Ең жоғарғы ортақ балл — {{ best_curator.curator }}</div>
     </div>
     {% endif %}
     {% if worst_curator %}
     <div class="stat-tile stat-warn">
-      <div class="stat-value">{{ '%.2f'|format(worst_curator.avg_score) }}</div>
+      <div class="stat-value">{{ '%.2f'|format(worst_curator.avg_score)|kk_num }}</div>
       <div class="stat-label">Ең төменгі ортақ балл — {{ worst_curator.curator }}</div>
     </div>
     {% endif %}
@@ -154,17 +154,17 @@
   <h3>Лига бойынша үлес</h3>
   <div class="stat-grid">
     <div class="stat-tile">
-      <div class="stat-value">{{ report.gold_share }}%</div>
+      <div class="stat-value">{{ report.gold_share|kk_num }}%</div>
       {{ delta(comparison.gold_share if comparison else none) }}
       <div class="stat-label">Алтын лига · {{ report.gold_count }} оқушы</div>
     </div>
     <div class="stat-tile">
-      <div class="stat-value">{{ report.silver_share }}%</div>
+      <div class="stat-value">{{ report.silver_share|kk_num }}%</div>
       {{ delta(comparison.silver_share if comparison else none) }}
       <div class="stat-label">Күміс лига · {{ report.silver_count }} оқушы</div>
     </div>
     <div class="stat-tile">
-      <div class="stat-value">{{ report.bronze_share }}%</div>
+      <div class="stat-value">{{ report.bronze_share|kk_num }}%</div>
       {{ delta(comparison.bronze_share if comparison else none) }}
       <div class="stat-label">Қола лига · {{ report.bronze_count }} оқушы</div>
     </div>

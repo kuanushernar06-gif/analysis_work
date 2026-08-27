@@ -74,6 +74,16 @@ _SUMMARY_LABEL_RE = re.compile(r"^([^:\n]{1,80}):(.*)$")
 TEACHER_STATS_CATEGORIES = ("sabaq_tapsyru", "aylyq_test")
 
 
+@app.template_filter("kk_num")
+def kk_num(value):
+    """Ондық бөлшекті '.' емес, қазақша/орысша дәстүр бойынша ',' арқылы
+    көрсету үшін — санды (немесе '%.2f'|format секілді дайын жолды) сол
+    қалпында, тек нүктені үтірге ауыстырып қайтарады."""
+    if value is None:
+        return "—"
+    return str(value).replace(".", ",")
+
+
 @app.template_filter("summary_html")
 def format_summary_html(text):
     """Апта қорытындысындағы 'Белгі: мәтін' жолдарының белгісін жирный қылып көрсетеді."""
