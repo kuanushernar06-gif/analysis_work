@@ -65,7 +65,8 @@
   <h2>{{ stream_code|ls_stream_label }}</h2>
   {% for t in teachers %}
   {% set loop_teacher = loop %}
-  <div class="ls-teacher-card" id="ls-teacher-{{ stream_code }}-{{ loop_teacher.index }}" data-ls-teacher data-stream="{{ stream_code }}" data-program="{{ stream_program }}" data-teacher="{{ t.name }}">
+  <div class="ls-teacher-card" id="ls-teacher-{{ stream_code }}-{{ loop_teacher.index }}" data-ls-teacher data-stream="{{ stream_code }}" data-program="{{ stream_program }}" data-teacher="{{ t.name }}"
+       data-all-like="{{ t.avg_like if t.avg_like is not none else '' }}" data-all-attendance="{{ t.avg_attendance if t.avg_attendance is not none else '' }}">
     <div class="ls-teacher-head">
       {% if t.photo_url %}
       <img class="ls-teacher-avatar" src="{{ t.photo_url }}" alt="{{ t.name }}">
@@ -75,8 +76,8 @@
       <div>
         <h3>{{ t.name }}</h3>
         <p class="muted">
-          Ұнату пайызы: {% if t.avg_like is not none %}{{ t.avg_like }}%{% else %}—{% endif %}
-          · Қатысым пайызы: {% if t.avg_attendance is not none %}{{ t.avg_attendance }}%{% else %}—{% endif %}
+          Ұнату пайызы: <span class="ls-teacher-summary-like">{% if t.avg_like is not none %}{{ t.avg_like }}%{% else %}—{% endif %}</span>
+          · Қатысым пайызы: <span class="ls-teacher-summary-attendance">{% if t.avg_attendance is not none %}{{ t.avg_attendance }}%{% else %}—{% endif %}</span>
         </p>
       </div>
     </div>
@@ -84,7 +85,8 @@
     {% if t.weeks %}
     {% for w in t.weeks %}
     {% set week_id = "ls-week-" ~ stream_code ~ "-" ~ loop_teacher.index ~ "-" ~ loop.index %}
-    <div class="ls-week-group" data-ls-week data-month="{{ w.month }}" data-week="{{ w.week }}">
+    <div class="ls-week-group" data-ls-week data-month="{{ w.month }}" data-week="{{ w.week }}"
+         data-avg-like="{{ w.avg_like if w.avg_like is not none else '' }}" data-avg-attendance="{{ w.avg_attendance if w.avg_attendance is not none else '' }}">
       <div class="ls-week-row">
         <button type="button" class="ls-week-toggle" data-teacher-toggle="{{ week_id }}">
           <span class="teacher-curators-arrow" aria-hidden="true">▸</span>
@@ -228,6 +230,45 @@
       }
     }
 
+    function avg(values) {
+      values = values.filter(function (v) { return v !== null && v !== undefined && v !== ""; }).map(Number);
+      if (!values.length) return null;
+      var sum = values.reduce(function (a, b) { return a + b; }, 0);
+      return Math.round((sum / values.length) * 10) / 10;
+    }
+
+    function fmtPct(v) { return v === null ? "—" : v + "%"; }
+
+    // Тек Ай/Апта фильтрі осы жиынтықты өзгертеді (Поток/Мұғалім карточканы
+    // толық көрсету/жасыруды басқарады, ал бұл — сол карточканың ІШІНДЕГІ
+    // санды нақтылайды): фильтр белсенді болса, сол ай/аптаға сай апталардың
+    // avg_like/avg_attendance мәндерінің орташасын көрсетеді (Жалпы нәтиже
+    // бетіндегі мұғалім карточкаларымен бірдей әдіс — апта орташаларының
+    // орташасы), фильтр жоқ болса — бүкіл уақыттағы бастапқы мәнге қайтады.
+    function updateTeacherSummary(card, weekFilterActive, m, w) {
+      var likeEl = card.querySelector(".ls-teacher-summary-like");
+      var attendanceEl = card.querySelector(".ls-teacher-summary-attendance");
+      if (!likeEl || !attendanceEl) return;
+
+      if (!weekFilterActive) {
+        likeEl.textContent = fmtPct(card.getAttribute("data-all-like") || null);
+        attendanceEl.textContent = fmtPct(card.getAttribute("data-all-attendance") || null);
+        return;
+      }
+
+      var likeVals = [], attendanceVals = [];
+      card.querySelectorAll("[data-ls-week]").forEach(function (el) {
+        var weekMatches = (!m || el.getAttribute("data-month") === m) && (!w || el.getAttribute("data-week") === w);
+        if (!weekMatches) return;
+        var l = el.getAttribute("data-avg-like");
+        var a = el.getAttribute("data-avg-attendance");
+        if (l) likeVals.push(l);
+        if (a) attendanceVals.push(a);
+      });
+      likeEl.textContent = fmtPct(avg(likeVals));
+      attendanceEl.textContent = fmtPct(avg(attendanceVals));
+    }
+
     function applyFilter() {
       var programVal = programSelect.value;
       var streamVal = streamSelect.value;
@@ -259,6 +300,8 @@
           }
         });
 
+        updateTeacherSummary(card, weekFilterActive, m, w);
+
         if (!anyActive) { card.style.display = ""; return; }
         if (!teacherMatches) { card.style.display = "none"; return; }
         if (!weekFilterActive) { card.style.display = ""; return; }
@@ -287,7 +330,11 @@
         if (body) body.setAttribute("hidden", "");
         if (toggle) toggle.classList.remove("is-open");
       });
-      document.querySelectorAll("[data-ls-teacher], [data-ls-stream]").forEach(function (card) {
+      document.querySelectorAll("[data-ls-teacher]").forEach(function (card) {
+        card.style.display = "";
+        updateTeacherSummary(card, false, "", "");
+      });
+      document.querySelectorAll("[data-ls-stream]").forEach(function (card) {
         card.style.display = "";
       });
     }
