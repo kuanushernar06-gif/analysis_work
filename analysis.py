@@ -132,6 +132,7 @@ def compute_report(conn, week_id, combine_week_ids=None, subjects_filter=None, c
     percents = []
     fail_students = set()
     max_achiever_students = set()
+    zero_score_students = set()
     student_percents = {}
     subject_map = {}
     topic_map = {}
@@ -176,6 +177,9 @@ def compute_report(conn, week_id, combine_week_ids=None, subjects_filter=None, c
             if student:
                 max_achiever_students.add(student)
 
+        if pct is not None and pct == 0 and student:
+            zero_score_students.add(student)
+
         if topic:
             t = topic_map.setdefault(topic, {"name": topic, "count": 0, "percents": []})
             t["count"] += 1
@@ -193,12 +197,9 @@ def compute_report(conn, week_id, combine_week_ids=None, subjects_filter=None, c
     report["max_achiever_count"] = len(report["max_achievers"])
     report["max_achiever_students"] = len(max_achiever_students)
 
-    zero_students = 0
     gold_count = silver_count = bronze_count = 0
     for student_pcts in student_percents.values():
         avg_pct = sum(student_pcts) / len(student_pcts)
-        if avg_pct == 0:
-            zero_students += 1
         if avg_pct >= gold_percent:
             gold_count += 1
         elif avg_pct >= silver_percent:
@@ -207,7 +208,12 @@ def compute_report(conn, week_id, combine_week_ids=None, subjects_filter=None, c
             bronze_count += 1
 
     total_students = len(student_percents)
-    report["zero_students"] = zero_students
+    # Айлық ортақ анализде (бірнеше апта біріктірілгенде) бір оқушының
+    # АЙ БОЙЫНША орташасы 0 болуын емес (ол тек барлық жазбасы 0 болса
+    # ғана шығады), сол оқушы ЖЕКЕ жазбаларының қайсы бірінде 0 балл
+    # алғанын санаймыз — max_achiever_students-пен бірдей логика (жалпы
+    # саны, орташа емес).
+    report["zero_students"] = len(zero_score_students)
     report["gold_count"] = gold_count
     report["silver_count"] = silver_count
     report["bronze_count"] = bronze_count
