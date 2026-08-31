@@ -99,7 +99,7 @@
   <h2>Талдау</h2>
   {% if comparison %}
   <p class="muted">
-    {% if comparison.is_aylyq_test %}Алдыңғы айлық тест{% else %}Өткен апта{% endif %}
+    {% if comparison.is_month_summary %}Өткен ай{% elif comparison.is_aylyq_test %}Алдыңғы айлық тест{% else %}Өткен апта{% endif %}
     («{{ comparison.prev_title }}») нәтижесімен салыстырғанда прогресс/регресс төменде көрсетілген.
   </p>
   {% endif %}

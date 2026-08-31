@@ -294,6 +294,35 @@ def find_previous_week_with_data(conn, week, stream):
     return None
 
 
+def find_previous_month_summary_with_data(conn, week, stream):
+    """find_previous_week_with_data-мен бірдей логика, тек 'N-АЙ ОРТАҚ'
+    (айлық ортақ) апталары үшін — ағымдағы айдың алдында, дәл осы ағында
+    нақты нәтижесі бар ЕҢ СОҢҒЫ айлық ортақ аптаны табады (алдыңғы ай бос
+    болса, одан да бұрынғысын қарастыра береді)."""
+    if stream is None or stream["category"] != db.DEFAULT_CATEGORY:
+        return None
+    if week["week_number"] != db.WEEKS_PER_MONTH:
+        return None
+
+    rows = conn.execute(
+        "SELECT * FROM weeks WHERE stream_id = ? AND week_number = ? AND month_number < ? "
+        "ORDER BY month_number DESC",
+        (week["stream_id"], db.WEEKS_PER_MONTH, week["month_number"] or 0),
+    ).fetchall()
+    for w in rows:
+        component_ids = [cw["id"] for cw in get_month_component_weeks(conn, w)]
+        if not component_ids:
+            continue
+        placeholders = ",".join("?" * len(component_ids))
+        count = conn.execute(
+            f"SELECT COUNT(*) AS c FROM results WHERE week_id IN ({placeholders}) AND score IS NOT NULL",
+            component_ids,
+        ).fetchone()["c"]
+        if count > 0:
+            return w
+    return None
+
+
 @app.route("/")
 def index():
     return render_template("index.html")
@@ -1106,6 +1135,18 @@ def week_report(week_id):
             if prev_report and prev_report.get("has_data"):
                 comparison = compare_reports(report, prev_report)
                 comparison["is_aylyq_test"] = bool(stream and stream["category"] == "aylyq_test")
+    elif is_summary and report and report.get("has_data"):
+        prev_summary_week = find_previous_month_summary_with_data(conn, week, stream)
+        if prev_summary_week is not None:
+            prev_component_ids = [cw["id"] for cw in get_month_component_weeks(conn, prev_summary_week)]
+            prev_report = (
+                compute_report(conn, prev_summary_week["id"], combine_week_ids=prev_component_ids)
+                if prev_component_ids
+                else None
+            )
+            if prev_report and prev_report.get("has_data"):
+                comparison = compare_reports(report, prev_report)
+                comparison["is_month_summary"] = True
 
     # ДЕҢГЕЙЛІК/БАЙҚАУ ТЕСТ санатында нәтиже бөлек топтарға бөлінеді:
     # 'Шығармашылық' (пән атауында CREATIVE_SUBJECT_KEYWORD түбірі бар —
