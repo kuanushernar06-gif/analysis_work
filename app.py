@@ -17,6 +17,7 @@ from analysis import (
     compute_report,
     compute_curator_extremes,
     compare_reports,
+    count_students_at_or_above,
     compute_teacher_stats_for_week,
     get_prior_year_comparison,
     compute_ls_teacher_data,
@@ -51,8 +52,9 @@ from gdocs import (
 )
 from curator_analysis import (
     generate_curator_analysis,
-    generate_results_analysis,
+    generate_baiqau_results_analysis,
     build_summary_text,
+    build_baiqau_summary_text,
     merge_analyses,
     CuratorAnalysisError,
 )
@@ -321,6 +323,52 @@ def find_previous_month_summary_with_data(conn, week, stream):
         if count > 0:
             return w
     return None
+
+
+# ДЕҢГЕЙЛІК/БАЙҚАУ ТЕСТ санатындағы 'Жалпы қорытынды'-да Шығармашылық
+# (макс. 30) баллы бойынша неше оқушы осы межеден асқанын көрсету үшін.
+CREATIVE_THRESHOLD_BANDS = (30, 28, 25, 20)
+
+
+def compute_baiqau_subject_reports(conn, week_id, report):
+    """ДЕҢГЕЙЛІК/БАЙҚАУ ТЕСТ санатында нәтиже бөлек топтарға бөлінеді:
+    'Шығармашылық' (пән атауында CREATIVE_SUBJECT_KEYWORD түбірі бар —
+    'Шығармашылық' немесе қысқартылған 'Шығарым' нұсқасын да қамтиды,
+    бірақ пән бойынша бөлек CREATIVE_HISTORY_SUFFIX/CREATIVE_LITERACY_SUFFIX
+    жұрнағы жоқ — олар өз алдына бөлек есептеледі) және 'Тарих жалпы'
+    (қалғандары) — жылдық отчеттегі 'ШЫҒАРМ' мен 'БАРЛЫҚ КОМБ ТАРИХ'
+    парақтарына сәйкес. Қайтарады: (creative_report, creative_history_report,
+    creative_literacy_report, general_report, creative_subjects)."""
+    all_subjects = [s["name"] for s in (report.get("subjects") or [])]
+    creative_history_subjects = [s for s in all_subjects if s.endswith(CREATIVE_HISTORY_SUFFIX)]
+    creative_literacy_subjects = [s for s in all_subjects if s.endswith(CREATIVE_LITERACY_SUFFIX)]
+    creative_subjects = [
+        s for s in all_subjects
+        if CREATIVE_SUBJECT_KEYWORD in s.upper()
+        and s not in creative_history_subjects
+        and s not in creative_literacy_subjects
+    ]
+    general_subjects = [
+        s for s in all_subjects
+        if s not in creative_subjects
+        and s not in creative_history_subjects
+        and s not in creative_literacy_subjects
+    ]
+    creative_report = (
+        compute_report(conn, week_id, subjects_filter=creative_subjects) if creative_subjects else None
+    )
+    creative_history_report = (
+        compute_report(conn, week_id, subjects_filter=creative_history_subjects)
+        if creative_history_subjects else None
+    )
+    creative_literacy_report = (
+        compute_report(conn, week_id, subjects_filter=creative_literacy_subjects)
+        if creative_literacy_subjects else None
+    )
+    general_report = (
+        compute_report(conn, week_id, subjects_filter=general_subjects) if general_subjects else None
+    )
+    return creative_report, creative_history_report, creative_literacy_report, general_report, creative_subjects
 
 
 @app.route("/")
@@ -1148,40 +1196,12 @@ def week_report(week_id):
                 comparison = compare_reports(report, prev_report)
                 comparison["is_month_summary"] = True
 
-    # ДЕҢГЕЙЛІК/БАЙҚАУ ТЕСТ санатында нәтиже бөлек топтарға бөлінеді:
-    # 'Шығармашылық' (пән атауында CREATIVE_SUBJECT_KEYWORD түбірі бар —
-    # 'Шығармашылық' немесе қысқартылған 'Шығарым' нұсқасын да қамтиды,
-    # бірақ пән бойынша бөлек CREATIVE_HISTORY_SUFFIX/CREATIVE_LITERACY_SUFFIX
-    # жұрнағы жоқ — олар өз алдына бөлек есептеледі) және 'Тарих жалпы'
-    # (қалғандары) — жылдық отчеттегі 'ШЫҒАРМ' мен 'БАРЛЫҚ КОМБ ТАРИХ'
-    # парақтарына сәйкес. Тек шығармашылықтың қосынды баллы өткен жылмен
-    # салыстырылады, жалпы тарих салыстырылмайды.
     creative_report = general_report = None
     creative_history_report = creative_literacy_report = None
     if stream and stream["category"] == "baiqau_test" and report and report.get("has_data"):
-        all_subjects = [s["name"] for s in (report.get("subjects") or [])]
-        creative_history_subjects = [s for s in all_subjects if s.endswith(CREATIVE_HISTORY_SUFFIX)]
-        creative_literacy_subjects = [s for s in all_subjects if s.endswith(CREATIVE_LITERACY_SUFFIX)]
-        creative_subjects = [
-            s for s in all_subjects
-            if CREATIVE_SUBJECT_KEYWORD in s.upper()
-            and s not in creative_history_subjects
-            and s not in creative_literacy_subjects
-        ]
-        general_subjects = [
-            s for s in all_subjects
-            if s not in creative_subjects
-            and s not in creative_history_subjects
-            and s not in creative_literacy_subjects
-        ]
-        if creative_subjects:
-            creative_report = compute_report(conn, week_id, subjects_filter=creative_subjects)
-        if creative_history_subjects:
-            creative_history_report = compute_report(conn, week_id, subjects_filter=creative_history_subjects)
-        if creative_literacy_subjects:
-            creative_literacy_report = compute_report(conn, week_id, subjects_filter=creative_literacy_subjects)
-        if general_subjects:
-            general_report = compute_report(conn, week_id, subjects_filter=general_subjects)
+        creative_report, creative_history_report, creative_literacy_report, general_report, _creative_subjects = (
+            compute_baiqau_subject_reports(conn, week_id, report)
+        )
 
     prior_year = None
     if stream and week["month_number"] is not None and stream["category"] in ("sabaq_tapsyru", "baiqau_test"):
@@ -1370,6 +1390,10 @@ def generate_summary(week_id):
 
 @app.route("/weeks/<int:week_id>/summary/generate-from-results", methods=["POST"])
 def generate_results_summary(week_id):
+    """ДЕҢГЕЙЛІК/БАЙҚАУ ТЕСТ санатының 'Жалпы қорытындысы' — report.html-де
+    тек stream['category'] == 'baiqau_test' болғанда ғана шақырылады.
+    Шығармашылық пен Жалпы тарихты бір мидай орташаға араластырмай, бөлек
+    сандық көрсеткіштермен (build_baiqau_summary_text) құрастырады."""
     conn = get_db()
     week, _stream, _program = get_week_context(conn, week_id)
     if week is None:
@@ -1381,11 +1405,26 @@ def generate_results_summary(week_id):
         flash("Алдымен кестені импорттаңыз.", "error")
         return redirect(url_for("week_report", week_id=week_id))
 
+    creative_report, creative_history_report, creative_literacy_report, general_report, creative_subjects = (
+        compute_baiqau_subject_reports(conn, week_id, report)
+    )
+    creative_thresholds = (
+        count_students_at_or_above(conn, week_id, creative_subjects, CREATIVE_THRESHOLD_BANDS)
+        if creative_subjects else None
+    )
+
     try:
-        summary_text = generate_results_analysis(report)
+        analysis_text = generate_baiqau_results_analysis(
+            creative_report, creative_history_report, creative_literacy_report, general_report, creative_thresholds
+        )
     except CuratorAnalysisError as e:
         flash(f"Қорытынды анализ жасау сәтсіз аяқталды: {e}", "error")
         return redirect(url_for("week_report", week_id=week_id))
+
+    summary_text = build_baiqau_summary_text(
+        creative_report, creative_history_report, creative_literacy_report, general_report,
+        creative_thresholds, analysis_text,
+    )
 
     conn.execute("UPDATE weeks SET summary = ? WHERE id = ?", (summary_text, week_id))
     conn.commit()

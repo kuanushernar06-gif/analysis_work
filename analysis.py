@@ -248,6 +248,31 @@ def compute_report(conn, week_id, combine_week_ids=None, subjects_filter=None, c
     return report
 
 
+def count_students_at_or_above(conn, week_id, subjects_filter, thresholds):
+    """Берілген пән(дер) бойынша, әрбір threshold санына тең немесе одан
+    жоғары балл алған ЕРЕКШЕ оқушылар санын қайтарады: {threshold: count}.
+    ДЕҢГЕЙЛІК/БАЙҚАУ ТЕСТ-тегі Шығармашылық баллы (30) бойынша '30+',
+    '28+' сияқты жинақтарды көрсету үшін қолданылады — бір оқушыда бірнеше
+    жазба болса (болмауы керек, бірақ сақтық үшін), ең жоғарғысы алынады."""
+    subj_placeholders = ",".join("?" * len(subjects_filter))
+    rows = conn.execute(
+        f"SELECT student, score FROM results WHERE week_id = ? AND subject IN ({subj_placeholders}) "
+        "AND score IS NOT NULL",
+        [week_id] + list(subjects_filter),
+    ).fetchall()
+
+    student_best_score = {}
+    for r in rows:
+        student = (r["student"] or "").strip()
+        if not student:
+            continue
+        score = float(r["score"])
+        if student not in student_best_score or score > student_best_score[student]:
+            student_best_score[student] = score
+
+    return {t: sum(1 for s in student_best_score.values() if s >= t) for t in thresholds}
+
+
 def compute_curator_extremes(conn, week_ids):
     """Осы апта(лар)дың өз нәтижелерін куратор бойынша топтап, ең жоғарғы
     және ең төменгі ортақ балл жинаған кураторды қайтарады. Шақырушы тарап

@@ -187,6 +187,10 @@ def _join_plain_names(names):
     return "; ".join(names) if names else "Жоқ"
 
 
+def _int_max_score(value, default):
+    return int(value) if value else default
+
+
 def _kk_num(value):
     """Ондық бөлшекті '.' емес, қазақша/орысша дәстүр бойынша ',' арқылы
     көрсету үшін — app.py-дегі 'kk_num' Jinja-фильтрімен бірдей ереже."""
@@ -417,11 +421,7 @@ RESULTS_PROMPT_TEMPLATE = """Сен білім беру ұйымының дер�
 """
 
 
-def generate_results_analysis(report, label: str = "ДТ/БТ") -> str:
-    """Кураторлардың жазбасынсыз, тек импортталған балл кестесінен есептелген
-    report статистикасы негізінде AI-ден оқушылардың нәтижесі бойынша қысқа
-    қорытынды сұрайды — ДЕҢГЕЙЛІК/БАЙҚАУ ТЕСТ санатында куратор құжаты
-    тұжырымдамасы жоқ болғандықтан керек."""
+def _get_gemini_api_key() -> str:
     api_key = os.environ.get("GEMINI_API_KEY")
     if api_key:
         api_key = "".join(ch for ch in api_key.strip() if ch.isascii() and ch.isprintable())
@@ -430,13 +430,114 @@ def generate_results_analysis(report, label: str = "ДТ/БТ") -> str:
             "GEMINI_API_KEY орнатылмаған. .env файлына тегін Gemini API кілтін қосыңыз "
             "(aistudio.google.com сайтынан алуға болады)."
         )
+    return api_key
 
-    stats_text = _format_report_stats(report)
+
+def _format_baiqau_stats(
+    creative_report, creative_history_report, creative_literacy_report, general_report, creative_thresholds,
+):
+    """Шығармашылық (Тарих+ОС, 30 балл) пен Жалпы тарихтың (20 балл) бөлек
+    статистикасын AI сұранысына арналған мәтінге жинақтайды — жалпы
+    (мидай) орташа балл емес, дәл осы екі топтың өз көрсеткіштерімен,
+    сол арқылы AI-дің жазатын қорытындысы да сол бөлінген сандарға
+    сәйкес келеді."""
+    lines = []
+
+    if creative_report and creative_report.get("has_data"):
+        lines.append(
+            f"Шығармашылық (Тарих + Оқу сауаттылығы, барлығы {_int_max_score(creative_report.get('ref_max_score'), 30)} балл): "
+            f"ортақ балл {creative_report.get('overall_avg_score')} ({creative_report.get('overall_avg_percent')}%)."
+        )
+        if creative_thresholds:
+            bands = ", ".join(
+                f"{t}+ балл — {creative_thresholds.get(t, 0)} оқушы"
+                for t in sorted(creative_thresholds, reverse=True)
+            )
+            lines.append(f"Балл межесінен өткен оқушылар саны: {bands}.")
+        if creative_history_report and creative_history_report.get("has_data"):
+            lines.append(
+                f"Тарих бөлігінде ({_int_max_score(creative_history_report.get('ref_max_score'), 20)} балл) шекті балл "
+                f"жинамаған оқушы саны: {creative_history_report.get('fail_unique_students')}."
+            )
+        if creative_literacy_report and creative_literacy_report.get("has_data"):
+            lines.append(
+                f"Оқу сауаттылығы бөлігінде ({_int_max_score(creative_literacy_report.get('ref_max_score'), 10)} балл) "
+                f"шекті балл жинамаған оқушы саны: {creative_literacy_report.get('fail_unique_students')}."
+            )
+
+    if general_report and general_report.get("has_data"):
+        lines.append(
+            f"Жалпы тарих бөлімінде ({_int_max_score(general_report.get('ref_max_score'), 20)} балл): "
+            f"ортақ балл {general_report.get('overall_avg_score')} ({general_report.get('overall_avg_percent')}%)."
+        )
+        worst = (general_report.get("worst_topics") or [])[:5]
+        if worst:
+            lines.append(
+                "Жалпы тарихтағы ең төмен нәтижелі тақырыптар: "
+                + "; ".join(f"{t['name']} ({t['avg_percent']}%)" for t in worst)
+            )
+
+    return "\n".join(lines)
+
+
+def generate_baiqau_results_analysis(
+    creative_report, creative_history_report, creative_literacy_report, general_report, creative_thresholds,
+) -> str:
+    """ДЕҢГЕЙЛІК/БАЙҚАУ ТЕСТ-тің Шығармашылық пен Жалпы тарих бөлек
+    статистикасы (бір-бірімен араласып, мидай орташаға айналмайтындай)
+    негізінде AI-ден оқушылардың нәтижесі бойынша қысқа қорытынды сұрайды."""
+    api_key = _get_gemini_api_key()
+
+    stats_text = _format_baiqau_stats(
+        creative_report, creative_history_report, creative_literacy_report, general_report, creative_thresholds
+    )
     if not stats_text:
         raise CuratorAnalysisError("Алдымен кестені импорттаңыз — сандық деректер жоқ.")
 
-    prompt = RESULTS_PROMPT_TEMPLATE.format(label=label, stats_section=stats_text)
+    prompt = RESULTS_PROMPT_TEMPLATE.format(label="ДТ/БТ", stats_section=stats_text)
     return _call_gemini_text(prompt, api_key)
+
+
+def build_baiqau_summary_text(
+    creative_report, creative_history_report, creative_literacy_report, general_report,
+    creative_thresholds, analysis_text,
+) -> str:
+    """ДЕҢГЕЙЛІК/БАЙҚАУ ТЕСТ санатының 'Жалпы қорытындысын' қолданушы
+    белгілеген нақты үлгі бойынша құрастырады: Шығармашылық пен Жалпы
+    тарихтың сандық көрсеткіштері (есептелген report-тан, сенімді) және
+    аяғында AI жазған қысқа сапалы анализ ('Анализ:')."""
+    lines = []
+
+    if creative_report and creative_report.get("has_data"):
+        lines.append("Шығарм:")
+        lines.append("")
+        lines.append(f"* Ортақ балл: {_kk_num(creative_report.get('overall_avg_score'))} / {_int_max_score(creative_report.get('ref_max_score'), 30)} балл")
+        thresholds = creative_thresholds or {}
+        for t in sorted(thresholds, reverse=True):
+            lines.append(f"* {t}+ саны: {thresholds.get(t, 0)}")
+        history_fail = (
+            creative_history_report.get("fail_unique_students")
+            if creative_history_report and creative_history_report.get("has_data") else "—"
+        )
+        literacy_fail = (
+            creative_literacy_report.get("fail_unique_students")
+            if creative_literacy_report and creative_literacy_report.get("has_data") else "—"
+        )
+        lines.append(f"* Тарих шекті балл жинамағандар: {history_fail}")
+        lines.append(f"* ОС шекті балл жинамағандар: {literacy_fail}")
+        lines.append("")
+
+    if general_report and general_report.get("has_data"):
+        lines.append("Жалпы тарих:")
+        lines.append("")
+        lines.append(f"* Ортақ балл: {_kk_num(general_report.get('overall_avg_score'))} / {_int_max_score(general_report.get('ref_max_score'), 20)} балл")
+        lines.append("")
+
+    lines.append("Анализ:")
+    lines.append("")
+    lines.append(analysis_text or "—")
+
+    return "\n".join(lines)
 
 
 def generate_curator_analysis(doc_text: str, report=None) -> dict:
