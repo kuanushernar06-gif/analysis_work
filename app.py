@@ -3,6 +3,7 @@ import json
 import os
 import re
 import secrets
+import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 from urllib.parse import urlparse
@@ -1551,14 +1552,22 @@ def import_sheet(week_id):
     return redirect(url_for("week_import", week_id=week_id))
 
 
-def _fetch_group_juz40_results(token, group, month, week_number, default_max_score):
+def _fetch_group_juz40_results(
+    token, group, month, week_number, default_max_score, lessons_cache, lessons_lock
+):
     """Бір топ (group) үшін Juz40-тан осы ай/аптаның СТ балдарын алады.
     Тек желі сұранысын жасайды, DB-ге өзі жазбайды — thread pool-да қатар
     шақыру үшін бөлек ұсталған. Қайтарады: (rows, status, error_message).
     status — 'ok' (тақырып табылды), 'no_theme' (шынымен жоқ, апта әлі
     ашылмаған) немесе 'error' (сұраныс сәтсіз — 'жоқ' дегеннен бөлек
     көрсету үшін, әйтпесе уақытша желі қатесі 'дерек жоқ' болып қате
-    түсіндіріледі)."""
+    түсіндіріледі).
+
+    lessons_cache — themeId -> lessons тізімі (сол тақырыптың сабақтары
+    БҮКІЛ курс бойынша ортақ, топқа тәуелді емес — HAR-да расталған),
+    сұраныс санын азайту үшін осы сұраныс (import_juz40 шақыруы) бойы
+    ортақ пайдаланылады. Тақырыптың өзі (get_group_themes) әр топ үшін
+    бөлек сұралады — топ бойынша нақты дұрыстығын сақтау үшін."""
     group_id = group.get("id")
     curator = group.get("curator") or {}
     curator_name = (curator.get("firstname") or "").strip() or (group.get("name") or "")
@@ -1570,7 +1579,13 @@ def _fetch_group_juz40_results(token, group, month, week_number, default_max_sco
         if theme is None:
             return rows, "no_theme", None
 
-        lessons = juz40_client.get_theme_lessons(token, theme["themeId"])
+        theme_id = theme["themeId"]
+        with lessons_lock:
+            lessons = lessons_cache.get(theme_id)
+        if lessons is None:
+            lessons = juz40_client.get_theme_lessons(token, theme_id)
+            with lessons_lock:
+                lessons_cache[theme_id] = lessons
         for lesson in lessons:
             lesson_id = lesson.get("id")
             progresses = juz40_client.get_lesson_progresses(token, group_id, lesson_id)
@@ -1594,7 +1609,7 @@ def _fetch_group_juz40_results(token, group, month, week_number, default_max_sco
 # себепті бірнеше топты БІР МЕЗГІЛДЕ (параллель) сұраймыз. Желі
 # сұранысы GIL-ді босатады, сондықтан жіп (thread) арқылы қатарлау
 # нақты жылдамдық береді.
-JUZ40_IMPORT_WORKERS = 16
+JUZ40_IMPORT_WORKERS = 24
 
 
 @app.route("/weeks/<int:week_id>/import/juz40", methods=["POST"])
@@ -1636,13 +1651,17 @@ def import_juz40(week_id):
         all_rows = []
         groups_without_theme = 0
         failed_groups = []
+        lessons_cache = {}
+        lessons_lock = threading.Lock()
 
         def _run_batch(group_list):
             out = []
             with ThreadPoolExecutor(max_workers=JUZ40_IMPORT_WORKERS) as executor:
                 future_map = {
                     executor.submit(
-                        _fetch_group_juz40_results, token, g, week["month_number"], week["week_number"], default_max_score
+                        _fetch_group_juz40_results,
+                        token, g, week["month_number"], week["week_number"], default_max_score,
+                        lessons_cache, lessons_lock,
                     ): g
                     for g in group_list
                 }
