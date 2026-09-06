@@ -75,6 +75,11 @@
       <button type="submit" class="btn btn-primary">Анализ шығару</button>
     </div>
   </form>
+  <div class="import-submit-row no-print" style="margin-top:16px; border-top:1px solid var(--border); padding-top:16px">
+    <form method="post" action="{{ url_for('import_juz40', week_id=week['id']) }}" style="display:inline">
+      <button type="submit" class="btn btn-outline btn-small">Juz40-дан синхрондау (сынақ)</button>
+    </form>
+  </div>
   {% endif %}
 </div>
 

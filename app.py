@@ -13,6 +13,8 @@ from markupsafe import Markup, escape
 load_dotenv()
 
 import db
+import juz40_client
+from juz40_client import Juz40Error
 from analysis import (
     compute_report,
     compute_curator_extremes,
@@ -1545,6 +1547,90 @@ def import_sheet(week_id):
         if total_skipped:
             summary += f" {total_skipped} жол балл дұрыс емес болғандықтан өткізіп жіберілді."
         flash(summary, "ok")
+    return redirect(url_for("week_import", week_id=week_id))
+
+
+@app.route("/weeks/<int:week_id>/import/juz40", methods=["POST"])
+def import_juz40(week_id):
+    """СЫНАҚ: Juz40 платформасынан осы нақты аптаның 'САБАҚ ТАПСЫРУ' СТ
+    балдарын JUZ40_USERNAME/JUZ40_PASSWORD арқылы автоматты тартып алады
+    (тек осы week_id-ге ғана нәтиже қосады, басқа апта/потокқа тимейді).
+    Поток Juz40 курсымен ТЕК дәл (артық сөзсіз) атау сәйкестігі бойынша
+    ғана байланысады — сәйкестік табылмаса ештеңе жасамайды."""
+    conn = get_db()
+    week, stream, program = get_week_context(conn, week_id)
+    if week is None or stream is None or program is None:
+        flash("Апта табылмады.", "error")
+        return redirect(url_for("index"))
+    if stream["category"] != "sabaq_tapsyru":
+        flash("Бұл сынақ тек САБАҚ ТАПСЫРУ АНАЛИЗ санатында қолжетімді.", "error")
+        return redirect(url_for("week_import", week_id=week_id))
+
+    try:
+        token = juz40_client.login()
+        all_streams = juz40_client.get_all_streams(token)
+        course_id = juz40_client.find_course_id(all_streams, program["slug"], stream["code"])
+        if course_id is None:
+            flash(
+                f"Juz40-та '{stream['code']}' потогына дәл сәйкес келетін курс табылмады "
+                "(әлі ашылмаған болуы мүмкін).",
+                "error",
+            )
+            return redirect(url_for("week_import", week_id=week_id))
+
+        groups = juz40_client.get_groups(token, course_id)
+        default_max_score = db.score_defaults_for(program["slug"], stream["category"])[0]
+
+        import_id = conn.execute(
+            "INSERT INTO imports (week_id, sheet_url, sheet_count, row_count, skipped_count) "
+            "VALUES (?, ?, ?, 0, 0) RETURNING id",
+            (week_id, f"juz40:{course_id}", len(groups)),
+        ).fetchone()["id"]
+
+        inserted = 0
+        groups_without_theme = 0
+        for g in groups:
+            group_id = g.get("id")
+            curator = g.get("curator") or {}
+            curator_name = (curator.get("firstname") or "").strip() or (g.get("name") or "")
+
+            themes = juz40_client.get_group_themes(token, group_id, week["month_number"], week["week_number"])
+            theme = juz40_client.find_theme_by_name_part(themes, "САБАҚ ТАПСЫРУ")
+            if theme is None:
+                groups_without_theme += 1
+                continue
+
+            lessons = juz40_client.get_theme_lessons(token, theme["themeId"])
+            for lesson in lessons:
+                lesson_id = lesson.get("id")
+                progresses = juz40_client.get_lesson_progresses(token, group_id, lesson_id)
+                for p in progresses:
+                    student = (
+                        f"{(p.get('studentFirstname') or '').strip()} "
+                        f"{(p.get('studentLastname') or '').strip()}"
+                    ).strip()
+                    score = p.get("score")
+                    if not student or score is None:
+                        continue
+                    max_score = p.get("aiMaxScore") or default_max_score
+                    conn.execute(
+                        "INSERT INTO results (week_id, import_id, curator, student, subject, topic, score, max_score) "
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                        (week_id, import_id, curator_name, student, "Сабақ тапсыру", None, score, max_score),
+                    )
+                    inserted += 1
+
+        conn.execute("UPDATE imports SET row_count = ? WHERE id = ?", (inserted, import_id))
+        conn.commit()
+
+        summary = f"Juz40-дан {inserted} нәтиже импортталды ({len(groups)} топтан)."
+        if groups_without_theme:
+            summary += f" {groups_without_theme} топта осы аптаның САБАҚ ТАПСЫРУ тақырыбы табылмады."
+        flash(summary, "ok")
+    except Juz40Error as e:
+        conn.rollback()
+        flash(f"Juz40 синхрондауы сәтсіз аяқталды: {e}", "error")
+
     return redirect(url_for("week_import", week_id=week_id))
 
 
