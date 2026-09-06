@@ -3,6 +3,7 @@ import json
 import os
 import re
 import secrets
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 from urllib.parse import urlparse
 
@@ -1550,6 +1551,52 @@ def import_sheet(week_id):
     return redirect(url_for("week_import", week_id=week_id))
 
 
+def _fetch_group_juz40_results(token, group, month, week_number, default_max_score):
+    """Бір топ (group) үшін Juz40-тан осы ай/аптаның СТ балдарын алады.
+    Тек желі сұранысын жасайды, DB-ге өзі жазбайды — thread pool-да қатар
+    шақыру үшін бөлек ұсталған. Қайтарады: (rows, status, error_message).
+    status — 'ok' (тақырып табылды), 'no_theme' (шынымен жоқ, апта әлі
+    ашылмаған) немесе 'error' (сұраныс сәтсіз — 'жоқ' дегеннен бөлек
+    көрсету үшін, әйтпесе уақытша желі қатесі 'дерек жоқ' болып қате
+    түсіндіріледі)."""
+    group_id = group.get("id")
+    curator = group.get("curator") or {}
+    curator_name = (curator.get("firstname") or "").strip() or (group.get("name") or "")
+
+    rows = []
+    try:
+        themes = juz40_client.get_group_themes(token, group_id, month, week_number)
+        theme = juz40_client.find_theme_by_name_part(themes, "САБАҚ ТАПСЫРУ")
+        if theme is None:
+            return rows, "no_theme", None
+
+        lessons = juz40_client.get_theme_lessons(token, theme["themeId"])
+        for lesson in lessons:
+            lesson_id = lesson.get("id")
+            progresses = juz40_client.get_lesson_progresses(token, group_id, lesson_id)
+            for p in progresses:
+                student = (
+                    f"{(p.get('studentFirstname') or '').strip()} "
+                    f"{(p.get('studentLastname') or '').strip()}"
+                ).strip()
+                score = p.get("score")
+                if not student or score is None:
+                    continue
+                max_score = p.get("aiMaxScore") or default_max_score
+                rows.append((curator_name, student, score, max_score))
+    except Juz40Error as e:
+        return rows, "error", str(e)
+    return rows, "ok", None
+
+
+# Топтарды бір-бірлеп (реттік) сұраса, 80+ топ бар кезде Vercel-дің
+# серверлес функция уақыты (504 GATEWAY_TIMEOUT) жетпей қалады — сол
+# себепті бірнеше топты БІР МЕЗГІЛДЕ (параллель) сұраймыз. Желі
+# сұранысы GIL-ді босатады, сондықтан жіп (thread) арқылы қатарлау
+# нақты жылдамдық береді.
+JUZ40_IMPORT_WORKERS = 16
+
+
 @app.route("/weeks/<int:week_id>/import/juz40", methods=["POST"])
 def import_juz40(week_id):
     """СЫНАҚ: Juz40 платформасынан осы нақты аптаның 'САБАҚ ТАПСЫРУ' СТ
@@ -1568,8 +1615,7 @@ def import_juz40(week_id):
 
     try:
         token = juz40_client.login()
-        all_streams = juz40_client.get_all_streams(token)
-        course_id = juz40_client.find_course_id(all_streams, program["slug"], stream["code"])
+        course_id = juz40_client.find_course_id(token, program["slug"], stream["code"])
         if course_id is None:
             flash(
                 f"Juz40-та '{stream['code']}' потогына дәл сәйкес келетін курс табылмады "
@@ -1587,38 +1633,56 @@ def import_juz40(week_id):
             (week_id, f"juz40:{course_id}", len(groups)),
         ).fetchone()["id"]
 
-        inserted = 0
+        all_rows = []
         groups_without_theme = 0
-        for g in groups:
-            group_id = g.get("id")
-            curator = g.get("curator") or {}
-            curator_name = (curator.get("firstname") or "").strip() or (g.get("name") or "")
+        failed_groups = []
 
-            themes = juz40_client.get_group_themes(token, group_id, week["month_number"], week["week_number"])
-            theme = juz40_client.find_theme_by_name_part(themes, "САБАҚ ТАПСЫРУ")
-            if theme is None:
+        def _run_batch(group_list):
+            out = []
+            with ThreadPoolExecutor(max_workers=JUZ40_IMPORT_WORKERS) as executor:
+                future_map = {
+                    executor.submit(
+                        _fetch_group_juz40_results, token, g, week["month_number"], week["week_number"], default_max_score
+                    ): g
+                    for g in group_list
+                }
+                for future in as_completed(future_map):
+                    g = future_map[future]
+                    rows, status, err = future.result()
+                    out.append((g, rows, status, err))
+            return out
+
+        for g, rows, status, err in _run_batch(groups):
+            if status == "ok":
+                all_rows.extend(rows)
+            elif status == "no_theme":
                 groups_without_theme += 1
-                continue
+            else:
+                failed_groups.append(g)
 
-            lessons = juz40_client.get_theme_lessons(token, theme["themeId"])
-            for lesson in lessons:
-                lesson_id = lesson.get("id")
-                progresses = juz40_client.get_lesson_progresses(token, group_id, lesson_id)
-                for p in progresses:
-                    student = (
-                        f"{(p.get('studentFirstname') or '').strip()} "
-                        f"{(p.get('studentLastname') or '').strip()}"
-                    ).strip()
-                    score = p.get("score")
-                    if not student or score is None:
-                        continue
-                    max_score = p.get("aiMaxScore") or default_max_score
-                    conn.execute(
-                        "INSERT INTO results (week_id, import_id, curator, student, subject, topic, score, max_score) "
-                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                        (week_id, import_id, curator_name, student, "Сабақ тапсыру", None, score, max_score),
-                    )
-                    inserted += 1
+        # Уақытша (желі/жүктеме) қатеге ұшыраған топтарды, БІРЖОЛА "тақырып
+        # жоқ" деп есептемей, азырақ жүктемемен бір рет қайта көреміз.
+        if failed_groups:
+            still_failed = 0
+            for g, rows, status, err in _run_batch(failed_groups):
+                if status == "ok":
+                    all_rows.extend(rows)
+                elif status == "no_theme":
+                    groups_without_theme += 1
+                else:
+                    still_failed += 1
+            failed_groups_count = still_failed
+        else:
+            failed_groups_count = 0
+
+        inserted = 0
+        for curator_name, student, score, max_score in all_rows:
+            conn.execute(
+                "INSERT INTO results (week_id, import_id, curator, student, subject, topic, score, max_score) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (week_id, import_id, curator_name, student, "Сабақ тапсыру", None, score, max_score),
+            )
+            inserted += 1
 
         conn.execute("UPDATE imports SET row_count = ? WHERE id = ?", (inserted, import_id))
         conn.commit()
@@ -1627,6 +1691,12 @@ def import_juz40(week_id):
         if groups_without_theme:
             summary += f" {groups_without_theme} топта осы аптаның САБАҚ ТАПСЫРУ тақырыбы табылмады."
         flash(summary, "ok")
+        if failed_groups_count:
+            flash(
+                f"{failed_groups_count} топ Juz40 сұранысының қатесіне байланысты өткізіп жіберілді "
+                "(желі/жүктеме қатесі — қайта басып көріңіз).",
+                "error",
+            )
     except Juz40Error as e:
         conn.rollback()
         flash(f"Juz40 синхрондауы сәтсіз аяқталды: {e}", "error")

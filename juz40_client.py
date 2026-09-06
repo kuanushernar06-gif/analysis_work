@@ -11,6 +11,7 @@ import os
 import re
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 
 from netfetch import SSL_CONTEXT, USER_AGENT
@@ -33,21 +34,46 @@ def _get_credentials():
     return username, password
 
 
+_MAX_RETRIES = 3
+_RETRY_BACKOFF_SECONDS = 0.6
+
+
 def _call(url, method="GET", body=None, token=None, timeout=30):
+    """Көп топты параллель сұраған кезде Juz40 API кейде уақытша (желі/
+    жүктеме) қатесі қайтарады — соны 'деректің жоқтығымен' шатастырмас
+    үшін, уақытша қателерде бірнеше рет қайталап көреді."""
     headers = {"content-type": "application/json", "user-agent": USER_AGENT}
     if token:
         headers["Authorization"] = f"Bearer {token}"
     data = json.dumps(body).encode() if body is not None else None
-    req = urllib.request.Request(url, data=data, method=method, headers=headers)
-    try:
-        with urllib.request.urlopen(req, timeout=timeout, context=SSL_CONTEXT) as resp:
-            raw = resp.read()
-            return json.loads(raw.decode()) if raw else None
-    except urllib.error.HTTPError as e:
-        detail = e.read().decode("utf-8", errors="replace")
-        raise Juz40Error(f"Juz40 API қатесі (HTTP {e.code}) {url}: {detail[:300]}") from e
-    except urllib.error.URLError as e:
-        raise Juz40Error(f"Juz40 API-ге қосыла алмадым: {e.reason}") from e
+
+    last_error = None
+    for attempt in range(_MAX_RETRIES):
+        req = urllib.request.Request(url, data=data, method=method, headers=headers)
+        try:
+            with urllib.request.urlopen(req, timeout=timeout, context=SSL_CONTEXT) as resp:
+                raw = resp.read()
+                return json.loads(raw.decode()) if raw else None
+        except urllib.error.HTTPError as e:
+            detail = e.read().decode("utf-8", errors="replace")
+            if e.code in (429, 500, 502, 503, 504) and attempt < _MAX_RETRIES - 1:
+                last_error = Juz40Error(f"Juz40 API қатесі (HTTP {e.code}) {url}: {detail[:300]}")
+                time.sleep(_RETRY_BACKOFF_SECONDS * (attempt + 1))
+                continue
+            raise Juz40Error(f"Juz40 API қатесі (HTTP {e.code}) {url}: {detail[:300]}") from e
+        except urllib.error.URLError as e:
+            if attempt < _MAX_RETRIES - 1:
+                last_error = Juz40Error(f"Juz40 API-ге қосыла алмадым: {e.reason}")
+                time.sleep(_RETRY_BACKOFF_SECONDS * (attempt + 1))
+                continue
+            raise Juz40Error(f"Juz40 API-ге қосыла алмадым: {e.reason}") from e
+        except TimeoutError as e:
+            if attempt < _MAX_RETRIES - 1:
+                last_error = Juz40Error(f"Juz40 API сұранысының уақыты бітті: {url}")
+                time.sleep(_RETRY_BACKOFF_SECONDS * (attempt + 1))
+                continue
+            raise Juz40Error(f"Juz40 API сұранысының уақыты бітті: {url}") from e
+    raise last_error or Juz40Error(f"Juz40 API-ге сұраныс сәтсіз аяқталды: {url}")
 
 
 def login():
@@ -65,7 +91,13 @@ def login():
 
 
 def get_all_streams(token, max_pages=40):
-    """Осы аккаунтқа көрінетін БАРЛЫҚ ағым/курсты (беттеп) жинап қайтарады."""
+    """Осы аккаунтқа көрінетін БАРЛЫҚ ағым/курсты (беттеп) жинап қайтарады.
+
+    ЕСКЕРТУ: бұл платформадағы БАРЛЫҚ (мыңдаған) курсты бір-бірлеп парақтап
+    оқиды — өте баяу (ондаған секунд/бетте). Курс іздеу үшін
+    find_course_id() енді бұны ШАҚЫРМАЙДЫ, оның орнына жылдам, пән
+    бойынша сүзілген _search_courses()-ты пайдаланады. Бұл функция тек
+    сирек диагностика/ескі жол ретінде қалдырылған."""
     all_streams = []
     page = 0
     while page < max_pages:
@@ -84,6 +116,23 @@ def get_all_streams(token, max_pages=40):
     return all_streams
 
 
+# "Қазақстан тарихы" пәнінің Juz40-тағы ID-і (пайдаланушының методист
+# дашбордының URL-інен расталған: /methodist/main?subject=...).
+JUZ40_SUBJECT_ID = "2f9a8bf5-4a39-4c5f-aa32-4c7ae09521b2"
+
+
+def _search_courses(token, search_word, size=50):
+    """Пән бойынша сүзілген, сервер жағында атау бойынша іздейтін ЖЫЛДАМ
+    курс іздеу (толық каталогты парақтаудан әлдеқайда тез)."""
+    q = urllib.parse.quote(search_word)
+    body = _call(
+        f"{API_BASE}/v2/headteacher/subjects/{JUZ40_SUBJECT_ID}/courses"
+        f"?size={size}&page=0&searchWord={q}&sort=year,DESC&sort=month,DESC",
+        token=token,
+    )
+    return (body or {}).get("content", [])
+
+
 # Sheets.py-дегі PRIOR_YEAR_MONTH_TO_STREAM-мен бірдей ай->нөмір сәйкестігі —
 # Juz40-та курс аты осы айдың атауын қамтиды.
 _MONTH_TO_STREAM_NUM = {
@@ -98,10 +147,15 @@ _PROGRAM_LABEL = {"smart": "SMART", "junior": "JUNIOR"}
 _COURSE_NAME_RE = re.compile(r"^Қазақстан тарихы (SMART|JUNIOR) (\S+) (11|10) СЫНЫП (\d{4})$")
 
 
-def find_course_id(all_streams, program_slug, stream_code):
+def find_course_id(token, program_slug, stream_code):
     """stream_code (мыс. 'ТАРИХ-01' немесе 'JUNIOR-21') үшін, Juz40-тағы
     БІРЕГЕЙ, дәл сәйкес келетін курсты іздейді. Дәл бір сәйкестік
-    табылмаса (0 немесе 2+) — None қайтарады, ЕШҚАШАН болжамайды."""
+    табылмаса (0 немесе 2+) — None қайтарады, ЕШҚАШАН болжамайды.
+
+    Толық каталогты парақтаудың орнына, пән бойынша сүзілген жылдам
+    іздеуді (_search_courses) пайдаланады — нәтижесінде табылған
+    үміткерлер бәрібір АТАУ БОЙЫНША ДӘЛ сүзгіден (_COURSE_NAME_RE)
+    өтеді, сондықтан қауіпсіздігі (ешқашан жуықтап таңдамау) сақталады."""
     m = re.match(r"^(ТАРИХ|JUNIOR)-(\d+)$", stream_code)
     if not m:
         return None
@@ -114,16 +168,18 @@ def find_course_id(all_streams, program_slug, stream_code):
     if expected_label is None:
         return None
 
+    search_word = f"Қазақстан тарихы {expected_label} {month} {expected_grade} СЫНЫП"
+    candidates = _search_courses(token, search_word)
+
     found = []
-    for s in all_streams:
-        for c in s.get("courses", []):
-            name = (c.get("name") or "").strip()
-            cm = _COURSE_NAME_RE.match(name)
-            if not cm:
-                continue
-            program, cmonth, grade, _year = cm.groups()
-            if program == expected_label and cmonth == month and grade == expected_grade:
-                found.append(c.get("id"))
+    for c in candidates:
+        name = (c.get("name") or "").strip()
+        cm = _COURSE_NAME_RE.match(name)
+        if not cm:
+            continue
+        program, cmonth, grade, _year = cm.groups()
+        if program == expected_label and cmonth == month and grade == expected_grade:
+            found.append(c.get("id"))
     if len(found) == 1:
         return found[0]
     return None
