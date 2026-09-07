@@ -79,6 +79,9 @@
     <form method="post" action="{{ url_for('import_juz40', week_id=week['id']) }}" style="display:inline">
       <button type="submit" class="btn btn-outline btn-small">Juz40-дан синхрондау (сынақ)</button>
     </form>
+    <form method="post" action="{{ url_for('import_juz40', week_id=week['id']) }}?limit=5" style="display:inline; margin-left:8px">
+      <button type="submit" class="btn btn-outline btn-small">Juz40 диагностика (5 топ)</button>
+    </form>
   </div>
   {% endif %}
 </div>
