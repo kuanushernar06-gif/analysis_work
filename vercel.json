@@ -5,6 +5,7 @@
   "routes": [
     { "src": "/(.*)", "dest": "api/index.py" }
   ],
+  "regions": ["dxb1"],
   "functions": {
     "api/index.py": { "maxDuration": 60 }
   }
