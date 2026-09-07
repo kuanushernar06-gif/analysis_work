@@ -4,6 +4,7 @@ import os
 import re
 import secrets
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 from urllib.parse import urlparse
@@ -1628,9 +1629,20 @@ def import_juz40(week_id):
         flash("Бұл сынақ тек САБАҚ ТАПСЫРУ АНАЛИЗ санатында қолжетімді.", "error")
         return redirect(url_for("week_import", week_id=week_id))
 
+    # СЫНАҚ ДИАГНОСТИКАСЫ: ?limit=N қосса, тек алғашқы N топты ғана өңдейді
+    # (production-дағы Vercel timeout себебін толық 84 топты күтпей-ақ,
+    # шағын партиямен нақты уақытын өлшеу үшін). Deploy тұрақталған соң
+    # осы уақытша блокты алып тастау керек.
+    debug_limit = request.args.get("limit", type=int)
+    t_start = time.time()
+    timings = []
+
     try:
         token = juz40_client.login()
+        timings.append(f"login={round(time.time() - t_start, 1)}s")
+
         course_id = juz40_client.find_course_id(token, program["slug"], stream["code"])
+        timings.append(f"course_id={round(time.time() - t_start, 1)}s")
         if course_id is None:
             flash(
                 f"Juz40-та '{stream['code']}' потогына дәл сәйкес келетін курс табылмады "
@@ -1640,6 +1652,9 @@ def import_juz40(week_id):
             return redirect(url_for("week_import", week_id=week_id))
 
         groups = juz40_client.get_groups(token, course_id)
+        timings.append(f"groups={round(time.time() - t_start, 1)}s (n={len(groups)})")
+        if debug_limit:
+            groups = groups[:debug_limit]
         default_max_score = db.score_defaults_for(program["slug"], stream["category"])[0]
 
         import_id = conn.execute(
@@ -1678,6 +1693,7 @@ def import_juz40(week_id):
                 groups_without_theme += 1
             else:
                 failed_groups.append(g)
+        timings.append(f"batch1={round(time.time() - t_start, 1)}s")
 
         # Уақытша (желі/жүктеме) қатеге ұшыраған топтарды, БІРЖОЛА "тақырып
         # жоқ" деп есептемей, азырақ жүктемемен бір рет қайта көреміз.
@@ -1706,10 +1722,13 @@ def import_juz40(week_id):
         conn.execute("UPDATE imports SET row_count = ? WHERE id = ?", (inserted, import_id))
         conn.commit()
 
+        timings.append(f"total={round(time.time() - t_start, 1)}s")
         summary = f"Juz40-дан {inserted} нәтиже импортталды ({len(groups)} топтан)."
         if groups_without_theme:
             summary += f" {groups_without_theme} топта осы аптаның САБАҚ ТАПСЫРУ тақырыбы табылмады."
         flash(summary, "ok")
+        if debug_limit:
+            flash("DEBUG TIMING: " + " | ".join(timings), "ok")
         if failed_groups_count:
             flash(
                 f"{failed_groups_count} топ Juz40 сұранысының қатесіне байланысты өткізіп жіберілді "
@@ -1718,7 +1737,10 @@ def import_juz40(week_id):
             )
     except Juz40Error as e:
         conn.rollback()
+        timings.append(f"failed_at={round(time.time() - t_start, 1)}s")
         flash(f"Juz40 синхрондауы сәтсіз аяқталды: {e}", "error")
+        if debug_limit:
+            flash("DEBUG TIMING: " + " | ".join(timings), "error")
 
     return redirect(url_for("week_import", week_id=week_id))
 
