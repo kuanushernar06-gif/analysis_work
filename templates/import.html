@@ -88,6 +88,12 @@
     <form method="post" action="{{ url_for('import_juz40', week_id=week['id']) }}?limit=40" style="display:inline; margin-left:8px">
       <button type="submit" class="btn btn-outline btn-small">Juz40 диагностика (40 топ)</button>
     </form>
+    <form method="post" action="{{ url_for('import_juz40', week_id=week['id']) }}?limit=60" style="display:inline; margin-left:8px">
+      <button type="submit" class="btn btn-outline btn-small">Juz40 диагностика (60 топ)</button>
+    </form>
+    <form method="post" action="{{ url_for('import_juz40', week_id=week['id']) }}?limit=75" style="display:inline; margin-left:8px">
+      <button type="submit" class="btn btn-outline btn-small">Juz40 диагностика (75 топ)</button>
+    </form>
   </div>
   {% endif %}
 </div>
