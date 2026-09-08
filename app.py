@@ -1552,6 +1552,47 @@ def import_sheet(week_id):
     return redirect(url_for("week_import", week_id=week_id))
 
 
+# Куратор 0 балл қойылған оқушыға дәлелді себеп жазса (ауру, жол, хабарсыз,
+# қолхат т.б.), сол оқушыны "0 балл жинаған" деп есептемеу үшін — тек кілт
+# сөз бойынша анықтайды (заң құжаты емес), сондықтан комментарийдің өзі
+# әрқашан results.excuse_note-та сақталады, методист тексере алады.
+_EXCUSE_KEYWORDS = [
+    "қолхат", "ауырып", "ауру", "науқас", "жолда", "сапарда", "сапарға",
+    "хабарсыз", "хабар жоқ", "байланыссыз", "байланыс жоқ", "дәрігерде",
+    "емделуде", "карантин", "туыс", "қайтыс", "отбасылық жағдай",
+    "отбасы жағдайы", "ауылда",
+    # желі/техникалық ақау — тапсыра алмауының дәлелді (өз кінәсі емес) себебі
+    "сеть ұстамады", "желі ұстамады", "интернет болмады", "интернет жоқ",
+    "техникалық ақау", "қосыла алмады",
+    # курстан/топтан шыққан оқушы — осы аптада нақты қатыспаған, "0 балл
+    # жинады" деп есептеу дұрыс емес
+    "курстан шықты", "шыққан оқушы", "оқудан шықты", "тобынан шықты",
+]
+
+
+def _is_valid_absence_excuse(comment_text):
+    text = (comment_text or "").lower()
+    return any(kw in text for kw in _EXCUSE_KEYWORDS)
+
+
+def _fetch_juz40_zero_score_excuse(token, group_id, lesson_id, student_id):
+    """0 балл алған оқушының Juz40-тағы куратор комментарийін алады
+    (firstProgress + retakeProgress). Табылмаса/қате болса None қайтарады —
+    бұл СТ негізгі баллын тоқтатпайды, тек себеп ескерілмей қалады."""
+    try:
+        detail = juz40_client.get_oral_student_progress(token, group_id, lesson_id, student_id)
+    except Juz40Error:
+        return None
+    comments = []
+    for key in ("firstProgress", "retakeProgress"):
+        prog = (detail or {}).get(key) or {}
+        for c in prog.get("comments") or []:
+            text = (c.get("commentText") or "").strip()
+            if text:
+                comments.append(text)
+    return "; ".join(comments) if comments else None
+
+
 def _fetch_group_juz40_results(
     token, group_id, curator_name, month, week_number, default_max_score, lessons_cache, lessons_lock
 ):
@@ -1597,7 +1638,17 @@ def _fetch_group_juz40_results(
                 # сайттың СТ үшін бекітілген максимум баллы бағдарламаға
                 # қарамастан ӘРҚАШАН default_max_score (SMART=15, JUNIOR=10)
                 # — Juz40-тың ішкі мәнін елемейміз.
-                rows.append((curator_name, student, score, default_max_score))
+                excuse_note = None
+                excused = 0
+                if float(score) == 0:
+                    student_id = p.get("studentId")
+                    if student_id:
+                        excuse_note = _fetch_juz40_zero_score_excuse(
+                            token, group_id, lesson_id, student_id
+                        )
+                        if excuse_note and _is_valid_absence_excuse(excuse_note):
+                            excused = 1
+                rows.append((curator_name, student, score, default_max_score, excuse_note, excused))
     except Juz40Error as e:
         return rows, "error", str(e)
     return rows, "ok", None
@@ -1745,14 +1796,15 @@ def import_juz40_step(week_id):
             g = future_map[future]
             rows, status, err = future.result()
             if status == "ok":
-                for curator_name, student, score, max_score in rows:
+                for curator_name, student, score, max_score, excuse_note, excused in rows:
                     conn.execute(
                         "INSERT INTO results "
-                        "(week_id, import_id, curator, student, subject, topic, score, max_score) "
-                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                        "(week_id, import_id, curator, student, subject, topic, score, max_score, "
+                        " excuse_note, excused) "
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                         (
                             week_id, job["import_id"], curator_name, student, "Сабақ тапсыру",
-                            None, score, max_score,
+                            None, score, max_score, excuse_note, excused,
                         ),
                     )
                     inserted_now += 1

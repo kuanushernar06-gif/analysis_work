@@ -65,6 +65,12 @@
   {{ delta(cmp.zero_students if cmp else none) }}
   <div class="stat-label">0 балл жинаған оқушы</div>
 </div>
+{% if rep.excused_count %}
+<div class="stat-tile">
+  <div class="stat-value">{{ rep.excused_count }}</div>
+  <div class="stat-label">Дәлелді себеппен есептелмеген (ауру, жол, хабарсыз т.б.)</div>
+</div>
+{% endif %}
 {% if show_threshold %}
 <div class="stat-tile stat-warn">
   <div class="stat-value">{{ rep.fail_unique_students }}</div>

@@ -110,6 +110,7 @@ def compute_report(conn, week_id, combine_week_ids=None, subjects_filter=None, c
         "max_achiever_count": 0,
         "max_achiever_students": 0,
         "zero_students": 0,
+        "excused_count": 0,
         "gold_count": 0,
         "silver_count": 0,
         "bronze_count": 0,
@@ -137,7 +138,14 @@ def compute_report(conn, week_id, combine_week_ids=None, subjects_filter=None, c
     subject_map = {}
     topic_map = {}
 
+    excused_count = 0
     for r in results:
+        # Куратор дәлелді себеп (ауру, жол, хабарсыз, қолхат т.б.) жазған 0
+        # баллды жалпы санатқа мүлдем қоспаймыз — оқушы қатыспаған
+        # (excused absence) деп есептейміз, тек жеке санда көрсетеміз.
+        if r["excused"]:
+            excused_count += 1
+            continue
         student = (r["student"] or "").strip()
         subject = (r["subject"] or "Белгісіз пән").strip() or "Белгісіз пән"
         topic = (r["topic"] or "").strip()
@@ -214,6 +222,7 @@ def compute_report(conn, week_id, combine_week_ids=None, subjects_filter=None, c
     # алғанын санаймыз — max_achiever_students-пен бірдей логика (жалпы
     # саны, орташа емес).
     report["zero_students"] = len(zero_score_students)
+    report["excused_count"] = excused_count
     report["gold_count"] = gold_count
     report["silver_count"] = silver_count
     report["bronze_count"] = bronze_count

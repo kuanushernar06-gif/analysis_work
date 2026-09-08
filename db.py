@@ -146,6 +146,8 @@ CREATE TABLE IF NOT EXISTS results (
     topic TEXT,
     score REAL,
     max_score REAL,
+    excuse_note TEXT,
+    excused INTEGER DEFAULT 0,
     created_at TIMESTAMPTZ DEFAULT now()
 );
 
@@ -301,6 +303,8 @@ CREATE TABLE IF NOT EXISTS results (
     topic TEXT,
     score REAL,
     max_score REAL,
+    excuse_note TEXT,
+    excused INTEGER DEFAULT 0,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -543,6 +547,12 @@ def _migrate(conn):
         conn.commit()
     conn.execute("UPDATE ls_imports SET program = 'smart' WHERE program IS NULL")
     conn.commit()
+    if not _column_exists(conn, "results", "excuse_note"):
+        conn.execute("ALTER TABLE results ADD COLUMN excuse_note TEXT")
+        conn.commit()
+    if not _column_exists(conn, "results", "excused"):
+        conn.execute("ALTER TABLE results ADD COLUMN excused INTEGER DEFAULT 0")
+        conn.commit()
 
 
 _STREAM_CODE_RENAMES = {
