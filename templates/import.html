@@ -75,11 +75,33 @@
       <button type="submit" class="btn btn-primary">Анализ шығару</button>
     </div>
   </form>
+  <style>
+    #juz40-sync-btn.is-syncing { position: relative; }
+    #juz40-sync-btn .juz40-dots span {
+      display: inline-block;
+      opacity: .2;
+      animation: juz40-blink 1.2s infinite;
+    }
+    #juz40-sync-btn .juz40-dots span:nth-child(2) { animation-delay: .2s; }
+    #juz40-sync-btn .juz40-dots span:nth-child(3) { animation-delay: .4s; }
+    @keyframes juz40-blink {
+      0%, 80%, 100% { opacity: .2; }
+      40% { opacity: 1; }
+    }
+    #juz40-sync-bar.is-syncing {
+      background: repeating-linear-gradient(
+        90deg, var(--accent), var(--accent) 10px, var(--accent-2) 10px, var(--accent-2) 20px
+      );
+      background-size: 28px 100%;
+      animation: juz40-stripes 0.7s linear infinite;
+    }
+    @keyframes juz40-stripes { to { background-position: 28px 0; } }
+  </style>
   <div class="import-submit-row no-print" style="margin-top:16px; border-top:1px solid var(--border); padding-top:16px">
     <button type="button" class="btn btn-outline btn-small" id="juz40-sync-btn"
             data-start-url="{{ url_for('import_juz40_start', week_id=week['id']) }}"
             data-step-url="{{ url_for('import_juz40_step', week_id=week['id']) }}">
-      Juz40-дан синхрондау (сынақ)
+      <span id="juz40-sync-btn-label">Juz40-дан синхрондау (сынақ)</span>
     </button>
     <div id="juz40-sync-progress" style="display:none; margin-top:10px; max-width:420px">
       <div style="background:var(--border); border-radius:6px; height:8px; overflow:hidden">
@@ -163,16 +185,27 @@
   (function () {
     const btn = document.getElementById("juz40-sync-btn");
     if (!btn) return;
+    const label = document.getElementById("juz40-sync-btn-label");
     const progressWrap = document.getElementById("juz40-sync-progress");
     const bar = document.getElementById("juz40-sync-bar");
     const text = document.getElementById("juz40-sync-text");
     const startUrl = btn.getAttribute("data-start-url");
     const stepUrl = btn.getAttribute("data-step-url");
+    const IDLE_LABEL = "Juz40-дан синхрондау (сынақ)";
+    const SYNCING_LABEL_HTML =
+      'Синхрондалуда<span class="juz40-dots"><span>.</span><span>.</span><span>.</span></span>';
 
-    function setProgress(processed, total, extra) {
+    function setSyncing(isSyncing) {
+      btn.disabled = isSyncing;
+      btn.classList.toggle("is-syncing", isSyncing);
+      bar.classList.toggle("is-syncing", isSyncing);
+      label.innerHTML = isSyncing ? SYNCING_LABEL_HTML : IDLE_LABEL;
+    }
+
+    function setProgress(processed, total) {
       const pct = total ? Math.round((processed / total) * 100) : 0;
       bar.style.width = pct + "%";
-      text.textContent = `${processed} / ${total} топ өңделді` + (extra ? ` — ${extra}` : "");
+      text.textContent = `${processed} / ${total} топ өңделді`;
     }
 
     async function postJson(url, body) {
@@ -188,7 +221,7 @@
       const data = await postJson(stepUrl, { job_id: jobId });
       if (!data.ok) {
         text.textContent = "Қате: " + (data.error || "белгісіз қате");
-        btn.disabled = false;
+        setSyncing(false);
         return;
       }
       setProgress(data.processed, data.total);
@@ -197,16 +230,14 @@
         if (data.no_theme) summary += ` ${data.no_theme} топта тақырып табылмады.`;
         if (data.failed) summary += ` ${data.failed} топ қатеге байланысты өткізіп жіберілді.`;
         text.textContent = summary;
-        btn.disabled = false;
-        btn.textContent = "Juz40-дан синхрондау (сынақ)";
+        setSyncing(false);
         return;
       }
       setTimeout(() => runStep(jobId), 250);
     }
 
     btn.addEventListener("click", async () => {
-      btn.disabled = true;
-      btn.textContent = "Синхрондалуда...";
+      setSyncing(true);
       progressWrap.style.display = "block";
       setProgress(0, 0);
       text.textContent = "Juz40-қа кіру, курс іздеу...";
@@ -214,16 +245,14 @@
         const data = await postJson(startUrl, {});
         if (!data.ok) {
           text.textContent = "Қате: " + (data.error || "белгісіз қате");
-          btn.disabled = false;
-          btn.textContent = "Juz40-дан синхрондау (сынақ)";
+          setSyncing(false);
           return;
         }
         setProgress(0, data.total);
         runStep(data.job_id);
       } catch (e) {
         text.textContent = "Желі қатесі: " + e;
-        btn.disabled = false;
-        btn.textContent = "Juz40-дан синхрондау (сынақ)";
+        setSyncing(false);
       }
     });
   })();
