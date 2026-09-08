@@ -4,7 +4,6 @@ import os
 import re
 import secrets
 import threading
-import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 from urllib.parse import urlparse
@@ -1554,7 +1553,7 @@ def import_sheet(week_id):
 
 
 def _fetch_group_juz40_results(
-    token, group, month, week_number, default_max_score, lessons_cache, lessons_lock
+    token, group_id, curator_name, month, week_number, default_max_score, lessons_cache, lessons_lock
 ):
     """Бір топ (group) үшін Juz40-тан осы ай/аптаның СТ балдарын алады.
     Тек желі сұранысын жасайды, DB-ге өзі жазбайды — thread pool-да қатар
@@ -1566,13 +1565,9 @@ def _fetch_group_juz40_results(
 
     lessons_cache — themeId -> lessons тізімі (сол тақырыптың сабақтары
     БҮКІЛ курс бойынша ортақ, топқа тәуелді емес — HAR-да расталған),
-    сұраныс санын азайту үшін осы сұраныс (import_juz40 шақыруы) бойы
-    ортақ пайдаланылады. Тақырыптың өзі (get_group_themes) әр топ үшін
-    бөлек сұралады — топ бойынша нақты дұрыстығын сақтау үшін."""
-    group_id = group.get("id")
-    curator = group.get("curator") or {}
-    curator_name = (curator.get("firstname") or "").strip() or (group.get("name") or "")
-
+    сұраныс санын азайту үшін осы job қадамы (step) бойы ортақ
+    пайдаланылады. Тақырыптың өзі (get_group_themes) әр топ үшін бөлек
+    сұралады — топ бойынша нақты дұрыстығын сақтау үшін."""
     rows = []
     try:
         themes = juz40_client.get_group_themes(token, group_id, month, week_number)
@@ -1606,61 +1601,43 @@ def _fetch_group_juz40_results(
 
 
 # Топтарды бір-бірлеп (реттік) сұраса, 80+ топ бар кезде Vercel-дің
-# серверлес функция уақыты (504 GATEWAY_TIMEOUT) жетпей қалады — сол
-# себепті бірнеше топты БІР МЕЗГІЛДЕ (параллель) сұраймыз. Желі
-# сұранысы GIL-ді босатады, сондықтан жіп (thread) арқылы қатарлау
-# нақты жылдамдық береді.
-#
-# МАҢЫЗДЫ: 24 жұмысшымен (worker) тексергенде, ~50+ топтан асқанда Juz40
-# API-дің өзі көп қатарлас сұранысты шектей бастайтыны анықталды (60 топ —
-# 187с, 75 топ — 282с — қайталанатын retry-лар себебінен). Сол себепті
-# қатарластықты ӘДЕЙІ АЗАЙТТЫҚ — Juz40-тың шегінен аспай, тұрақты
-# жылдамдықпен өту үшін.
+# серверлес функция уақыты (504 GATEWAY_TIMEOUT) жетпей қалады, ӘРІ Juz40
+# API-дің өзі көп қатарлас сұранысты шектеп тастайды (60 топ бір реттік
+# сұранымда — 187с, 75 топ — 282с болған, себебі қайталанатын retry-лар).
+# Сол екі шектеуден де құтылу үшін, синхрондау БІР ҮЛКЕН сұранысқа емес,
+# әрқайсысы бірнеше топты ғана өңдейтін көптеген ШАҒЫН қадамдарға
+# (/start + қайта-қайта /step) бөлінген — дәл осылай "STANALYZ" сияқты
+# басқа Juz40-интеграциялары да прогресс-барымен, бөлшектеп істейді.
 JUZ40_IMPORT_WORKERS = 3
+JUZ40_STEP_CHUNK_SIZE = 6
+JUZ40_MAX_GROUP_ATTEMPTS = 3
 
 
-@app.route("/weeks/<int:week_id>/import/juz40", methods=["POST"])
-def import_juz40(week_id):
-    """СЫНАҚ: Juz40 платформасынан осы нақты аптаның 'САБАҚ ТАПСЫРУ' СТ
-    балдарын JUZ40_USERNAME/JUZ40_PASSWORD арқылы автоматты тартып алады
-    (тек осы week_id-ге ғана нәтиже қосады, басқа апта/потокқа тимейді).
-    Поток Juz40 курсымен ТЕК дәл (артық сөзсіз) атау сәйкестігі бойынша
-    ғана байланысады — сәйкестік табылмаса ештеңе жасамайды."""
+@app.route("/weeks/<int:week_id>/import/juz40/start", methods=["POST"])
+def import_juz40_start(week_id):
+    """Juz40 синхрондау job-ын БАСТАЙДЫ: логин, курс іздеу, топтар тізімін
+    алып, juz40_sync_jobs жазбасын құрады. Нақты нәтижелерді бұл әлі
+    тартпайды — соны /step шақырулары бөлшектеп орындайды."""
     conn = get_db()
     week, stream, program = get_week_context(conn, week_id)
     if week is None or stream is None or program is None:
-        flash("Апта табылмады.", "error")
-        return redirect(url_for("index"))
+        return jsonify({"ok": False, "error": "Апта табылмады."})
     if stream["category"] != "sabaq_tapsyru":
-        flash("Бұл сынақ тек САБАҚ ТАПСЫРУ АНАЛИЗ санатында қолжетімді.", "error")
-        return redirect(url_for("week_import", week_id=week_id))
-
-    # СЫНАҚ ДИАГНОСТИКАСЫ: ?limit=N қосса, тек алғашқы N топты ғана өңдейді
-    # (production-дағы Vercel timeout себебін толық 84 топты күтпей-ақ,
-    # шағын партиямен нақты уақытын өлшеу үшін). Deploy тұрақталған соң
-    # осы уақытша блокты алып тастау керек.
-    debug_limit = request.args.get("limit", type=int)
-    t_start = time.time()
-    timings = []
+        return jsonify({"ok": False, "error": "Бұл сынақ тек САБАҚ ТАПСЫРУ АНАЛИЗ санатында қолжетімді."})
 
     try:
         token = juz40_client.login()
-        timings.append(f"login={round(time.time() - t_start, 1)}s")
-
         course_id = juz40_client.find_course_id(token, program["slug"], stream["code"])
-        timings.append(f"course_id={round(time.time() - t_start, 1)}s")
         if course_id is None:
-            flash(
-                f"Juz40-та '{stream['code']}' потогына дәл сәйкес келетін курс табылмады "
-                "(әлі ашылмаған болуы мүмкін).",
-                "error",
-            )
-            return redirect(url_for("week_import", week_id=week_id))
+            return jsonify({
+                "ok": False,
+                "error": (
+                    f"Juz40-та '{stream['code']}' потогына дәл сәйкес келетін курс табылмады "
+                    "(әлі ашылмаған болуы мүмкін)."
+                ),
+            })
 
         groups = juz40_client.get_groups(token, course_id)
-        timings.append(f"groups={round(time.time() - t_start, 1)}s (n={len(groups)})")
-        if debug_limit:
-            groups = groups[:debug_limit]
         default_max_score = db.score_defaults_for(program["slug"], stream["category"])[0]
 
         import_id = conn.execute(
@@ -1669,89 +1646,148 @@ def import_juz40(week_id):
             (week_id, f"juz40:{course_id}", len(groups)),
         ).fetchone()["id"]
 
-        all_rows = []
-        groups_without_theme = 0
-        failed_groups = []
-        lessons_cache = {}
-        lessons_lock = threading.Lock()
-
-        def _run_batch(group_list):
-            out = []
-            with ThreadPoolExecutor(max_workers=JUZ40_IMPORT_WORKERS) as executor:
-                future_map = {
-                    executor.submit(
-                        _fetch_group_juz40_results,
-                        token, g, week["month_number"], week["week_number"], default_max_score,
-                        lessons_cache, lessons_lock,
-                    ): g
-                    for g in group_list
-                }
-                for future in as_completed(future_map):
-                    g = future_map[future]
-                    rows, status, err = future.result()
-                    out.append((g, rows, status, err))
-            return out
-
-        for g, rows, status, err in _run_batch(groups):
-            if status == "ok":
-                all_rows.extend(rows)
-            elif status == "no_theme":
-                groups_without_theme += 1
-            else:
-                failed_groups.append(g)
-        timings.append(f"batch1={round(time.time() - t_start, 1)}s")
-
-        # Уақытша (желі/жүктеме) қатеге ұшыраған топтарды, БІРЖОЛА "тақырып
-        # жоқ" деп есептемей, азырақ жүктемемен бір рет қайта көреміз. Juz40
-        # жүктемеден кейін бірден қайта соғу оны одан ары шектеп тастауы
-        # мүмкін болғандықтан, қайталар алдында сәл кідіреміз.
-        if failed_groups:
-            time.sleep(5)
-            still_failed = 0
-            for g, rows, status, err in _run_batch(failed_groups):
-                if status == "ok":
-                    all_rows.extend(rows)
-                elif status == "no_theme":
-                    groups_without_theme += 1
-                else:
-                    still_failed += 1
-            failed_groups_count = still_failed
-        else:
-            failed_groups_count = 0
-
-        inserted = 0
-        for curator_name, student, score, max_score in all_rows:
-            conn.execute(
-                "INSERT INTO results (week_id, import_id, curator, student, subject, topic, score, max_score) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                (week_id, import_id, curator_name, student, "Сабақ тапсыру", None, score, max_score),
-            )
-            inserted += 1
-
-        conn.execute("UPDATE imports SET row_count = ? WHERE id = ?", (inserted, import_id))
+        pending = [
+            {
+                "id": g.get("id"),
+                "curator": (
+                    ((g.get("curator") or {}).get("firstname") or "").strip() or (g.get("name") or "")
+                ),
+                "attempts": 0,
+            }
+            for g in groups
+        ]
+        job_id = conn.execute(
+            "INSERT INTO juz40_sync_jobs "
+            "(week_id, import_id, course_id, month_number, week_number, default_max_score, "
+            " total_groups, pending_json, status) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'running') RETURNING id",
+            (
+                week_id, import_id, course_id, week["month_number"], week["week_number"],
+                default_max_score, len(groups), json.dumps(pending),
+            ),
+        ).fetchone()["id"]
         conn.commit()
 
-        timings.append(f"total={round(time.time() - t_start, 1)}s")
-        summary = f"Juz40-дан {inserted} нәтиже импортталды ({len(groups)} топтан)."
-        if groups_without_theme:
-            summary += f" {groups_without_theme} топта осы аптаның САБАҚ ТАПСЫРУ тақырыбы табылмады."
-        flash(summary, "ok")
-        if debug_limit:
-            flash("DEBUG TIMING: " + " | ".join(timings), "ok")
-        if failed_groups_count:
-            flash(
-                f"{failed_groups_count} топ Juz40 сұранысының қатесіне байланысты өткізіп жіберілді "
-                "(желі/жүктеме қатесі — қайта басып көріңіз).",
-                "error",
-            )
+        return jsonify({"ok": True, "job_id": job_id, "total": len(groups)})
     except Juz40Error as e:
         conn.rollback()
-        timings.append(f"failed_at={round(time.time() - t_start, 1)}s")
-        flash(f"Juz40 синхрондауы сәтсіз аяқталды: {e}", "error")
-        if debug_limit:
-            flash("DEBUG TIMING: " + " | ".join(timings), "error")
+        return jsonify({"ok": False, "error": f"Juz40 синхрондауы сәтсіз аяқталды: {e}"})
 
-    return redirect(url_for("week_import", week_id=week_id))
+
+@app.route("/weeks/<int:week_id>/import/juz40/step", methods=["POST"])
+def import_juz40_step(week_id):
+    """Job-тың КЕЛЕСІ шағын бөлігін (chunk, әдепкі 6 топ) өңдейді және
+    дереу қайтарады — Vercel-дің функция уақыты шегінен әрқашан жайлы
+    төмен қалу үшін ӘРІ Juz40-ты бірден көп сұранысымен шектеп тастамау
+    үшін. Frontend осы маршрутты done=true болғанша қайта-қайта шақырады."""
+    conn = get_db()
+    body = request.get_json(silent=True) or {}
+    job_id = body.get("job_id")
+    if not job_id:
+        return jsonify({"ok": False, "error": "job_id жоқ."})
+
+    job = conn.execute(
+        "SELECT * FROM juz40_sync_jobs WHERE id = ? AND week_id = ?", (job_id, week_id)
+    ).fetchone()
+    if job is None:
+        return jsonify({"ok": False, "error": "Job табылмады."})
+
+    def _job_progress(done):
+        return jsonify({
+            "ok": True, "done": done,
+            "processed": job["processed_count"], "total": job["total_groups"],
+            "inserted": job["inserted_count"], "no_theme": job["no_theme_count"],
+            "failed": job["failed_count"],
+        })
+
+    if job["status"] != "running":
+        return _job_progress(True)
+
+    pending = json.loads(job["pending_json"] or "[]")
+    if not pending:
+        conn.execute("UPDATE juz40_sync_jobs SET status = 'done' WHERE id = ?", (job_id,))
+        conn.commit()
+        return _job_progress(True)
+
+    chunk = pending[:JUZ40_STEP_CHUNK_SIZE]
+    remaining = pending[JUZ40_STEP_CHUNK_SIZE:]
+
+    try:
+        token = juz40_client.login()
+    except Juz40Error as e:
+        conn.execute(
+            "UPDATE juz40_sync_jobs SET status = 'error', error = ? WHERE id = ?", (str(e), job_id)
+        )
+        conn.commit()
+        return jsonify({"ok": False, "error": f"Juz40 логині сәтсіз аяқталды: {e}"})
+
+    lessons_cache = {}
+    lessons_lock = threading.Lock()
+    inserted_now = 0
+    no_theme_now = 0
+    failed_now = 0
+    processed_now = 0
+    retry_later = []
+
+    with ThreadPoolExecutor(max_workers=JUZ40_IMPORT_WORKERS) as executor:
+        future_map = {
+            executor.submit(
+                _fetch_group_juz40_results,
+                token, g["id"], g["curator"], job["month_number"], job["week_number"],
+                job["default_max_score"], lessons_cache, lessons_lock,
+            ): g
+            for g in chunk
+        }
+        for future in as_completed(future_map):
+            g = future_map[future]
+            rows, status, err = future.result()
+            if status == "ok":
+                for curator_name, student, score, max_score in rows:
+                    conn.execute(
+                        "INSERT INTO results "
+                        "(week_id, import_id, curator, student, subject, topic, score, max_score) "
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                        (
+                            week_id, job["import_id"], curator_name, student, "Сабақ тапсыру",
+                            None, score, max_score,
+                        ),
+                    )
+                    inserted_now += 1
+                processed_now += 1
+            elif status == "no_theme":
+                no_theme_now += 1
+                processed_now += 1
+            else:
+                g["attempts"] = g.get("attempts", 0) + 1
+                if g["attempts"] < JUZ40_MAX_GROUP_ATTEMPTS:
+                    retry_later.append(g)
+                else:
+                    failed_now += 1
+                    processed_now += 1
+
+    new_pending = remaining + retry_later
+    new_processed = job["processed_count"] + processed_now
+    new_inserted = job["inserted_count"] + inserted_now
+    new_no_theme = job["no_theme_count"] + no_theme_now
+    new_failed = job["failed_count"] + failed_now
+    done = not new_pending
+
+    conn.execute(
+        "UPDATE juz40_sync_jobs SET pending_json = ?, processed_count = ?, inserted_count = ?, "
+        "no_theme_count = ?, failed_count = ?, status = ? WHERE id = ?",
+        (
+            json.dumps(new_pending), new_processed, new_inserted, new_no_theme, new_failed,
+            "done" if done else "running", job_id,
+        ),
+    )
+    if done:
+        conn.execute("UPDATE imports SET row_count = ? WHERE id = ?", (new_inserted, job["import_id"]))
+    conn.commit()
+
+    return jsonify({
+        "ok": True, "done": done, "processed": new_processed, "total": job["total_groups"],
+        "inserted": new_inserted, "no_theme": new_no_theme, "failed": new_failed,
+    })
 
 
 @app.route("/weeks/<int:week_id>/results/upload", methods=["POST"])

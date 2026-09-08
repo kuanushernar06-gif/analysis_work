@@ -202,6 +202,25 @@ CREATE TABLE IF NOT EXISTS ls_sessions (
     attendance_percent REAL
 );
 
+CREATE TABLE IF NOT EXISTS juz40_sync_jobs (
+    id SERIAL PRIMARY KEY,
+    week_id INTEGER NOT NULL REFERENCES weeks(id) ON DELETE CASCADE,
+    import_id INTEGER REFERENCES imports(id) ON DELETE CASCADE,
+    course_id TEXT,
+    month_number INTEGER,
+    week_number INTEGER,
+    default_max_score REAL,
+    total_groups INTEGER,
+    pending_json TEXT,
+    processed_count INTEGER DEFAULT 0,
+    inserted_count INTEGER DEFAULT 0,
+    no_theme_count INTEGER DEFAULT 0,
+    failed_count INTEGER DEFAULT 0,
+    status TEXT DEFAULT 'running',
+    error TEXT,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
 CREATE INDEX IF NOT EXISTS idx_streams_program ON streams(program_id);
 CREATE INDEX IF NOT EXISTS idx_results_week ON results(week_id);
 CREATE INDEX IF NOT EXISTS idx_notes_week ON curator_notes(week_id);
@@ -336,6 +355,25 @@ CREATE TABLE IF NOT EXISTS ls_sessions (
     week_label TEXT,
     like_percent REAL,
     attendance_percent REAL
+);
+
+CREATE TABLE IF NOT EXISTS juz40_sync_jobs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    week_id INTEGER NOT NULL REFERENCES weeks(id) ON DELETE CASCADE,
+    import_id INTEGER REFERENCES imports(id) ON DELETE CASCADE,
+    course_id TEXT,
+    month_number INTEGER,
+    week_number INTEGER,
+    default_max_score REAL,
+    total_groups INTEGER,
+    pending_json TEXT,
+    processed_count INTEGER DEFAULT 0,
+    inserted_count INTEGER DEFAULT 0,
+    no_theme_count INTEGER DEFAULT 0,
+    failed_count INTEGER DEFAULT 0,
+    status TEXT DEFAULT 'running',
+    error TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS idx_streams_program ON streams(program_id);
