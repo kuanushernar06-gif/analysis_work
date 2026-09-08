@@ -1593,8 +1593,11 @@ def _fetch_group_juz40_results(
                 score = p.get("score")
                 if not student or score is None:
                     continue
-                max_score = p.get("aiMaxScore") or default_max_score
-                rows.append((curator_name, student, score, max_score))
+                # Juz40 өзінің aiMaxScore-ін қайтарады (мыс. 20), бірақ
+                # сайттың СТ үшін бекітілген максимум баллы бағдарламаға
+                # қарамастан ӘРҚАШАН default_max_score (SMART=15, JUNIOR=10)
+                # — Juz40-тың ішкі мәнін елемейміз.
+                rows.append((curator_name, student, score, default_max_score))
     except Juz40Error as e:
         return rows, "error", str(e)
     return rows, "ok", None
