@@ -1616,7 +1616,7 @@ def _fetch_group_juz40_results(
 # 187с, 75 топ — 282с — қайталанатын retry-лар себебінен). Сол себепті
 # қатарластықты ӘДЕЙІ АЗАЙТТЫҚ — Juz40-тың шегінен аспай, тұрақты
 # жылдамдықпен өту үшін.
-JUZ40_IMPORT_WORKERS = 6
+JUZ40_IMPORT_WORKERS = 3
 
 
 @app.route("/weeks/<int:week_id>/import/juz40", methods=["POST"])
@@ -1702,8 +1702,11 @@ def import_juz40(week_id):
         timings.append(f"batch1={round(time.time() - t_start, 1)}s")
 
         # Уақытша (желі/жүктеме) қатеге ұшыраған топтарды, БІРЖОЛА "тақырып
-        # жоқ" деп есептемей, азырақ жүктемемен бір рет қайта көреміз.
+        # жоқ" деп есептемей, азырақ жүктемемен бір рет қайта көреміз. Juz40
+        # жүктемеден кейін бірден қайта соғу оны одан ары шектеп тастауы
+        # мүмкін болғандықтан, қайталар алдында сәл кідіреміз.
         if failed_groups:
+            time.sleep(5)
             still_failed = 0
             for g, rows, status, err in _run_batch(failed_groups):
                 if status == "ok":

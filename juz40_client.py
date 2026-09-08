@@ -35,7 +35,7 @@ def _get_credentials():
 
 
 _MAX_RETRIES = 3
-_RETRY_BACKOFF_SECONDS = 0.6
+_RETRY_BACKOFF_SECONDS = 2.0
 
 
 def _call(url, method="GET", body=None, token=None, timeout=30):
