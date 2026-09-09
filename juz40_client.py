@@ -15,8 +15,6 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-import pdfplumber
-
 from netfetch import SSL_CONTEXT, USER_AGENT
 
 API_BASE = "https://api.juz40-edu.kz"
@@ -262,7 +260,14 @@ def extract_pdf_questions(pdf_bytes):
     """СТ нұсқасының (variant) PDF-індегі әр сұрақ бетінің мәтінін тізім
     етіп қайтарады. 1-бет — мұқаба (нұсқа №, пән, дәйексөз), одан кейінгі
     әр бет — бір сұрақ (oralPassingDto.scores-пен индекс бойынша сәйкес
-    келеді: questions[0] <-> scores[0], т.с.с.)."""
+    келеді: questions[0] <-> scores[0], т.с.с.).
+
+    pdfplumber осы функция ІШІНДЕ ғана импортталады — модуль деңгейінде
+    импорттасақ, осы кітапхана орнатылмаса/бұзылса БҮКІЛ сайт (логин
+    беті де қоса) құлап қалады, тек осы (сирек шақырылатын) мүмкіндік
+    емес."""
+    import pdfplumber
+
     questions = []
     with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
         for page in pdf.pages[1:]:
