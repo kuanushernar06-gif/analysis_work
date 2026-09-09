@@ -1865,6 +1865,7 @@ def import_juz40_step(week_id):
 # созылмайды.
 JUZ40_QUESTION_CHUNK_SIZE = 1
 JUZ40_QUESTION_STUDENT_WORKERS = 4
+JUZ40_QUESTION_STUDENT_BATCH = 8
 JUZ40_MAX_QUESTION_GROUP_ATTEMPTS = 3
 
 
@@ -1903,9 +1904,17 @@ def _fetch_student_juz40_questions(token, group_id, lesson_id, curator_name, p, 
     ]
 
 
-def _fetch_group_juz40_questions(token, group_id, curator_name, month, week_number, lessons_cache, lessons_lock, pdf_cache_snapshot):
-    """Бір топтың барлық оқушысы үшін сұрақ-сұрақ (variant PDF-ке негізделген)
-    нәтижесін алады. Қайтарады: (question_rows, newly_fetched_pdfs, status, err).
+def _fetch_group_juz40_questions(token, group_id, curator_name, month, week_number, lessons_cache, lessons_lock, pdf_cache_snapshot, cursor=0):
+    """Бір топтың оқушыларының сұрақ-сұрақ (variant PDF-ке негізделген)
+    нәтижесін алады — БІР РЕТ шақырғанда тек JUZ40_QUESTION_STUDENT_BATCH
+    (8) оқушыны ғана өңдейді, қалғанын ЕМЕС. Себебі: кейбір топта 40-50
+    оқушы болады, ал production-да (Vercel, Frankfurt) кейбір Juz40
+    сұраныстары күтпеген жерден өте баяулап, БІР қадам 5 минуттан асып,
+    Vercel-дің 300 секундтық қатаң шегіне тіреліп қалғаны байқалды. Топ
+    аяқталмаса, next_cursor қайтарылып, /step осы топты СОЛ ЖЕРДЕН
+    жалғастырады (топты алдымен FIFO кезектің басына қояды).
+
+    Қайтарады: (question_rows, newly_fetched_pdfs, status, err, next_cursor, has_more).
     - question_rows: [(curator_name, student, variant, question_index, question_text, score), ...]
     - newly_fetched_pdfs: [(pdf_url, questions_list), ...] — pdf_cache_snapshot-та
       жоқ, осы шақыруда жаңадан жүктеп-оқылған PDF-тер (негізгі ағын DB-ге
@@ -1917,7 +1926,7 @@ def _fetch_group_juz40_questions(token, group_id, curator_name, month, week_numb
         themes = juz40_client.get_group_themes(token, group_id, month, week_number)
         theme = juz40_client.find_theme_by_name_part(themes, "САБАҚ ТАПСЫРУ")
         if theme is None:
-            return question_rows, [], "no_theme", None
+            return question_rows, [], "no_theme", None, 0, False
 
         theme_id = theme["themeId"]
         with lessons_lock:
@@ -1927,23 +1936,34 @@ def _fetch_group_juz40_questions(token, group_id, curator_name, month, week_numb
             with lessons_lock:
                 lessons_cache[theme_id] = lessons
 
+        # Барлық lesson-дардың progress-терін бір тізбекке жинап, cursor
+        # соған қатысты — топтың ІШІНДЕ бірнеше lesson болса да, бірыңғай
+        # (lesson_id, p) жұптарын біртіндеп өңдейміз.
+        flat = []
         for lesson in lessons:
             lesson_id = lesson.get("id")
             progresses = juz40_client.get_lesson_progresses(token, group_id, lesson_id)
-            with ThreadPoolExecutor(max_workers=JUZ40_QUESTION_STUDENT_WORKERS) as executor:
-                futures = [
-                    executor.submit(
-                        _fetch_student_juz40_questions,
-                        token, group_id, lesson_id, curator_name, p,
-                        pdf_cache_snapshot, newly_fetched, newly_fetched_lock,
-                    )
-                    for p in progresses
-                ]
-                for future in as_completed(futures):
-                    question_rows.extend(future.result())
+            for p in progresses:
+                flat.append((lesson_id, p))
+
+        batch = flat[cursor:cursor + JUZ40_QUESTION_STUDENT_BATCH]
+        next_cursor = cursor + len(batch)
+        has_more = next_cursor < len(flat)
+
+        with ThreadPoolExecutor(max_workers=JUZ40_QUESTION_STUDENT_WORKERS) as executor:
+            futures = [
+                executor.submit(
+                    _fetch_student_juz40_questions,
+                    token, group_id, lesson_id, curator_name, p,
+                    pdf_cache_snapshot, newly_fetched, newly_fetched_lock,
+                )
+                for lesson_id, p in batch
+            ]
+            for future in as_completed(futures):
+                question_rows.extend(future.result())
     except Juz40Error as e:
-        return question_rows, list(newly_fetched.items()), "error", str(e)
-    return question_rows, list(newly_fetched.items()), "ok", None
+        return question_rows, list(newly_fetched.items()), "error", str(e), cursor, True
+    return question_rows, list(newly_fetched.items()), "ok", None, next_cursor, has_more
 
 
 @app.route("/weeks/<int:week_id>/import/juz40/questions/start", methods=["POST"])
@@ -2069,6 +2089,7 @@ def import_juz40_questions_step(week_id):
     processed_now = 0
     failed_now = 0
     retry_later = []
+    continue_now = []
     all_new_pdfs = {}
 
     with ThreadPoolExecutor(max_workers=JUZ40_IMPORT_WORKERS) as executor:
@@ -2076,13 +2097,13 @@ def import_juz40_questions_step(week_id):
             executor.submit(
                 _fetch_group_juz40_questions,
                 token, g["id"], g["curator"], job["month_number"], job["week_number"],
-                lessons_cache, lessons_lock, pdf_cache_snapshot,
+                lessons_cache, lessons_lock, pdf_cache_snapshot, g.get("cursor", 0),
             ): g
             for g in chunk
         }
         for future in as_completed(future_map):
             g = future_map[future]
-            question_rows, newly_fetched, status, err = future.result()
+            question_rows, newly_fetched, status, err, next_cursor, has_more = future.result()
             if status in ("ok", "no_theme"):
                 for pdf_url, questions in newly_fetched:
                     all_new_pdfs.setdefault(pdf_url, questions)
@@ -2097,7 +2118,14 @@ def import_juz40_questions_step(week_id):
                         ),
                     )
                     inserted_now += 1
-                processed_now += 1
+                if status == "ok" and has_more:
+                    # Топ әлі толық аяқталған жоқ — СОЛ ЖЕРДЕН (cursor)
+                    # жалғасу үшін кезектің басына қоямыз, "өңделді" деп
+                    # әлі есептемейміз.
+                    g["cursor"] = next_cursor
+                    continue_now.append(g)
+                else:
+                    processed_now += 1
             else:
                 g["attempts"] = g.get("attempts", 0) + 1
                 if g["attempts"] < JUZ40_MAX_QUESTION_GROUP_ATTEMPTS:
@@ -2115,7 +2143,7 @@ def import_juz40_questions_step(week_id):
         except Exception:
             pass
 
-    new_pending = remaining + retry_later
+    new_pending = continue_now + remaining + retry_later
     new_processed = job["processed_count"] + processed_now
     new_inserted = job["inserted_count"] + inserted_now
     new_failed = job["failed_count"] + failed_now

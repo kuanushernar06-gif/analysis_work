@@ -39,7 +39,7 @@ _MAX_RETRIES = 3
 _RETRY_BACKOFF_SECONDS = 2.0
 
 
-def _call(url, method="GET", body=None, token=None, timeout=30):
+def _call(url, method="GET", body=None, token=None, timeout=15):
     """Көп топты параллель сұраған кезде Juz40 API кейде уақытша (желі/
     жүктеме) қатесі қайтарады — соны 'деректің жоқтығымен' шатастырмас
     үшін, уақытша қателерде бірнеше рет қайталап көреді."""
@@ -238,7 +238,7 @@ def download_material(url):
     # URL-дің құрылымдық бөліктерін (протокол, жол бөлгіштер) бүлдірмейді.
     safe_url = urllib.parse.quote(url, safe=":/?&=%")
     req = urllib.request.Request(safe_url, headers={"user-agent": USER_AGENT})
-    with urllib.request.urlopen(req, timeout=60, context=SSL_CONTEXT) as resp:
+    with urllib.request.urlopen(req, timeout=15, context=SSL_CONTEXT) as resp:
         return resp.read()
 
 
