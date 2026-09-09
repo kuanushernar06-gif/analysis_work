@@ -234,8 +234,21 @@
       return resp.json();
     }
 
-    async function runStep(jobId) {
-      const data = await postJson(stepUrl, { job_id: jobId });
+    async function runStep(jobId, retryCount) {
+      retryCount = retryCount || 0;
+      let data;
+      try {
+        data = await postJson(stepUrl, { job_id: jobId });
+      } catch (e) {
+        if (retryCount >= 8) {
+          text.textContent = "Желі қатесі, синхрондау тоқтады: " + e + " (батырманы қайта басып жалғастыруға болады)";
+          setSyncing(false);
+          return;
+        }
+        text.textContent = `Уақытша желі қатесі, қайталануда... (${retryCount + 1})`;
+        setTimeout(() => runStep(jobId, retryCount + 1), 2000);
+        return;
+      }
       if (!data.ok) {
         text.textContent = "Қате: " + (data.error || "белгісіз қате");
         setSyncing(false);
@@ -310,8 +323,21 @@
       return resp.json();
     }
 
-    async function runStep(jobId) {
-      const data = await postJson(stepUrl, { job_id: jobId });
+    async function runStep(jobId, retryCount) {
+      retryCount = retryCount || 0;
+      let data;
+      try {
+        data = await postJson(stepUrl, { job_id: jobId });
+      } catch (e) {
+        if (retryCount >= 8) {
+          text.textContent = "Желі қатесі, синхрондау тоқтады: " + e + " (батырманы қайта басып жалғастыруға болады)";
+          setSyncing(false);
+          return;
+        }
+        text.textContent = `Уақытша желі қатесі, қайталануда... (${retryCount + 1})`;
+        setTimeout(() => runStep(jobId, retryCount + 1), 2000);
+        return;
+      }
       if (!data.ok) {
         text.textContent = "Қате: " + (data.error || "белгісіз қате");
         setSyncing(false);

@@ -1957,6 +1957,14 @@ def import_juz40_questions_start(week_id):
     if stream["category"] != "sabaq_tapsyru":
         return jsonify({"ok": False, "error": "Бұл сынақ тек САБАҚ ТАПСЫРУ АНАЛИЗ санатында қолжетімді."})
 
+    # Батырманы қайта бассаңыз (мыс. алдыңғы синхрондау желі қатесінен
+    # үзілсе), әр рет ЖАҢА job басталады — сол себепті осы аптаның
+    # алдыңғы (аяқталмаған да, аяқталған да) сұрақ-жауап деректерін алдын
+    # ала тазалаймыз, әйтпесе оқушылар қосарланып, статистика бұрмаланады.
+    conn.execute("DELETE FROM juz40_question_results WHERE week_id = ?", (week_id,))
+    conn.execute("DELETE FROM juz40_question_jobs WHERE week_id = ?", (week_id,))
+    conn.commit()
+
     try:
         token = juz40_client.login()
         course_id = juz40_client.find_course_id(token, program["slug"], stream["code"])
