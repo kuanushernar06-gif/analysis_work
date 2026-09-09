@@ -1170,21 +1170,16 @@ def compute_question_stats(conn, week_id, limit=20, min_attempts=3):
         if not text or r["score"] is None:
             continue
         score = float(r["score"])
-        entry = stats.setdefault(text, {"question": text, "total": 0, "wrong": 0, "partial": 0})
+        entry = stats.setdefault(text, {"question": text, "total": 0, "wrong": 0})
         entry["total"] += 1
         if score <= 0:
             entry["wrong"] += 1
-        elif score < 1:
-            entry["partial"] += 1
 
     result = []
     for entry in stats.values():
         if entry["total"] < min_attempts:
             continue
         entry["wrong_percent"] = round(entry["wrong"] / entry["total"] * 100, 1)
-        entry["not_fully_correct_percent"] = round(
-            (entry["wrong"] + entry["partial"]) / entry["total"] * 100, 1
-        )
         result.append(entry)
 
     result.sort(key=lambda e: e["wrong_percent"], reverse=True)

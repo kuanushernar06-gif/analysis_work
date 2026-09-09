@@ -246,7 +246,6 @@
         <tr>
           <th>Сұрақ</th>
           <th>Қате (%)</th>
-          <th>Толық дұрыс емес (%)</th>
           <th>Тапсырған саны</th>
         </tr>
       </thead>
@@ -255,7 +254,6 @@
         <tr>
           <td style="white-space:pre-wrap; max-width:480px">{{ q.question }}</td>
           <td>{{ q.wrong_percent|kk_num }}%</td>
-          <td>{{ q.not_fully_correct_percent|kk_num }}%</td>
           <td>{{ q.total }}</td>
         </tr>
         {% endfor %}
