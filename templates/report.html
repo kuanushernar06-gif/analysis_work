@@ -214,7 +214,7 @@
 
 {% endif %}
 
-{% if not (stream and stream['category'] == 'baiqau_test') %}
+{% if not (stream and stream['category'] in ('baiqau_test', 'sabaq_tapsyru')) %}
 <div class="card">
   <h2>Кураторлардың жиынтық анализі</h2>
   {% if is_month_summary %}
@@ -232,6 +232,47 @@
 </div>
 {% endif %}
 
+{% if not is_month_summary and stream and stream['category'] == 'sabaq_tapsyru' %}
+<div class="card">
+  <h2>Ең көп қате кеткен сұрақтар</h2>
+  <p class="section-intro">
+    Juz40 платформасындағы әр оқушының сұрақ-сұрақ жауабы негізінде — оқушылар ЕҢ КӨП қате
+    жауап берген сұрақтар (куратор түсінігіне емес, нақты сұрақ мәтініне негізделген).
+  </p>
+  {% if question_stats %}
+  <div class="table-scroll">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Сұрақ</th>
+          <th>Қате (%)</th>
+          <th>Толық дұрыс емес (%)</th>
+          <th>Тапсырған саны</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for q in question_stats %}
+        <tr>
+          <td style="white-space:pre-wrap; max-width:480px">{{ q.question }}</td>
+          <td>{{ q.wrong_percent|kk_num }}%</td>
+          <td>{{ q.not_fully_correct_percent|kk_num }}%</td>
+          <td>{{ q.total }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="muted">
+    Әзірге сұрақ-сұрақ деректері жоқ.
+    <a href="{{ url_for('week_import', week_id=week['id']) }}">Кестені импорттау бетінде</a>
+    «Сұрақтар анализін синхрондау» батырмасын басыңыз.
+  </p>
+  {% endif %}
+</div>
+{% endif %}
+
+{% if not (stream and stream['category'] == 'sabaq_tapsyru') %}
 <div class="card" id="summary">
   <h2>Жалпы қорытынды</h2>
   {% if is_month_summary %}
@@ -307,8 +348,9 @@
   {% endif %}
   {% endif %}
 </div>
+{% endif %}
 
-{% if not is_month_summary and week['summary'] %}
+{% if not is_month_summary and week['summary'] and not (stream and stream['category'] == 'sabaq_tapsyru') %}
 <script>
   (function () {
     const btn = document.getElementById("summary-delete-btn");

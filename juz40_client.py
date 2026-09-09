@@ -6,6 +6,7 @@
 Сайттың нақты "поток → Juz40 курсы" сәйкестігі АТАУ БОЙЫНША ДӘЛ (толық,
 артық сөзсіз) сәйкестендіріледі — ешқашан жуықтап/болжап таңдамайды.
 Сәйкестік табылмаса (курс әлі ашылмаған болуы мүмкін) None қайтарады."""
+import io
 import json
 import os
 import re
@@ -13,6 +14,8 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+
+import pdfplumber
 
 from netfetch import SSL_CONTEXT, USER_AGENT
 
@@ -232,6 +235,37 @@ def get_oral_student_progress(token, group_id, lesson_id, student_id):
 
 
 def download_material(url):
-    req = urllib.request.Request(url, headers={"user-agent": USER_AGENT})
+    # URL-дегі кириллица/бос орын секілді таңбалар urllib-тің шикі
+    # (ASCII) HTTP сұранысына сыймайды — percent-encode қажет. safe=":/?&=%"
+    # URL-дің құрылымдық бөліктерін (протокол, жол бөлгіштер) бүлдірмейді.
+    safe_url = urllib.parse.quote(url, safe=":/?&=%")
+    req = urllib.request.Request(safe_url, headers={"user-agent": USER_AGENT})
     with urllib.request.urlopen(req, timeout=60, context=SSL_CONTEXT) as resp:
         return resp.read()
+
+
+_PDF_HEADER_RE = re.compile(r"^[^\n]*\|\s*Сабақ тапсыру\s*\n?", re.MULTILINE)
+_PDF_STANDALONE_NUM_RE = re.compile(r"^\s*\d{1,2}\s*$", re.MULTILINE)
+
+
+def _clean_pdf_question_text(raw_text):
+    """PDF беті: тақырыпша ('... | Сабақ тапсыру') және сұрақ нөмірінің
+    үлкен графикасы (беттің ортасында, сөйлемді бөліп тұратын жеке '14'
+    секілді жол) кездеседі — соларды алып тастап, оқылатын мәтін қалдырады."""
+    text = _PDF_HEADER_RE.sub("", raw_text)
+    lines = [ln for ln in text.split("\n") if not _PDF_STANDALONE_NUM_RE.match(ln)]
+    cleaned = "\n".join(lines).strip()
+    return re.sub(r"\n{3,}", "\n\n", cleaned)
+
+
+def extract_pdf_questions(pdf_bytes):
+    """СТ нұсқасының (variant) PDF-індегі әр сұрақ бетінің мәтінін тізім
+    етіп қайтарады. 1-бет — мұқаба (нұсқа №, пән, дәйексөз), одан кейінгі
+    әр бет — бір сұрақ (oralPassingDto.scores-пен индекс бойынша сәйкес
+    келеді: questions[0] <-> scores[0], т.с.с.)."""
+    questions = []
+    with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
+        for page in pdf.pages[1:]:
+            raw_text = (page.extract_text() or "").strip()
+            questions.append(_clean_pdf_question_text(raw_text))
+    return questions

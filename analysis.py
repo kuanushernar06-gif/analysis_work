@@ -1149,3 +1149,44 @@ def compute_ls_stream_week_stats(conn):
 
     return by_stream
 
+
+def compute_question_stats(conn, week_id, limit=20, min_attempts=3):
+    """Juz40 сұрақ-сұрақ анализі (Phase 2): әр бірегей сұрақ мәтіні бойынша
+    оқушылардың неше пайызы қате (0 балл) немесе жартылай (0.5) жауап
+    бергенін есептеп, ЕҢ КӨП ҚАТЕ КЕТКЕН сұрақтарды (limit дейін) қайтарады.
+    Куратор/себеп анализіне қатысы жоқ — тек сұрақ мәтіні мен балл негізінде.
+
+    min_attempts — тым аз оқушы тапсырған (кездейсоқ) сұрақтың есепке
+    кірмеуі үшін төменгі шек."""
+    rows = conn.execute(
+        "SELECT question_text, score FROM juz40_question_results "
+        "WHERE week_id = ? AND question_text IS NOT NULL",
+        (week_id,),
+    ).fetchall()
+
+    stats = {}
+    for r in rows:
+        text = (r["question_text"] or "").strip()
+        if not text or r["score"] is None:
+            continue
+        score = float(r["score"])
+        entry = stats.setdefault(text, {"question": text, "total": 0, "wrong": 0, "partial": 0})
+        entry["total"] += 1
+        if score <= 0:
+            entry["wrong"] += 1
+        elif score < 1:
+            entry["partial"] += 1
+
+    result = []
+    for entry in stats.values():
+        if entry["total"] < min_attempts:
+            continue
+        entry["wrong_percent"] = round(entry["wrong"] / entry["total"] * 100, 1)
+        entry["not_fully_correct_percent"] = round(
+            (entry["wrong"] + entry["partial"]) / entry["total"] * 100, 1
+        )
+        result.append(entry)
+
+    result.sort(key=lambda e: e["wrong_percent"], reverse=True)
+    return result[:limit]
+

@@ -223,6 +223,42 @@ CREATE TABLE IF NOT EXISTS juz40_sync_jobs (
     created_at TIMESTAMPTZ DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS juz40_pdf_cache (
+    pdf_url TEXT PRIMARY KEY,
+    questions_json TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS juz40_question_results (
+    id SERIAL PRIMARY KEY,
+    week_id INTEGER NOT NULL REFERENCES weeks(id) ON DELETE CASCADE,
+    import_id INTEGER REFERENCES imports(id) ON DELETE CASCADE,
+    curator TEXT,
+    student TEXT,
+    variant INTEGER,
+    question_index INTEGER,
+    question_text TEXT,
+    score REAL,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS juz40_question_jobs (
+    id SERIAL PRIMARY KEY,
+    week_id INTEGER NOT NULL REFERENCES weeks(id) ON DELETE CASCADE,
+    import_id INTEGER REFERENCES imports(id) ON DELETE CASCADE,
+    course_id TEXT,
+    month_number INTEGER,
+    week_number INTEGER,
+    total_groups INTEGER,
+    pending_json TEXT,
+    processed_count INTEGER DEFAULT 0,
+    inserted_count INTEGER DEFAULT 0,
+    failed_count INTEGER DEFAULT 0,
+    status TEXT DEFAULT 'running',
+    error TEXT,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
 CREATE INDEX IF NOT EXISTS idx_streams_program ON streams(program_id);
 CREATE INDEX IF NOT EXISTS idx_results_week ON results(week_id);
 CREATE INDEX IF NOT EXISTS idx_notes_week ON curator_notes(week_id);
@@ -230,6 +266,7 @@ CREATE INDEX IF NOT EXISTS idx_imports_week ON imports(week_id);
 CREATE INDEX IF NOT EXISTS idx_teacher_curators_teacher ON teacher_curators(teacher_id);
 CREATE INDEX IF NOT EXISTS idx_ls_sessions_import ON ls_sessions(import_id);
 CREATE INDEX IF NOT EXISTS idx_ls_sessions_stream ON ls_sessions(stream_code);
+CREATE INDEX IF NOT EXISTS idx_question_results_week ON juz40_question_results(week_id);
 """
 
 # SQLite диалектісі — DATABASE_URL қойылмаған кезде локальді дамыту үшін
@@ -380,6 +417,42 @@ CREATE TABLE IF NOT EXISTS juz40_sync_jobs (
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS juz40_pdf_cache (
+    pdf_url TEXT PRIMARY KEY,
+    questions_json TEXT NOT NULL,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS juz40_question_results (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    week_id INTEGER NOT NULL REFERENCES weeks(id) ON DELETE CASCADE,
+    import_id INTEGER REFERENCES imports(id) ON DELETE CASCADE,
+    curator TEXT,
+    student TEXT,
+    variant INTEGER,
+    question_index INTEGER,
+    question_text TEXT,
+    score REAL,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS juz40_question_jobs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    week_id INTEGER NOT NULL REFERENCES weeks(id) ON DELETE CASCADE,
+    import_id INTEGER REFERENCES imports(id) ON DELETE CASCADE,
+    course_id TEXT,
+    month_number INTEGER,
+    week_number INTEGER,
+    total_groups INTEGER,
+    pending_json TEXT,
+    processed_count INTEGER DEFAULT 0,
+    inserted_count INTEGER DEFAULT 0,
+    failed_count INTEGER DEFAULT 0,
+    status TEXT DEFAULT 'running',
+    error TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE INDEX IF NOT EXISTS idx_streams_program ON streams(program_id);
 CREATE INDEX IF NOT EXISTS idx_results_week ON results(week_id);
 CREATE INDEX IF NOT EXISTS idx_notes_week ON curator_notes(week_id);
@@ -387,6 +460,7 @@ CREATE INDEX IF NOT EXISTS idx_imports_week ON imports(week_id);
 CREATE INDEX IF NOT EXISTS idx_teacher_curators_teacher ON teacher_curators(teacher_id);
 CREATE INDEX IF NOT EXISTS idx_ls_sessions_import ON ls_sessions(import_id);
 CREATE INDEX IF NOT EXISTS idx_ls_sessions_stream ON ls_sessions(stream_code);
+CREATE INDEX IF NOT EXISTS idx_question_results_week ON juz40_question_results(week_id);
 """
 
 

@@ -110,10 +110,27 @@
       <p id="juz40-sync-text" class="muted" style="margin-top:6px; font-size:13px"></p>
     </div>
   </div>
+  <div class="import-submit-row no-print" style="margin-top:16px">
+    <button type="button" class="btn btn-outline btn-small" id="juz40-questions-btn"
+            data-start-url="{{ url_for('import_juz40_questions_start', week_id=week['id']) }}"
+            data-step-url="{{ url_for('import_juz40_questions_step', week_id=week['id']) }}">
+      <span id="juz40-questions-btn-label">Сұрақтар анализін синхрондау (сынақ)</span>
+    </button>
+    <p class="muted" style="margin-top:6px; font-size:13px">
+      Әр оқушының жеке сұрақ-сұрақ жауабын Juz40-тан алады — толық курс үшін бірнеше минутқа
+      созылуы мүмкін, бетті жаппай күте тұрыңыз.
+    </p>
+    <div id="juz40-questions-progress" style="display:none; margin-top:10px; max-width:420px">
+      <div style="background:var(--border); border-radius:6px; height:8px; overflow:hidden">
+        <div id="juz40-questions-bar" style="background:var(--accent); height:100%; width:0%; transition:width .2s"></div>
+      </div>
+      <p id="juz40-questions-text" class="muted" style="margin-top:6px; font-size:13px"></p>
+    </div>
+  </div>
   {% endif %}
 </div>
 
-{% if not (stream and stream['category'] == 'baiqau_test') %}
+{% if not (stream and stream['category'] in ('baiqau_test', 'sabaq_tapsyru')) %}
 <div class="card">
   <h2>Куратор анализін жүктеу</h2>
   <p class="section-intro">
@@ -230,6 +247,80 @@
         if (data.no_theme) summary += ` ${data.no_theme} топта тақырып табылмады.`;
         if (data.failed) summary += ` ${data.failed} топ қатеге байланысты өткізіп жіберілді.`;
         text.textContent = summary;
+        setSyncing(false);
+        return;
+      }
+      setTimeout(() => runStep(jobId), 250);
+    }
+
+    btn.addEventListener("click", async () => {
+      setSyncing(true);
+      progressWrap.style.display = "block";
+      setProgress(0, 0);
+      text.textContent = "Juz40-қа кіру, курс іздеу...";
+      try {
+        const data = await postJson(startUrl, {});
+        if (!data.ok) {
+          text.textContent = "Қате: " + (data.error || "белгісіз қате");
+          setSyncing(false);
+          return;
+        }
+        setProgress(0, data.total);
+        runStep(data.job_id);
+      } catch (e) {
+        text.textContent = "Желі қатесі: " + e;
+        setSyncing(false);
+      }
+    });
+  })();
+</script>
+<script>
+  (function () {
+    const btn = document.getElementById("juz40-questions-btn");
+    if (!btn) return;
+    const label = document.getElementById("juz40-questions-btn-label");
+    const progressWrap = document.getElementById("juz40-questions-progress");
+    const bar = document.getElementById("juz40-questions-bar");
+    const text = document.getElementById("juz40-questions-text");
+    const startUrl = btn.getAttribute("data-start-url");
+    const stepUrl = btn.getAttribute("data-step-url");
+    const IDLE_LABEL = "Сұрақтар анализін синхрондау (сынақ)";
+    const SYNCING_LABEL_HTML =
+      'Синхрондалуда<span class="juz40-dots"><span>.</span><span>.</span><span>.</span></span>';
+
+    function setSyncing(isSyncing) {
+      btn.disabled = isSyncing;
+      btn.classList.toggle("is-syncing", isSyncing);
+      bar.classList.toggle("is-syncing", isSyncing);
+      label.innerHTML = isSyncing ? SYNCING_LABEL_HTML : IDLE_LABEL;
+    }
+
+    function setProgress(processed, total) {
+      const pct = total ? Math.round((processed / total) * 100) : 0;
+      bar.style.width = pct + "%";
+      text.textContent = `${processed} / ${total} топ өңделді`;
+    }
+
+    async function postJson(url, body) {
+      const resp = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body || {}),
+      });
+      return resp.json();
+    }
+
+    async function runStep(jobId) {
+      const data = await postJson(stepUrl, { job_id: jobId });
+      if (!data.ok) {
+        text.textContent = "Қате: " + (data.error || "белгісіз қате");
+        setSyncing(false);
+        return;
+      }
+      setProgress(data.processed, data.total);
+      if (data.done) {
+        text.textContent = `Дайын: ${data.inserted} сұрақ-жауап жазбасы сақталды.` +
+          (data.failed ? ` ${data.failed} топ қатеге байланысты өткізіп жіберілді.` : "");
         setSyncing(false);
         return;
       }

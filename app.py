@@ -26,6 +26,7 @@ from analysis import (
     get_prior_year_comparison,
     compute_ls_teacher_data,
     compute_ls_stream_week_stats,
+    compute_question_stats,
     _match_teacher_curators,
     _registered_name_candidates,
     _compact_name,
@@ -1218,6 +1219,13 @@ def week_report(week_id):
             for entry in prior_year.values():
                 entry["delta"] = _delta(current_score, entry["avg_score"])
 
+    # Juz40 сұрақ-сұрақ анализі (Phase 2) — тек СТ (sabaq_tapsyru) апталық
+    # беттерінде, куратор жазған түсінікке емес, нақты сұрақ мәтініне
+    # негізделген "ең көп қате кеткен сұрақтар" тізімі.
+    question_stats = []
+    if not is_summary and stream and stream["category"] == "sabaq_tapsyru":
+        question_stats = compute_question_stats(conn, week_id)
+
     return render_template(
         "report.html",
         week=week,
@@ -1238,6 +1246,7 @@ def week_report(week_id):
         creative_history_report=creative_history_report,
         creative_literacy_report=creative_literacy_report,
         general_report=general_report,
+        question_stats=question_stats,
     )
 
 
@@ -1842,6 +1851,283 @@ def import_juz40_step(week_id):
     return jsonify({
         "ok": True, "done": done, "processed": new_processed, "total": job["total_groups"],
         "inserted": new_inserted, "no_theme": new_no_theme, "failed": new_failed,
+    })
+
+
+# ---------------------------------------------------------------------------
+# Juz40 СҰРАҚ-СҰРАҚ АНАЛИЗІ (Phase 2): жоғарыдағы баллды синхрондаудан бөлек,
+# себебі ӘЛДЕҚАЙДА АУЫР — ЖОК бір ғана топ деңгейінде емес, ӘР ОҚУШЫ үшін
+# жеке сұраныс керек (oralPassingDto.scores — сұрақ-сұрақ балл), сосын сол
+# оқушының нұсқасының (variant) PDF-ін оқып, әр сұрақтың мәтінін алу керек.
+# Сол себепті толық синхрондау ондаған минутқа созылуы мүмкін (STANALYZ
+# сияқты басқа Juz40-интеграциялары да осыны ескертеді) — бірақ бөлшектеп
+# (chunk) істелетіндіктен, ЖЕКЕ сұраныстардың ешқайсысы ешқашан ұзаққа
+# созылмайды.
+JUZ40_QUESTION_CHUNK_SIZE = 1
+JUZ40_QUESTION_STUDENT_WORKERS = 4
+JUZ40_MAX_QUESTION_GROUP_ATTEMPTS = 3
+
+
+def _fetch_student_juz40_questions(token, group_id, lesson_id, curator_name, p, pdf_cache_snapshot, newly_fetched, newly_fetched_lock):
+    """Бір оқушының сұрақ-сұрақ балын алады. Топ ішінде БІРНЕШЕ оқушыны
+    ҚАТАРЛАС сұрау үшін бөлек ұсталған — кейбір топта 40-50 оқушы болғанда,
+    реттік сұрау бір қадамды 60 секундтан асырып жіберетіні анықталды."""
+    student = (
+        f"{(p.get('studentFirstname') or '').strip()} "
+        f"{(p.get('studentLastname') or '').strip()}"
+    ).strip()
+    student_id = p.get("studentId")
+    if not student or not student_id:
+        return []
+    detail = juz40_client.get_oral_student_progress(token, group_id, lesson_id, student_id)
+    prog = (detail or {}).get("firstProgress") or {}
+    dto = prog.get("oralPassingDto")
+    materials = prog.get("materials") or []
+    if not dto or not dto.get("scores") or not materials:
+        return []
+    scores = dto["scores"]
+    pdf_url = materials[0]
+    variant = prog.get("variant")
+
+    with newly_fetched_lock:
+        questions = pdf_cache_snapshot.get(pdf_url) or newly_fetched.get(pdf_url)
+    if questions is None:
+        pdf_bytes = juz40_client.download_material(pdf_url)
+        questions = juz40_client.extract_pdf_questions(pdf_bytes)
+        with newly_fetched_lock:
+            newly_fetched[pdf_url] = questions
+
+    return [
+        (curator_name, student, variant, idx, questions[idx] if idx < len(questions) else None, score)
+        for idx, score in enumerate(scores)
+    ]
+
+
+def _fetch_group_juz40_questions(token, group_id, curator_name, month, week_number, lessons_cache, lessons_lock, pdf_cache_snapshot):
+    """Бір топтың барлық оқушысы үшін сұрақ-сұрақ (variant PDF-ке негізделген)
+    нәтижесін алады. Қайтарады: (question_rows, newly_fetched_pdfs, status, err).
+    - question_rows: [(curator_name, student, variant, question_index, question_text, score), ...]
+    - newly_fetched_pdfs: [(pdf_url, questions_list), ...] — pdf_cache_snapshot-та
+      жоқ, осы шақыруда жаңадан жүктеп-оқылған PDF-тер (негізгі ағын DB-ге
+      жазады, бұл функция тек оқиды/жүктейді — жіп қауіпсіздігі үшін)."""
+    question_rows = []
+    newly_fetched = {}
+    newly_fetched_lock = threading.Lock()
+    try:
+        themes = juz40_client.get_group_themes(token, group_id, month, week_number)
+        theme = juz40_client.find_theme_by_name_part(themes, "САБАҚ ТАПСЫРУ")
+        if theme is None:
+            return question_rows, [], "no_theme", None
+
+        theme_id = theme["themeId"]
+        with lessons_lock:
+            lessons = lessons_cache.get(theme_id)
+        if lessons is None:
+            lessons = juz40_client.get_theme_lessons(token, theme_id)
+            with lessons_lock:
+                lessons_cache[theme_id] = lessons
+
+        for lesson in lessons:
+            lesson_id = lesson.get("id")
+            progresses = juz40_client.get_lesson_progresses(token, group_id, lesson_id)
+            with ThreadPoolExecutor(max_workers=JUZ40_QUESTION_STUDENT_WORKERS) as executor:
+                futures = [
+                    executor.submit(
+                        _fetch_student_juz40_questions,
+                        token, group_id, lesson_id, curator_name, p,
+                        pdf_cache_snapshot, newly_fetched, newly_fetched_lock,
+                    )
+                    for p in progresses
+                ]
+                for future in as_completed(futures):
+                    question_rows.extend(future.result())
+    except Juz40Error as e:
+        return question_rows, list(newly_fetched.items()), "error", str(e)
+    return question_rows, list(newly_fetched.items()), "ok", None
+
+
+@app.route("/weeks/<int:week_id>/import/juz40/questions/start", methods=["POST"])
+def import_juz40_questions_start(week_id):
+    """Сұрақ-сұрақ анализ job-ын бастайды — топтар тізімін алады, әрі қарай
+    /questions/step осы тізімді бөлшектеп өңдейді."""
+    conn = get_db()
+    week, stream, program = get_week_context(conn, week_id)
+    if week is None or stream is None or program is None:
+        return jsonify({"ok": False, "error": "Апта табылмады."})
+    if stream["category"] != "sabaq_tapsyru":
+        return jsonify({"ok": False, "error": "Бұл сынақ тек САБАҚ ТАПСЫРУ АНАЛИЗ санатында қолжетімді."})
+
+    try:
+        token = juz40_client.login()
+        course_id = juz40_client.find_course_id(token, program["slug"], stream["code"])
+        if course_id is None:
+            return jsonify({
+                "ok": False,
+                "error": (
+                    f"Juz40-та '{stream['code']}' потогына дәл сәйкес келетін курс табылмады "
+                    "(әлі ашылмаған болуы мүмкін)."
+                ),
+            })
+
+        groups = juz40_client.get_groups(token, course_id)
+
+        import_id = conn.execute(
+            "INSERT INTO imports (week_id, sheet_url, sheet_count, row_count, skipped_count) "
+            "VALUES (?, ?, ?, 0, 0) RETURNING id",
+            (week_id, f"juz40-questions:{course_id}", len(groups)),
+        ).fetchone()["id"]
+
+        pending = [
+            {
+                "id": g.get("id"),
+                "curator": (
+                    ((g.get("curator") or {}).get("firstname") or "").strip() or (g.get("name") or "")
+                ),
+                "attempts": 0,
+            }
+            for g in groups
+        ]
+        job_id = conn.execute(
+            "INSERT INTO juz40_question_jobs "
+            "(week_id, import_id, course_id, month_number, week_number, total_groups, pending_json, status) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, 'running') RETURNING id",
+            (
+                week_id, import_id, course_id, week["month_number"], week["week_number"],
+                len(groups), json.dumps(pending),
+            ),
+        ).fetchone()["id"]
+        conn.commit()
+
+        return jsonify({"ok": True, "job_id": job_id, "total": len(groups)})
+    except Juz40Error as e:
+        conn.rollback()
+        return jsonify({"ok": False, "error": f"Juz40 синхрондауы сәтсіз аяқталды: {e}"})
+
+
+@app.route("/weeks/<int:week_id>/import/juz40/questions/step", methods=["POST"])
+def import_juz40_questions_step(week_id):
+    """Job-тың келесі шағын бөлігін (әдепкі 2 топ) өңдейді. Топ саны аз,
+    себебі әр топтың ІШІНДЕ де әр оқушыға жеке сұраныс жасалады (~40
+    оқушы/топ) — сол себепті бір қадам да айтарлықтай жұмыс жасайды."""
+    conn = get_db()
+    body = request.get_json(silent=True) or {}
+    job_id = body.get("job_id")
+    if not job_id:
+        return jsonify({"ok": False, "error": "job_id жоқ."})
+
+    job = conn.execute(
+        "SELECT * FROM juz40_question_jobs WHERE id = ? AND week_id = ?", (job_id, week_id)
+    ).fetchone()
+    if job is None:
+        return jsonify({"ok": False, "error": "Job табылмады."})
+
+    def _job_progress(done):
+        return jsonify({
+            "ok": True, "done": done,
+            "processed": job["processed_count"], "total": job["total_groups"] or 0,
+            "inserted": job["inserted_count"], "failed": job["failed_count"],
+            "groups_left": len(json.loads(job["pending_json"] or "[]")),
+        })
+
+    if job["status"] != "running":
+        return _job_progress(True)
+
+    pending = json.loads(job["pending_json"] or "[]")
+    if not pending:
+        conn.execute("UPDATE juz40_question_jobs SET status = 'done' WHERE id = ?", (job_id,))
+        conn.commit()
+        return _job_progress(True)
+
+    chunk = pending[:JUZ40_QUESTION_CHUNK_SIZE]
+    remaining = pending[JUZ40_QUESTION_CHUNK_SIZE:]
+
+    try:
+        token = juz40_client.login()
+    except Juz40Error as e:
+        conn.execute(
+            "UPDATE juz40_question_jobs SET status = 'error', error = ? WHERE id = ?", (str(e), job_id)
+        )
+        conn.commit()
+        return jsonify({"ok": False, "error": f"Juz40 логині сәтсіз аяқталды: {e}"})
+
+    pdf_cache_snapshot = {
+        row["pdf_url"]: json.loads(row["questions_json"])
+        for row in conn.execute("SELECT pdf_url, questions_json FROM juz40_pdf_cache").fetchall()
+    }
+
+    lessons_cache = {}
+    lessons_lock = threading.Lock()
+    inserted_now = 0
+    processed_now = 0
+    failed_now = 0
+    retry_later = []
+    all_new_pdfs = {}
+
+    with ThreadPoolExecutor(max_workers=JUZ40_IMPORT_WORKERS) as executor:
+        future_map = {
+            executor.submit(
+                _fetch_group_juz40_questions,
+                token, g["id"], g["curator"], job["month_number"], job["week_number"],
+                lessons_cache, lessons_lock, pdf_cache_snapshot,
+            ): g
+            for g in chunk
+        }
+        for future in as_completed(future_map):
+            g = future_map[future]
+            question_rows, newly_fetched, status, err = future.result()
+            if status in ("ok", "no_theme"):
+                for pdf_url, questions in newly_fetched:
+                    all_new_pdfs.setdefault(pdf_url, questions)
+                for curator_name, student, variant, q_index, q_text, score in question_rows:
+                    conn.execute(
+                        "INSERT INTO juz40_question_results "
+                        "(week_id, import_id, curator, student, variant, question_index, question_text, score) "
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                        (
+                            week_id, job["import_id"], curator_name, student, variant,
+                            q_index, q_text, score,
+                        ),
+                    )
+                    inserted_now += 1
+                processed_now += 1
+            else:
+                g["attempts"] = g.get("attempts", 0) + 1
+                if g["attempts"] < JUZ40_MAX_QUESTION_GROUP_ATTEMPTS:
+                    retry_later.append(g)
+                else:
+                    failed_now += 1
+                    processed_now += 1
+
+    for pdf_url, questions in all_new_pdfs.items():
+        try:
+            conn.execute(
+                "INSERT INTO juz40_pdf_cache (pdf_url, questions_json) VALUES (?, ?)",
+                (pdf_url, json.dumps(questions)),
+            )
+        except Exception:
+            pass
+
+    new_pending = remaining + retry_later
+    new_processed = job["processed_count"] + processed_now
+    new_inserted = job["inserted_count"] + inserted_now
+    new_failed = job["failed_count"] + failed_now
+    done = not new_pending
+
+    conn.execute(
+        "UPDATE juz40_question_jobs SET pending_json = ?, processed_count = ?, inserted_count = ?, "
+        "failed_count = ?, status = ? WHERE id = ?",
+        (
+            json.dumps(new_pending), new_processed, new_inserted, new_failed,
+            "done" if done else "running", job_id,
+        ),
+    )
+    if done:
+        conn.execute("UPDATE imports SET row_count = ? WHERE id = ?", (new_inserted, job["import_id"]))
+    conn.commit()
+
+    return jsonify({
+        "ok": True, "done": done, "processed": new_processed, "total": job["total_groups"] or 0,
+        "inserted": new_inserted, "failed": new_failed, "groups_left": len(new_pending),
     })
 
 
