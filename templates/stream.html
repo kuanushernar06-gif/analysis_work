@@ -20,7 +20,7 @@
       <div class="nav-card-title">{{ item.week['title'] }}</div>
       <div class="pill-row">
         <span class="pill {{ 'pill-good' if item.result_count else 'pill-muted' }}">{{ item.result_count }} нәтиже</span>
-        <span class="pill {{ 'pill-good' if item.note_count else 'pill-muted' }}">{{ '✓ Куратор анализі' if item.note_count else 'Анализ жоқ' }}</span>
+        <span class="pill {{ 'pill-good' if item.note_count else 'pill-muted' }}">{{ '✓ ' ~ analysis_label if item.note_count else 'Анализ жоқ' }}</span>
       </div>
     </a>
     {% endfor %}

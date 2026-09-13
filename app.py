@@ -798,6 +798,8 @@ def stream_detail(stream_id):
     for w in weeks:
         weeks_by_month.setdefault(w["month_number"], []).append(w)
 
+    is_sabaq_tapsyru = stream["category"] == "sabaq_tapsyru"
+
     months = {}
     for w in weeks:
         if is_month_summary_week(w, stream):
@@ -806,16 +808,25 @@ def stream_detail(stream_id):
                 if cw["week_number"] < db.WEEKS_PER_MONTH
             ]
             result_count = sum(result_counts.get(cw["id"], 0) for cw in component_weeks)
-            note_count = 1 if any(cw["curators_doc_url"] for cw in component_weeks) else 0
+            if is_sabaq_tapsyru:
+                note_count = 1 if (w["summary"] or any(cw["summary"] for cw in component_weeks)) else 0
+            else:
+                note_count = 1 if any(cw["curators_doc_url"] for cw in component_weeks) else 0
         else:
             result_count = result_counts.get(w["id"], 0)
-            note_count = 1 if w["curators_doc_url"] else 0
+            if is_sabaq_tapsyru:
+                note_count = 1 if w["summary"] else 0
+            else:
+                note_count = 1 if w["curators_doc_url"] else 0
         months.setdefault(w["month_number"], []).append(
             {"week": w, "result_count": result_count, "note_count": note_count}
         )
     months_sorted = sorted(months.items(), key=lambda item: (item[0] is None, item[0]))
 
-    return render_template("stream.html", stream=stream, program=program, months=months_sorted)
+    return render_template(
+        "stream.html", stream=stream, program=program, months=months_sorted,
+        analysis_label="Сұрақтар анализі" if is_sabaq_tapsyru else "Куратор анализі",
+    )
 
 
 def _teacher_stream_picker_data(conn):
