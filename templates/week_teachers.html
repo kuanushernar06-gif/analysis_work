@@ -71,7 +71,14 @@
         {% if t.weak_students %}
         <ul class="teacher-curators-list">
           {% for s in t.weak_students %}
-          <li>{{ s.student }} — {{ s.curator }} <span class="muted">({{ '%.2f'|format(s.avg_score)|kk_num }})</span></li>
+          <li>
+            {{ s.student }} — {{ s.curator }} <span class="muted">({{ '%.2f'|format(s.avg_score)|kk_num }})</span>
+            {% if s.student_id %}
+            <button type="button" class="wa-btn no-print" data-student-id="{{ s.student_id }}" title="WhatsApp-қа жазу">
+              <span class="wa-btn-label">WhatsApp</span>
+            </button>
+            {% endif %}
+          </li>
           {% endfor %}
         </ul>
         {% else %}
@@ -83,7 +90,14 @@
         {% if t.strong_students %}
         <ul class="teacher-curators-list">
           {% for s in t.strong_students %}
-          <li>{{ s.student }} — {{ s.curator }} <span class="muted">({{ '%.2f'|format(s.avg_score)|kk_num }})</span></li>
+          <li>
+            {{ s.student }} — {{ s.curator }} <span class="muted">({{ '%.2f'|format(s.avg_score)|kk_num }})</span>
+            {% if s.student_id %}
+            <button type="button" class="wa-btn no-print" data-student-id="{{ s.student_id }}" title="WhatsApp-қа жазу">
+              <span class="wa-btn-label">WhatsApp</span>
+            </button>
+            {% endif %}
+          </li>
           {% endfor %}
         </ul>
         {% else %}
@@ -99,4 +113,58 @@
 </div>
 {% endif %}
 
+{% endblock %}
+
+{% block scripts %}
+<style>
+  .wa-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: 8px;
+    padding: 2px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--good);
+    background: var(--good-bg);
+    color: var(--good);
+    font-size: 0.75rem;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .wa-btn:hover { opacity: 0.85; }
+  .wa-btn:disabled { opacity: 0.6; cursor: default; }
+</style>
+<script>
+  (function () {
+    document.querySelectorAll(".wa-btn").forEach(function (btn) {
+      btn.addEventListener("click", async function () {
+        var studentId = btn.getAttribute("data-student-id");
+        var label = btn.querySelector(".wa-btn-label");
+        var originalText = label.textContent;
+        btn.disabled = true;
+        label.textContent = "...";
+        try {
+          var resp = await fetch("/students/" + studentId + "/contact");
+          var data = await resp.json();
+          if (!data.ok) {
+            alert("Қате: " + (data.error || "белгісіз қате"));
+            return;
+          }
+          var phone = data.phone || data.parent_phone;
+          if (!phone) {
+            alert("Бұл оқушының телефон нөмірі Juz40-та табылмады.");
+            return;
+          }
+          var digits = phone.replace(/[^0-9]/g, "");
+          window.open("https://wa.me/" + digits, "_blank");
+        } catch (e) {
+          alert("Желі қатесі: " + e);
+        } finally {
+          btn.disabled = false;
+          label.textContent = originalText;
+        }
+      });
+    });
+  })();
+</script>
 {% endblock %}

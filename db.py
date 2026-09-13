@@ -142,6 +142,7 @@ CREATE TABLE IF NOT EXISTS results (
     import_id INTEGER REFERENCES imports(id) ON DELETE SET NULL,
     curator TEXT,
     student TEXT,
+    student_id TEXT,
     subject TEXT,
     topic TEXT,
     score REAL,
@@ -149,6 +150,14 @@ CREATE TABLE IF NOT EXISTS results (
     excuse_note TEXT,
     excused INTEGER DEFAULT 0,
     created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS juz40_student_contacts (
+    student_id TEXT PRIMARY KEY,
+    phone TEXT,
+    parent_phone TEXT,
+    parent_name TEXT,
+    fetched_at TIMESTAMPTZ DEFAULT now()
 );
 
 CREATE TABLE IF NOT EXISTS curator_notes (
@@ -336,6 +345,7 @@ CREATE TABLE IF NOT EXISTS results (
     import_id INTEGER REFERENCES imports(id) ON DELETE SET NULL,
     curator TEXT,
     student TEXT,
+    student_id TEXT,
     subject TEXT,
     topic TEXT,
     score REAL,
@@ -343,6 +353,14 @@ CREATE TABLE IF NOT EXISTS results (
     excuse_note TEXT,
     excused INTEGER DEFAULT 0,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS juz40_student_contacts (
+    student_id TEXT PRIMARY KEY,
+    phone TEXT,
+    parent_phone TEXT,
+    parent_name TEXT,
+    fetched_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS curator_notes (
@@ -626,6 +644,9 @@ def _migrate(conn):
         conn.commit()
     if not _column_exists(conn, "results", "excused"):
         conn.execute("ALTER TABLE results ADD COLUMN excused INTEGER DEFAULT 0")
+        conn.commit()
+    if not _column_exists(conn, "results", "student_id"):
+        conn.execute("ALTER TABLE results ADD COLUMN student_id TEXT")
         conn.commit()
 
 

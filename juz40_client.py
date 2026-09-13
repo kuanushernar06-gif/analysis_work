@@ -232,6 +232,14 @@ def get_oral_student_progress(token, group_id, lesson_id, student_id):
     )
 
 
+def get_user_profile(token, user_id):
+    """Оқушының (немесе кез келген қолданушының) толық профилін қайтарады
+    — phoneNumber (оқушының өз нөмірі), parentPhoneNumber/parentFirstname/
+    parentLastname (ата-ана) осында бар. headteacher-деңгейлі токенмен
+    де қолжетімді (жеке 'админ' рұқсаты керек емес)."""
+    return _call(f"{API_BASE}/v1/users/{user_id}", token=token)
+
+
 def download_material(url):
     # URL-дегі кириллица/бос орын секілді таңбалар urllib-тің шикі
     # (ASCII) HTTP сұранысына сыймайды — percent-encode қажет. safe=":/?&=%"

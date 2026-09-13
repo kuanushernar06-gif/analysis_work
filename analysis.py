@@ -757,7 +757,7 @@ def compute_teacher_stats_for_week(conn, week_id, combine_week_ids=None):
     week_ids = combine_week_ids if combine_week_ids else [week_id]
     placeholders = ",".join("?" * len(week_ids))
     rows = conn.execute(
-        f"SELECT curator, student, score FROM results WHERE week_id IN ({placeholders}) "
+        f"SELECT curator, student, student_id, score FROM results WHERE week_id IN ({placeholders}) "
         "AND score IS NOT NULL AND curator IS NOT NULL AND curator != ''",
         week_ids,
     ).fetchall()
@@ -768,7 +768,7 @@ def compute_teacher_stats_for_week(conn, week_id, combine_week_ids=None):
         cname = r["curator"].strip()
         score = float(r["score"])
         curator_scores.setdefault(cname, []).append(score)
-        curator_student_rows.setdefault(cname, []).append((r["student"], score))
+        curator_student_rows.setdefault(cname, []).append((r["student"], r["student_id"], score))
     curator_avg = {name: sum(vals) / len(vals) for name, vals in curator_scores.items() if vals}
 
     teacher_rows = conn.execute(
@@ -797,19 +797,27 @@ def compute_teacher_stats_for_week(conn, week_id, combine_week_ids=None):
 
         student_scores = {}
         student_curator = {}
+        student_id_by_name = {}
         for actual_name in used_curators:
-            for student_raw, score in curator_student_rows.get(actual_name, []):
+            for student_raw, student_id, score in curator_student_rows.get(actual_name, []):
                 student = (student_raw or "").strip()
                 if not student:
                     continue
                 student_scores.setdefault(student, []).append(score)
                 student_curator.setdefault(student, actual_name)
+                if student_id and student not in student_id_by_name:
+                    student_id_by_name[student] = student_id
 
         weak_students = []
         strong_students = []
         for student, scores in student_scores.items():
             avg = sum(scores) / len(scores)
-            entry = {"student": student, "curator": student_curator[student], "avg_score": round(avg, 2)}
+            entry = {
+                "student": student,
+                "curator": student_curator[student],
+                "avg_score": round(avg, 2),
+                "student_id": student_id_by_name.get(student),
+            }
             if avg <= WEAK_STUDENT_MAX_SCORE:
                 weak_students.append(entry)
             elif avg >= strong_min_score:

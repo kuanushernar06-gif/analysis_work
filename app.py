@@ -1641,6 +1641,48 @@ def _fetch_juz40_zero_score_excuse(token, group_id, lesson_id, student_id):
     return "; ".join(comments) if comments else None
 
 
+def _get_or_fetch_student_contact(conn, student_id):
+    """Оқушының телефон/ата-ана нөмірін DB-де кэштейді — Juz40-тан тек БІР
+    РЕТ (алғаш сұралғанда) алады, содан кейінгі шақырулар кэштен оқиды.
+    /v1/users/{id} headteacher токенімен де қолжетімді (жеке админ
+    рұқсаты керек емес)."""
+    row = conn.execute(
+        "SELECT phone, parent_phone, parent_name FROM juz40_student_contacts WHERE student_id = ?",
+        (student_id,),
+    ).fetchone()
+    if row is not None:
+        return dict(row)
+
+    token = juz40_client.login()
+    profile = juz40_client.get_user_profile(token, student_id)
+    phone = profile.get("phoneNumber")
+    parent_phone = profile.get("parentPhoneNumber")
+    parent_name = (
+        f"{(profile.get('parentFirstname') or '').strip()} {(profile.get('parentLastname') or '').strip()}"
+    ).strip() or None
+
+    conn.execute(
+        "INSERT INTO juz40_student_contacts (student_id, phone, parent_phone, parent_name) "
+        "VALUES (?, ?, ?, ?)",
+        (student_id, phone, parent_phone, parent_name),
+    )
+    conn.commit()
+    return {"phone": phone, "parent_phone": parent_phone, "parent_name": parent_name}
+
+
+@app.route("/students/<student_id>/contact", methods=["GET"])
+def get_student_contact(student_id):
+    """Оқушының WhatsApp үшін телефон/ата-ана нөмірін қайтарады — тек
+    осы оқушыны нақты сұрағанда ғана Juz40-қа сұраныс жасайды (барлық
+    нашар/мықты оқушыны бірден жүктемей, батырма басылғанда ғана)."""
+    conn = get_db()
+    try:
+        contact = _get_or_fetch_student_contact(conn, student_id)
+    except Juz40Error as e:
+        return jsonify({"ok": False, "error": str(e)})
+    return jsonify({"ok": True, **contact})
+
+
 def _fetch_group_juz40_results(
     token, group_id, curator_name, month, week_number, default_max_score, lessons_cache, lessons_lock
 ):
@@ -1686,17 +1728,16 @@ def _fetch_group_juz40_results(
                 # сайттың СТ үшін бекітілген максимум баллы бағдарламаға
                 # қарамастан ӘРҚАШАН default_max_score (SMART=15, JUNIOR=10)
                 # — Juz40-тың ішкі мәнін елемейміз.
+                student_id = p.get("studentId")
                 excuse_note = None
                 excused = 0
-                if float(score) == 0:
-                    student_id = p.get("studentId")
-                    if student_id:
-                        excuse_note = _fetch_juz40_zero_score_excuse(
-                            token, group_id, lesson_id, student_id
-                        )
-                        if excuse_note and _is_valid_absence_excuse(excuse_note):
-                            excused = 1
-                rows.append((curator_name, student, score, default_max_score, excuse_note, excused))
+                if float(score) == 0 and student_id:
+                    excuse_note = _fetch_juz40_zero_score_excuse(
+                        token, group_id, lesson_id, student_id
+                    )
+                    if excuse_note and _is_valid_absence_excuse(excuse_note):
+                        excused = 1
+                rows.append((curator_name, student, student_id, score, default_max_score, excuse_note, excused))
     except Juz40Error as e:
         return rows, "error", str(e)
     return rows, "ok", None
@@ -1910,14 +1951,14 @@ def import_juz40_step(week_id):
             g = future_map[future]
             rows, status, err = future.result()
             if status == "ok":
-                for curator_name, student, score, max_score, excuse_note, excused in rows:
+                for curator_name, student, student_id, score, max_score, excuse_note, excused in rows:
                     conn.execute(
                         "INSERT INTO results "
-                        "(week_id, import_id, curator, student, subject, topic, score, max_score, "
+                        "(week_id, import_id, curator, student, student_id, subject, topic, score, max_score, "
                         " excuse_note, excused) "
-                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                         (
-                            week_id, job["import_id"], curator_name, student, "Сабақ тапсыру",
+                            week_id, job["import_id"], curator_name, student, student_id, "Сабақ тапсыру",
                             None, score, max_score, excuse_note, excused,
                         ),
                     )
