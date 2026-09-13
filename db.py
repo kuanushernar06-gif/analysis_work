@@ -539,15 +539,36 @@ def get_connection():
     return _get_sqlite_connection()
 
 
-def _column_exists(conn, table, column):
+_MIGRATE_TABLES = (
+    "weeks", "imports", "programs", "teachers", "streams", "ls_imports", "results",
+)
+
+
+def _load_existing_columns(conn):
+    """_migrate() тексеретін барлық кестенің бағандарын БІР сұранысымен
+    алдын ала жүктейді — 25 бөлек _column_exists тексерісінің әрқайсысы
+    өз алдына дерекқорға бармас үшін. Бұл әр cold start сайын (әсіресе
+    Neon 'ұйқыдан ояну' кідірісімен қосылғанда) қажетсіз кідіріс тудырған
+    еді, себебі осы бағандардың бәрі бұрыннан бар — тексеріс әрдайым
+    'бар' деп қайтарады, бірақ соған дейін дерекқорға барып қайту керек
+    болатын."""
     if getattr(conn, "backend", None) == "postgres":
-        row = conn.execute(
-            "SELECT column_name FROM information_schema.columns WHERE table_name = ? AND column_name = ?",
-            (table, column),
-        ).fetchone()
-        return row is not None
-    row = conn.execute(f"PRAGMA table_info({table})").fetchall()
-    return any(r["name"] == column for r in row)
+        placeholders = ",".join("?" * len(_MIGRATE_TABLES))
+        rows = conn.execute(
+            f"SELECT table_name, column_name FROM information_schema.columns "
+            f"WHERE table_name IN ({placeholders})",
+            list(_MIGRATE_TABLES),
+        ).fetchall()
+        return {(r["table_name"], r["column_name"]) for r in rows}
+    existing = set()
+    for table in _MIGRATE_TABLES:
+        for r in conn.execute(f"PRAGMA table_info({table})").fetchall():
+            existing.add((table, r["name"]))
+    return existing
+
+
+def _column_exists(existing_columns, table, column):
+    return (table, column) in existing_columns
 
 
 def _migrate_drop_material_check_tables(conn):
@@ -563,89 +584,90 @@ def _migrate_drop_material_check_tables(conn):
 def _migrate(conn):
     """Осыдан бұрын құрылған дерекқорларда жоқ бағандарды қосады (мыс. streams
     кестесі енгізілгенге дейін жасалған weeks кестесіне stream_id қосу)."""
-    if not _column_exists(conn, "weeks", "stream_id"):
+    existing_columns = _load_existing_columns(conn)
+    if not _column_exists(existing_columns, "weeks", "stream_id"):
         conn.execute(
             "ALTER TABLE weeks ADD COLUMN stream_id INTEGER REFERENCES streams(id) ON DELETE CASCADE"
         )
         conn.commit()
-    if not _column_exists(conn, "weeks", "month_number"):
+    if not _column_exists(existing_columns, "weeks", "month_number"):
         conn.execute("ALTER TABLE weeks ADD COLUMN month_number INTEGER")
         conn.commit()
-    if not _column_exists(conn, "weeks", "week_number"):
+    if not _column_exists(existing_columns, "weeks", "week_number"):
         conn.execute("ALTER TABLE weeks ADD COLUMN week_number INTEGER")
         conn.commit()
     conn.execute("CREATE INDEX IF NOT EXISTS idx_weeks_stream ON weeks(stream_id)")
     conn.commit()
-    if not _column_exists(conn, "weeks", "curators_doc_url"):
+    if not _column_exists(existing_columns, "weeks", "curators_doc_url"):
         conn.execute("ALTER TABLE weeks ADD COLUMN curators_doc_url TEXT")
         conn.commit()
-    if not _column_exists(conn, "weeks", "curators_doc_text"):
+    if not _column_exists(existing_columns, "weeks", "curators_doc_text"):
         conn.execute("ALTER TABLE weeks ADD COLUMN curators_doc_text TEXT")
         conn.commit()
-    if not _column_exists(conn, "weeks", "curators_doc_fetch_error"):
+    if not _column_exists(existing_columns, "weeks", "curators_doc_fetch_error"):
         conn.execute("ALTER TABLE weeks ADD COLUMN curators_doc_fetch_error TEXT")
         conn.commit()
-    if not _column_exists(conn, "weeks", "curators_analysis_json"):
+    if not _column_exists(existing_columns, "weeks", "curators_analysis_json"):
         conn.execute("ALTER TABLE weeks ADD COLUMN curators_analysis_json TEXT")
         conn.commit()
-    if not _column_exists(conn, "weeks", "curators_analysis_error"):
+    if not _column_exists(existing_columns, "weeks", "curators_analysis_error"):
         conn.execute("ALTER TABLE weeks ADD COLUMN curators_analysis_error TEXT")
         conn.commit()
-    if not _column_exists(conn, "imports", "sheet_count"):
+    if not _column_exists(existing_columns, "imports", "sheet_count"):
         conn.execute("ALTER TABLE imports ADD COLUMN sheet_count INTEGER")
         conn.commit()
-    if not _column_exists(conn, "weeks", "gold_threshold"):
+    if not _column_exists(existing_columns, "weeks", "gold_threshold"):
         conn.execute("ALTER TABLE weeks ADD COLUMN gold_threshold REAL")
         conn.commit()
-    if not _column_exists(conn, "weeks", "silver_threshold"):
+    if not _column_exists(existing_columns, "weeks", "silver_threshold"):
         conn.execute("ALTER TABLE weeks ADD COLUMN silver_threshold REAL")
         conn.commit()
-    if not _column_exists(conn, "imports", "target_score"):
+    if not _column_exists(existing_columns, "imports", "target_score"):
         conn.execute("ALTER TABLE imports ADD COLUMN target_score REAL")
         conn.commit()
-    if not _column_exists(conn, "weeks", "target_score"):
+    if not _column_exists(existing_columns, "weeks", "target_score"):
         conn.execute("ALTER TABLE weeks ADD COLUMN target_score REAL")
         conn.commit()
-    if not _column_exists(conn, "weeks", "plan_text"):
+    if not _column_exists(existing_columns, "weeks", "plan_text"):
         conn.execute("ALTER TABLE weeks ADD COLUMN plan_text TEXT")
         conn.commit()
-    if not _column_exists(conn, "programs", "plan_doc_url"):
+    if not _column_exists(existing_columns, "programs", "plan_doc_url"):
         conn.execute("ALTER TABLE programs ADD COLUMN plan_doc_url TEXT")
         conn.commit()
-    if not _column_exists(conn, "programs", "plan_doc_fetch_error"):
+    if not _column_exists(existing_columns, "programs", "plan_doc_fetch_error"):
         conn.execute("ALTER TABLE programs ADD COLUMN plan_doc_fetch_error TEXT")
         conn.commit()
-    if not _column_exists(conn, "teachers", "stream_id"):
+    if not _column_exists(existing_columns, "teachers", "stream_id"):
         conn.execute("ALTER TABLE teachers ADD COLUMN stream_id INTEGER REFERENCES streams(id)")
         conn.commit()
-    if not _column_exists(conn, "programs", "material_plan_url"):
+    if not _column_exists(existing_columns, "programs", "material_plan_url"):
         conn.execute("ALTER TABLE programs ADD COLUMN material_plan_url TEXT")
         conn.commit()
-    if not _column_exists(conn, "programs", "material_plan_text"):
+    if not _column_exists(existing_columns, "programs", "material_plan_text"):
         conn.execute("ALTER TABLE programs ADD COLUMN material_plan_text TEXT")
         conn.commit()
-    if not _column_exists(conn, "programs", "material_plan_fetch_error"):
+    if not _column_exists(existing_columns, "programs", "material_plan_fetch_error"):
         conn.execute("ALTER TABLE programs ADD COLUMN material_plan_fetch_error TEXT")
         conn.commit()
     _migrate_drop_material_check_tables(conn)
-    if not _column_exists(conn, "streams", "category"):
+    if not _column_exists(existing_columns, "streams", "category"):
         _migrate_stream_categories(conn)
     _migrate_stream_code_rename(conn)
     _migrate_month_summary_titles(conn)
     _migrate_program_score_defaults(conn)
     _migrate_aylyq_test_monthly(conn)
-    if not _column_exists(conn, "ls_imports", "program"):
+    if not _column_exists(existing_columns, "ls_imports", "program"):
         conn.execute("ALTER TABLE ls_imports ADD COLUMN program TEXT")
         conn.commit()
     conn.execute("UPDATE ls_imports SET program = 'smart' WHERE program IS NULL")
     conn.commit()
-    if not _column_exists(conn, "results", "excuse_note"):
+    if not _column_exists(existing_columns, "results", "excuse_note"):
         conn.execute("ALTER TABLE results ADD COLUMN excuse_note TEXT")
         conn.commit()
-    if not _column_exists(conn, "results", "excused"):
+    if not _column_exists(existing_columns, "results", "excused"):
         conn.execute("ALTER TABLE results ADD COLUMN excused INTEGER DEFAULT 0")
         conn.commit()
-    if not _column_exists(conn, "results", "student_id"):
+    if not _column_exists(existing_columns, "results", "student_id"):
         conn.execute("ALTER TABLE results ADD COLUMN student_id TEXT")
         conn.commit()
 
