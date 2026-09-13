@@ -520,9 +520,56 @@ def generate_question_analysis(question_stats) -> str:
     if not question_stats:
         raise CuratorAnalysisError("Алдымен «Сұрақтар анализін синхрондау» батырмасын басыңыз — деректер жоқ.")
 
-    stats_text = "Ең көп қате кеткен сұрақтар (әр сұрақ бөлек нұсқада, пайыз тек сол нұсқаны тапсырған оқушыларға қатысты):\n" + _format_question_stats(question_stats)
+    avg_wrong = round(sum(q["wrong_percent"] for q in question_stats) / len(question_stats), 1)
+    stats_text = (
+        f"Осы {len(question_stats)} сұрақ бойынша ЖАЛПЫ орташа қате пайызы: {avg_wrong}%.\n\n"
+        "Ең көп қате кеткен сұрақтар (әр сұрақ бөлек нұсқада, пайыз тек сол нұсқаны тапсырған "
+        "оқушыларға қатысты):\n" + _format_question_stats(question_stats)
+    )
     prompt = RESULTS_PROMPT_TEMPLATE.format(label="СТ сұрақ-сұрақ", stats_section=stats_text)
+    prompt += (
+        "\nБірінші сөйлемде осы сұрақтар бойынша ЖАЛПЫ орташа қате пайызын (жоғарыда берілген) "
+        "нақты санмен міндетті түрде айт."
+    )
     return _call_gemini_text(prompt, api_key)
+
+
+def build_question_summary_text(report, prior_year, analysis_text) -> str:
+    """СТ (sabaq_tapsyru) аптасының 'Жалпы қорытындысы' — есеп бетінің
+    жоғарғы тайлдарымен ДӘЛ бірдей сандарды (ортақ балл, мақсат орындалу,
+    өткен жылмен салыстыру, макс/0 балл алғандар) мәтін түрінде қайталап,
+    астына AI сұрақ-анализін қосады."""
+    lines = []
+    if report and report.get("has_data"):
+        max_score = report.get("ref_max_score")
+        score_part = f" / {int(max_score)} балл" if max_score else " балл"
+        lines.append(f"Ортақ балл: {_kk_num(report.get('overall_avg_score'))}{score_part}")
+
+        target_pct = report.get("target_achievement_percent")
+        lines.append(f"Мақсат орындалу пайызы: {_kk_num(target_pct)}%" if target_pct is not None else "Мақсат орындалу пайызы: —")
+
+        prior = (prior_year or {}).get("sabaq_tapsyru")
+        if prior and prior.get("avg_score") is not None:
+            delta = prior.get("delta")
+            if delta:
+                sign = "+" if delta["delta"] > 0 else ""
+                lines.append(
+                    f"Өткен жылмен салыстыру: {sign}{_kk_num(delta['delta'])} балл "
+                    f"(өткен жыл {prior.get('academic_year')}: {_kk_num(prior.get('avg_score'))} балл)"
+                )
+            else:
+                lines.append(f"Өткен жылмен салыстыру: өткен жыл {prior.get('academic_year')}: {_kk_num(prior.get('avg_score'))} балл")
+        else:
+            lines.append("Өткен жылмен салыстыру: деректер жоқ")
+
+        lines.append(f"Макс балл жинаған оқушылар: {report.get('max_achiever_students')}")
+        lines.append(f"0 балл жинаған оқушылар: {report.get('zero_students')}")
+        lines.append("")
+
+    lines.append("Анализ:")
+    lines.append("")
+    lines.append(analysis_text or "—")
+    return "\n".join(lines)
 
 
 def build_baiqau_summary_text(

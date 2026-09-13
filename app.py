@@ -61,6 +61,7 @@ from curator_analysis import (
     generate_question_analysis,
     build_summary_text,
     build_baiqau_summary_text,
+    build_question_summary_text,
     merge_analyses,
     CuratorAnalysisError,
 )
@@ -1450,7 +1451,9 @@ def generate_results_summary(week_id):
 def generate_question_summary(week_id):
     """СТ (sabaq_tapsyru) апталарының 'Жалпы қорытындысы' — куратор
     жазбасына емес, Juz40-тан синхрондалған сұрақ-сұрақ статистикасына
-    (compute_question_stats) негізделеді."""
+    (compute_question_stats) негізделеді. Мәтіннің басына есеп бетінің
+    жоғарғы тайлдарымен бірдей сандарды (ортақ балл, мақсат орындалу,
+    өткен жылмен салыстыру, макс/0 балл алғандар) қосады."""
     conn = get_db()
     week, stream, _program = get_week_context(conn, week_id)
     if week is None or stream is None:
@@ -1464,7 +1467,18 @@ def generate_question_summary(week_id):
         flash(f"Қорытынды анализ жасау сәтсіз аяқталды: {e}", "error")
         return redirect(url_for("week_report", week_id=week_id))
 
-    conn.execute("UPDATE weeks SET summary = ? WHERE id = ?", (analysis_text, week_id))
+    report = compute_report(conn, week_id)
+    prior_year = None
+    if week["month_number"] is not None:
+        prior_year = get_prior_year_comparison(conn, stream["category"], stream["code"], week["month_number"])
+        if prior_year:
+            current_score = report.get("overall_avg_score") if report and report.get("has_data") else None
+            for entry in prior_year.values():
+                entry["delta"] = _delta(current_score, entry["avg_score"])
+
+    summary_text = build_question_summary_text(report, prior_year, analysis_text)
+
+    conn.execute("UPDATE weeks SET summary = ? WHERE id = ?", (summary_text, week_id))
     conn.commit()
     flash("Жалпы қорытынды AI арқылы жасалды.", "ok")
     return redirect(url_for("week_report", week_id=week_id))
