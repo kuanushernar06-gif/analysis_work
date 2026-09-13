@@ -1715,7 +1715,6 @@ JUZ40_STEP_CHUNK_SIZE = 6
 JUZ40_MAX_GROUP_ATTEMPTS = 3
 
 
-@app.route("/weeks/<int:week_id>/import/juz40/start", methods=["POST"])
 def _sync_teachers_from_juz40_groups(conn, stream_id, groups):
     """Juz40-тың топ тізімінде әр топтың нақты мұғалімі (practicalLessonTeachers)
     көрсетілген — Juz40-тың өз "Каталог" бетіндегі дәл сол тағайындау. Осыны
@@ -1780,6 +1779,7 @@ def _sync_teachers_from_juz40_groups(conn, stream_id, groups):
     conn.commit()
 
 
+@app.route("/weeks/<int:week_id>/import/juz40/start", methods=["POST"])
 def import_juz40_start(week_id):
     """Juz40 синхрондау job-ын БАСТАЙДЫ: логин, курс іздеу, топтар тізімін
     алып, juz40_sync_jobs жазбасын құрады. Нақты нәтижелерді бұл әлі
