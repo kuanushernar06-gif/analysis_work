@@ -1157,30 +1157,35 @@ def compute_question_stats(conn, week_id, limit=20, min_attempts=3):
     Куратор/себеп анализіне қатысы жоқ — тек сұрақ мәтіні мен балл негізінде.
 
     min_attempts — тым аз оқушы тапсырған (кездейсоқ) сұрақтың есепке
-    кірмеуі үшін төменгі шек."""
+    кірмеуі үшін төменгі шек.
+
+    Есептеу (COUNT/SUM) осында, Python-да емес, SQL-де GROUP BY арқылы
+    жасалады — бір аптада 50 мыңнан астам жол болуы мүмкін (әр оқушы ×
+    әр сұрақ), соны түгел Python жадына тасымалдау есеп бетін
+    баяулататын еді."""
     rows = conn.execute(
-        "SELECT question_text, score FROM juz40_question_results "
-        "WHERE week_id = ? AND question_text IS NOT NULL",
-        (week_id,),
+        "SELECT question_text, COUNT(*) AS total, "
+        "SUM(CASE WHEN score <= 0 THEN 1 ELSE 0 END) AS wrong "
+        "FROM juz40_question_results "
+        "WHERE week_id = ? AND question_text IS NOT NULL AND score IS NOT NULL "
+        "GROUP BY question_text "
+        "HAVING COUNT(*) >= ?",
+        (week_id, min_attempts),
     ).fetchall()
 
-    stats = {}
+    result = []
     for r in rows:
         text = (r["question_text"] or "").strip()
-        if not text or r["score"] is None:
+        if not text:
             continue
-        score = float(r["score"])
-        entry = stats.setdefault(text, {"question": text, "total": 0, "wrong": 0})
-        entry["total"] += 1
-        if score <= 0:
-            entry["wrong"] += 1
-
-    result = []
-    for entry in stats.values():
-        if entry["total"] < min_attempts:
-            continue
-        entry["wrong_percent"] = round(entry["wrong"] / entry["total"] * 100, 1)
-        result.append(entry)
+        total = r["total"]
+        wrong = r["wrong"] or 0
+        result.append({
+            "question": text,
+            "total": total,
+            "wrong": wrong,
+            "wrong_percent": round(wrong / total * 100, 1),
+        })
 
     result.sort(key=lambda e: e["wrong_percent"], reverse=True)
     return result[:limit]
