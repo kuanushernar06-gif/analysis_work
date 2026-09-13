@@ -232,7 +232,7 @@
 </div>
 {% endif %}
 
-{% if not is_month_summary and stream and stream['category'] == 'sabaq_tapsyru' %}
+{% if not is_month_summary and stream and stream['category'] in ('sabaq_tapsyru', 'aylyq_test') %}
 <style>
   .qstat-list { display: flex; flex-direction: column; gap: 2px; margin-top: 12px; }
   .qstat-row {
@@ -295,7 +295,8 @@
   <p class="muted">
     Әзірге сұрақ-сұрақ деректері жоқ.
     <a href="{{ url_for('week_import', week_id=week['id']) }}">Кестені импорттау бетінде</a>
-    «Сұрақтар анализін синхрондау» батырмасын басыңыз.
+    {% if stream and stream['category'] == 'aylyq_test' %}«ТАЛДАУ ЖАСАУ»{% else %}«Сұрақтар анализін синхрондау»{% endif %}
+    батырмасын басыңыз.
   </p>
   {% endif %}
 </div>

@@ -213,6 +213,14 @@ def get_theme_lessons(token, theme_id):
     return body or []
 
 
+def get_lesson_detail(token, lesson_id):
+    """QUIZ түрдегі сабақтың толық деректемесін қайтарады — 'questions'
+    өрісінде әр сұрақтың нақты мәтіні (questionText) бар. Бұл лекция
+    бүкіл курс бойынша ортақ (топқа тәуелді емес), сондықтан бір рет
+    қана сұралып, кэштелуі керек."""
+    return _call(f"{API_BASE}/v2/headteacher/lessons/{lesson_id}", token=token)
+
+
 def get_lesson_progresses(token, group_id, lesson_id):
     """Сол сабақ бойынша БАРЛЫҚ оқушының жиынтық үлгерімі (жалпы балл,
     статус, вариант нөмірі)."""

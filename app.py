@@ -1,4 +1,5 @@
 import base64
+import html
 import json
 import os
 import re
@@ -1232,11 +1233,12 @@ def week_report(week_id):
             for entry in prior_year.values():
                 entry["delta"] = _delta(current_score, entry["avg_score"])
 
-    # Juz40 сұрақ-сұрақ анализі (Phase 2) — тек СТ (sabaq_tapsyru) апталық
-    # беттерінде, куратор жазған түсінікке емес, нақты сұрақ мәтініне
-    # негізделген "ең көп қате кеткен сұрақтар" тізімі.
+    # Juz40 сұрақ-сұрақ анализі — СТ (Phase 2, PDF-негізді) және АЙЛЫҚ ТЕСТ
+    # (QUIZ-негізді, ПДФ-сыз) апталық беттерінде, куратор жазған түсінікке
+    # емес, нақты сұрақ мәтініне негізделген "ең көп қате кеткен сұрақтар"
+    # тізімі.
     question_stats = []
-    if not is_summary and stream and stream["category"] == "sabaq_tapsyru":
+    if not is_summary and stream and stream["category"] in ("sabaq_tapsyru", "aylyq_test"):
         question_stats = compute_question_stats(conn, week_id)
 
     return render_template(
@@ -1785,23 +1787,46 @@ def _fetch_group_juz40_results(
 # есептемейміз, тек ағымдағы (версия қосымшасыз атаумен) сабақты аламыз.
 _LESSON_VERSION_SUFFIX_RE = re.compile(r"\s+\d+\.\d+$")
 
+_HTML_BLOCK_BREAK_RE = re.compile(r"</p>|<br\s*/?>|</li>", re.IGNORECASE)
+_HTML_TAG_RE = re.compile(r"<[^>]+>")
+
+
+def _strip_question_html(rich_text):
+    """Juz40 сұрақ мәтінін (questionText) rich-text/HTML күйінде қайтарады
+    (кестелерде картамен жұмыс сұрақтары суретті <figure> ретінде кездеседі)
+    — тегтерді алып, таза, оқылатын мәтін қалдырады."""
+    if not rich_text:
+        return ""
+    text = _HTML_BLOCK_BREAK_RE.sub("\n", rich_text)
+    text = _HTML_TAG_RE.sub("", text)
+    text = html.unescape(text)
+    return re.sub(r"\n{2,}", "\n", text).strip()
+
 
 def _fetch_group_juz40_aylyq_results(
-    token, group_id, curator_name, month, default_max_score, lessons_cache, lessons_lock
+    token, group_id, curator_name, month, default_max_score,
+    lessons_cache, lessons_lock, questions_cache,
 ):
-    """Бір топ үшін Juz40-тан осы айдың АЙЛЫҚ ТЕСТ балын алады. Тақырып
-    әрқашан Juz40-тың 4-аптасында (db.WEEKS_PER_MONTH) орналасады — біздің
-    өз апта нөміріміз (aylyq_test санатында әрқашан 1) емес.
+    """Бір топ үшін Juz40-тан осы айдың АЙЛЫҚ ТЕСТ балын АЛАДЫ, әрі — ПДФ-сыз,
+    себебі QUIZ түрдегі сабақта әр оқушының сұрақ-сұрақ жауабы (score/maxScore)
+    lesson progresses-тің өзінде бар — бірден сол оқушының сұрақ-сұрақ
+    статистикасын да жинайды (question_rows). Тақырып әрқашан Juz40-тың
+    4-аптасында (db.WEEKS_PER_MONTH) орналасады — біздің өз апта нөміріміз
+    (aylyq_test санатында әрқашан 1) емес.
 
     Бір тақырыпта дәл БІР ағымдағы сабақ анықталмаса (мыс. ескі версиясы
     да қалып қойса және екеуін ажырата алмасақ), 'ambiguous' статусымен
-    бос қайтарады — ешқашан қайсысы дұрыс екенін жуықтап болжамаймыз."""
+    бос қайтарады — ешқашан қайсысы дұрыс екенін жуықтап болжамаймыз.
+
+    questions_cache — lessonId -> {questionId: {"text", "index"}}, бүкіл
+    курс бойынша ортақ (get_lesson_detail бір рет қана шақырылады)."""
     rows = []
+    question_rows = []
     try:
         themes = juz40_client.get_group_themes(token, group_id, month, db.WEEKS_PER_MONTH)
         theme = juz40_client.find_theme_by_name_part(themes, "АЙЛЫҚ ТЕСТ")
         if theme is None:
-            return rows, "no_theme", None
+            return rows, question_rows, "no_theme", None
 
         theme_id = theme["themeId"]
         with lessons_lock:
@@ -1815,11 +1840,23 @@ def _fetch_group_juz40_aylyq_results(
             l for l in lessons if not _LESSON_VERSION_SUFFIX_RE.search(l.get("name") or "")
         ]
         if len(current_lessons) != 1:
-            return rows, "ambiguous", (
+            return rows, question_rows, "ambiguous", (
                 f"'{theme.get('themeName')}' тақырыбында {len(lessons)} сабақ табылды, "
                 "қайсысы ағымдағы екені анық емес."
             )
         lesson_id = current_lessons[0].get("id")
+
+        with lessons_lock:
+            question_map = questions_cache.get(lesson_id)
+        if question_map is None:
+            detail = juz40_client.get_lesson_detail(token, lesson_id)
+            question_map = {
+                q["id"]: {"text": _strip_question_html(q.get("questionText")), "index": idx}
+                for idx, q in enumerate((detail or {}).get("questions") or [])
+                if q.get("id")
+            }
+            with lessons_lock:
+                questions_cache[lesson_id] = question_map
 
         progresses = juz40_client.get_lesson_progresses(token, group_id, lesson_id)
         for p in progresses:
@@ -1832,9 +1869,17 @@ def _fetch_group_juz40_aylyq_results(
                 continue
             student_id = p.get("studentId")
             rows.append((curator_name, student, student_id, score, default_max_score, None, 0))
+
+            for qp in p.get("questionPassingDtos") or []:
+                q_info = question_map.get(qp.get("questionId"))
+                if not q_info or not q_info["text"] or qp.get("score") is None:
+                    continue
+                question_rows.append((
+                    curator_name, student, q_info["index"], q_info["text"], qp.get("score"),
+                ))
     except Juz40Error as e:
-        return rows, "error", str(e)
-    return rows, "ok", None
+        return rows, question_rows, "error", str(e)
+    return rows, question_rows, "ok", None
 
 
 # Топтарды бір-бірлеп (реттік) сұраса, 80+ топ бар кезде Vercel-дің
@@ -1928,6 +1973,13 @@ def import_juz40_start(week_id):
             "ok": False,
             "error": "Бұл сынақ тек САБАҚ ТАПСЫРУ АНАЛИЗ немесе АЙЛЫҚ ТЕСТ АНАЛИЗ санатында қолжетімді.",
         })
+
+    if stream["category"] == "aylyq_test":
+        # АЙЛЫҚ ТЕСТ-те сұрақ-сұрақ статистикасы да ОСЫ БІР синхрондаумен
+        # бірге жиналады (СТ-дегідей бөлек батырма емес) — қайта басқанда
+        # оқушылар қосарланып, статистика бұрмаланбас үшін алдын ала тазалаймыз.
+        conn.execute("DELETE FROM juz40_question_results WHERE week_id = ?", (week_id,))
+        conn.commit()
 
     try:
         token = juz40_client.login()
@@ -2031,6 +2083,7 @@ def import_juz40_step(week_id):
         return jsonify({"ok": False, "error": f"Juz40 логині сәтсіз аяқталды: {e}"})
 
     lessons_cache = {}
+    questions_cache = {}
     lessons_lock = threading.Lock()
     inserted_now = 0
     no_theme_now = 0
@@ -2046,7 +2099,7 @@ def import_juz40_step(week_id):
                 executor.submit(
                     _fetch_group_juz40_aylyq_results,
                     token, g["id"], g["curator"], job["month_number"],
-                    job["default_max_score"], lessons_cache, lessons_lock,
+                    job["default_max_score"], lessons_cache, lessons_lock, questions_cache,
                 ): g
                 for g in chunk
             }
@@ -2061,7 +2114,11 @@ def import_juz40_step(week_id):
             }
         for future in as_completed(future_map):
             g = future_map[future]
-            rows, status, err = future.result()
+            if is_aylyq:
+                rows, question_rows, status, err = future.result()
+            else:
+                rows, status, err = future.result()
+                question_rows = []
             if status == "ok":
                 for curator_name, student, student_id, score, max_score, excuse_note, excused in rows:
                     conn.execute(
@@ -2075,6 +2132,15 @@ def import_juz40_step(week_id):
                         ),
                     )
                     inserted_now += 1
+                for curator_name, student, q_index, q_text, q_score in question_rows:
+                    conn.execute(
+                        "INSERT INTO juz40_question_results "
+                        "(week_id, import_id, curator, student, variant, question_index, question_text, score) "
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                        (
+                            week_id, job["import_id"], curator_name, student, None, q_index, q_text, q_score,
+                        ),
+                    )
                 processed_now += 1
             elif status == "no_theme":
                 no_theme_now += 1
