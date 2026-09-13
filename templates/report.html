@@ -233,6 +233,35 @@
 {% endif %}
 
 {% if not is_month_summary and stream and stream['category'] == 'sabaq_tapsyru' %}
+<style>
+  .qstat-list { display: flex; flex-direction: column; gap: 2px; margin-top: 12px; }
+  .qstat-row {
+    display: grid;
+    grid-template-columns: 32px 1fr 84px;
+    gap: 14px;
+    align-items: center;
+    padding: 14px 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  .qstat-row:last-child { border-bottom: none; }
+  .qstat-rank {
+    display: flex; align-items: center; justify-content: center;
+    width: 28px; height: 28px; border-radius: 50%;
+    background: var(--border-strong); color: var(--text-secondary);
+    font-size: 0.78rem; font-weight: 700;
+  }
+  .qstat-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
+  .qstat-question { font-size: 0.92rem; line-height: 1.4; white-space: pre-wrap; }
+  .qstat-bar-track {
+    margin-top: 8px; height: 5px; border-radius: 999px;
+    background: var(--border); overflow: hidden; max-width: 320px;
+  }
+  .qstat-bar-fill { height: 100%; border-radius: 999px; background: var(--critical); }
+  .qstat-percent { text-align: right; font-size: 1.05rem; font-weight: 700; }
+  .qstat-percent-bad { color: var(--critical); }
+  .qstat-percent-gold { color: var(--warning); }
+  .qstat-percent-good { color: var(--good); }
+</style>
 <div class="card">
   <h2>Ең көп қате кеткен сұрақтар</h2>
   <p class="section-intro">
@@ -240,25 +269,27 @@
     жауап берген сұрақтар (куратор түсінігіне емес, нақты сұрақ мәтініне негізделген).
   </p>
   {% if question_stats %}
-  <div class="table-scroll">
-    <table class="table">
-      <thead>
-        <tr>
-          <th>Сұрақ</th>
-          <th>Қате (%)</th>
-          <th>Тапсырған саны</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for q in question_stats %}
-        <tr>
-          <td style="white-space:pre-wrap; max-width:480px">{{ q.question }}</td>
-          <td>{{ q.wrong_percent|kk_num }}%</td>
-          <td>{{ q.total }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+  <div class="qstat-list">
+    {% for q in question_stats %}
+    <div class="qstat-row">
+      <div class="qstat-rank">{{ loop.index }}</div>
+      <div>
+        <div class="qstat-meta">
+          {% if q.variant is not none %}
+          <span class="pill pill-blue">{{ q.variant }}-нұсқа{% if q.question_number %}, {{ q.question_number }}-сұрақ{% endif %}</span>
+          {% endif %}
+          <span class="muted" style="font-size:12px">{{ q.total }} оқушы тапсырды</span>
+        </div>
+        <div class="qstat-question">{{ q.question }}</div>
+        <div class="qstat-bar-track">
+          <div class="qstat-bar-fill" style="width: {{ q.wrong_percent }}%"></div>
+        </div>
+      </div>
+      <div class="qstat-percent {{ 'qstat-percent-bad' if q.wrong_percent >= 70 else ('qstat-percent-gold' if q.wrong_percent >= 40 else 'qstat-percent-good') }}">
+        {{ q.wrong_percent|kk_num }}%
+      </div>
+    </div>
+    {% endfor %}
   </div>
   {% else %}
   <p class="muted">
@@ -268,6 +299,66 @@
   </p>
   {% endif %}
 </div>
+{% endif %}
+
+{% if not is_month_summary and stream and stream['category'] == 'sabaq_tapsyru' %}
+<div class="card" id="summary">
+  <h2>Жалпы қорытынды</h2>
+  <p class="muted">
+    Бұл қорытындыны жоғарыдағы сұрақ-сұрақ статистикасы негізінде AI толық өзі жазады
+    (куратор жазбасы емес, нақты сұрақ мәтіні мен қате пайызы негізінде).
+  </p>
+  {% if question_stats %}
+  <form method="post" action="{{ url_for('generate_question_summary', week_id=week['id']) }}" class="no-print">
+    <button type="submit" class="btn btn-outline btn-small">
+      {% if week['summary'] %}Қорытындыны қайта жасау{% else %}Қорытынды анализ шығару{% endif %}
+    </button>
+  </form>
+  {% else %}
+  <p class="muted">
+    Алдымен <a href="{{ url_for('week_import', week_id=week['id']) }}">Кестені импорттау</a>
+    бетінде «Сұрақтар анализін синхрондау» батырмасын басыңыз.
+  </p>
+  {% endif %}
+  {% if week['summary'] %}
+  <div id="summary-view">
+    <div class="summary-display">{{ week['summary'] | summary_html }}</div>
+    <div class="import-submit-row no-print" style="margin-top:10px">
+      <button type="button" class="btn btn-danger btn-small" id="summary-delete-btn">Қорытындыны жою</button>
+    </div>
+    <div id="summary-delete-confirm" class="no-print" style="display:none; margin-top:10px">
+      <p class="muted">Жалпы қорытындыны толық өшіру керек пе? Бұл әрекетті қайтару мүмкін емес.</p>
+      <form method="post" action="{{ url_for('delete_summary', week_id=week['id']) }}" style="display:inline">
+        <button type="submit" class="btn btn-danger btn-small">Иә, толық өшіру</button>
+      </form>
+      <button type="button" class="btn btn-outline btn-small" id="summary-delete-cancel">Болдырмау</button>
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+{% if week['summary'] %}
+<script>
+  (function () {
+    const btn = document.getElementById("summary-delete-btn");
+    const confirmArea = document.getElementById("summary-delete-confirm");
+    const cancelBtn = document.getElementById("summary-delete-cancel");
+    if (!btn || !confirmArea) return;
+
+    btn.addEventListener("click", () => {
+      btn.parentElement.style.display = "none";
+      confirmArea.style.display = "block";
+    });
+
+    if (cancelBtn) {
+      cancelBtn.addEventListener("click", () => {
+        confirmArea.style.display = "none";
+        btn.parentElement.style.display = "";
+      });
+    }
+  })();
+</script>
+{% endif %}
 {% endif %}
 
 {% if not (stream and stream['category'] == 'sabaq_tapsyru') %}

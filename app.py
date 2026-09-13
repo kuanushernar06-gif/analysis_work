@@ -58,6 +58,7 @@ from gdocs import (
 from curator_analysis import (
     generate_curator_analysis,
     generate_baiqau_results_analysis,
+    generate_question_analysis,
     build_summary_text,
     build_baiqau_summary_text,
     merge_analyses,
@@ -1440,6 +1441,30 @@ def generate_results_summary(week_id):
     )
 
     conn.execute("UPDATE weeks SET summary = ? WHERE id = ?", (summary_text, week_id))
+    conn.commit()
+    flash("Жалпы қорытынды AI арқылы жасалды.", "ok")
+    return redirect(url_for("week_report", week_id=week_id))
+
+
+@app.route("/weeks/<int:week_id>/summary/generate-from-questions", methods=["POST"])
+def generate_question_summary(week_id):
+    """СТ (sabaq_tapsyru) апталарының 'Жалпы қорытындысы' — куратор
+    жазбасына емес, Juz40-тан синхрондалған сұрақ-сұрақ статистикасына
+    (compute_question_stats) негізделеді."""
+    conn = get_db()
+    week, stream, _program = get_week_context(conn, week_id)
+    if week is None or stream is None:
+        flash("Апта табылмады.", "error")
+        return redirect(url_for("index"))
+
+    question_stats = compute_question_stats(conn, week_id, limit=20)
+    try:
+        analysis_text = generate_question_analysis(question_stats)
+    except CuratorAnalysisError as e:
+        flash(f"Қорытынды анализ жасау сәтсіз аяқталды: {e}", "error")
+        return redirect(url_for("week_report", week_id=week_id))
+
+    conn.execute("UPDATE weeks SET summary = ? WHERE id = ?", (analysis_text, week_id))
     conn.commit()
     flash("Жалпы қорытынды AI арқылы жасалды.", "ok")
     return redirect(url_for("week_report", week_id=week_id))

@@ -498,6 +498,33 @@ def generate_baiqau_results_analysis(
     return _call_gemini_text(prompt, api_key)
 
 
+def _format_question_stats(question_stats):
+    lines = []
+    for i, q in enumerate(question_stats, start=1):
+        variant_label = f"Нұсқа {q['variant']}, " if q.get("variant") is not None else ""
+        num_label = f"{q['question_number']}-сұрақ: " if q.get("question_number") is not None else ""
+        lines.append(
+            f"{i}. {variant_label}{num_label}\"{q['question']}\" — "
+            f"қате жауап пайызы {q['wrong_percent']}% ({q['wrong']}/{q['total']} оқушы)"
+        )
+    return "\n".join(lines)
+
+
+def generate_question_analysis(question_stats) -> str:
+    """Juz40-тың сұрақ-сұрақ статистикасы (куратор жазбасы емес, нақты
+    сұрақ мәтіні мен қате пайызы) негізінде AI-ден қысқа қорытынды
+    сұрайды — ең көп қате кеткен сұрақтар қандай тақырыпты қамтиды,
+    неге байланысты болуы мүмкін, келесі кезеңде неге басымдық беру
+    керек."""
+    api_key = _get_gemini_api_key()
+    if not question_stats:
+        raise CuratorAnalysisError("Алдымен «Сұрақтар анализін синхрондау» батырмасын басыңыз — деректер жоқ.")
+
+    stats_text = "Ең көп қате кеткен сұрақтар (әр сұрақ бөлек нұсқада, пайыз тек сол нұсқаны тапсырған оқушыларға қатысты):\n" + _format_question_stats(question_stats)
+    prompt = RESULTS_PROMPT_TEMPLATE.format(label="СТ сұрақ-сұрақ", stats_section=stats_text)
+    return _call_gemini_text(prompt, api_key)
+
+
 def build_baiqau_summary_text(
     creative_report, creative_history_report, creative_literacy_report, general_report,
     creative_thresholds, analysis_text,

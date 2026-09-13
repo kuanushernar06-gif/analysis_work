@@ -1164,11 +1164,11 @@ def compute_question_stats(conn, week_id, limit=20, min_attempts=3):
     әр сұрақ), соны түгел Python жадына тасымалдау есеп бетін
     баяулататын еді."""
     rows = conn.execute(
-        "SELECT question_text, COUNT(*) AS total, "
+        "SELECT question_text, variant, question_index, COUNT(*) AS total, "
         "SUM(CASE WHEN score <= 0 THEN 1 ELSE 0 END) AS wrong "
         "FROM juz40_question_results "
         "WHERE week_id = ? AND question_text IS NOT NULL AND score IS NOT NULL "
-        "GROUP BY question_text "
+        "GROUP BY question_text, variant, question_index "
         "HAVING COUNT(*) >= ?",
         (week_id, min_attempts),
     ).fetchall()
@@ -1180,8 +1180,11 @@ def compute_question_stats(conn, week_id, limit=20, min_attempts=3):
             continue
         total = r["total"]
         wrong = r["wrong"] or 0
+        q_index = r["question_index"]
         result.append({
             "question": text,
+            "variant": r["variant"],
+            "question_number": (q_index + 1) if q_index is not None else None,
             "total": total,
             "wrong": wrong,
             "wrong_percent": round(wrong / total * 100, 1),
