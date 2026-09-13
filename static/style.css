@@ -1481,6 +1481,7 @@ details[open] > .note-head::before { content: "▾"; }
   line-height: 1.6;
 }
 .summary-display {
+  font-family: "JUZ40 Text", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
   font-size: 0.95rem;
   line-height: 1.7;
   color: var(--text-primary);
@@ -1530,6 +1531,13 @@ summary { cursor: pointer; color: var(--accent); font-size: 0.9rem; }
 @media print {
   .no-print { display: none !important; }
   .site-main { padding: 0; max-width: 100%; }
-  body { background: #fff; color: #000; }
+  body {
+    background: #fff;
+    color: #000;
+    /* Кейбір браузерлер "PDF ретінде сақтау" кезінде брендтік @font-face
+       қарпін елемей, жүйелік қаріпке ауыстырып жібереді — !important
+       арқылы басып шығаруда да "JUZ40 Text" сақталуын мәжбүрлейміз. */
+    font-family: "JUZ40 Text", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif !important;
+  }
   .card { border: 1px solid #ccc; border-radius: 6px; padding: 12px; margin-bottom: 24px; }
 }
