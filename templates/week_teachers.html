@@ -117,6 +117,11 @@
 
 {% block scripts %}
 <style>
+  /* Бұл беттегі оқушылар тізімі (аты + куратор + балл + WhatsApp) бір
+     жолға сыймай, орамдалып жатқандықтан, тек осы беттің өзінде негізгі
+     контейнерді кеңейтеміз (басқа беттерге тимейді). */
+  .site-main { max-width: 1360px; }
+  .teacher-student-breakdown { grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); }
   .wa-btn {
     display: inline-flex;
     align-items: center;
