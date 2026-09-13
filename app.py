@@ -1722,9 +1722,13 @@ def _sync_teachers_from_juz40_groups(conn, stream_id, groups):
     пайдаланып 'Мұғалімдер' парағының teacher/teacher_curators кестелерін
     ЕШБІР ҚОЛМЕН ЕНГІЗУСІЗ, әрдайым дәл, толық сәйкестендіреді.
 
-    curator_name — results.curator-мен ДӘЛ бірдей болу үшін тек firstname
-    (Phase 1 синхрондау да солай сақтайды, сол себепті 'Мұғалімдер'
-    беті ешбір қосымша fuzzy-сәйкестендірусіз дұрыс жұмыс істейді).
+    curator_name — Juz40-тың өзінде көрсетілетін ТОЛЫҚ атпен (аты + тегі)
+    сақталады, тек firstname емес — сол арқылы бір топта есімі қайталанатын
+    әртүрлі кураторлар (мыс. үш бөлек "Ақерке") бір-бірімен шатаспайды.
+    'Мұғалімдер' беті бұл толық атты results.curator-дегі (әдетте тек
+    firstname) нақты атпен _match_teacher_curators арқылы икемді
+    сәйкестендіреді — teacher_curators кестесі бастапқыда да дәл осылай,
+    қолмен толық атпен толтырылатын болған.
 
     Алдымен осы поток мұғалімдерінің ЕСКІ куратор тізімін толық тазалаймыз
     — Juz40-тан келетін дерек әрқашан АВТОРИТАРЛЫ болуы үшін (қолмен
@@ -1741,7 +1745,9 @@ def _sync_teachers_from_juz40_groups(conn, stream_id, groups):
     teacher_id_by_name = {}
     for g in groups:
         curator = g.get("curator") or {}
-        curator_name = (curator.get("firstname") or "").strip()
+        curator_name = (
+            f"{(curator.get('firstname') or '').strip()} {(curator.get('lastname') or '').strip()}"
+        ).strip()
         if not curator_name:
             continue
         teachers_field = g.get("practicalLessonTeachers") or []
