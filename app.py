@@ -1716,6 +1716,64 @@ JUZ40_MAX_GROUP_ATTEMPTS = 3
 
 
 @app.route("/weeks/<int:week_id>/import/juz40/start", methods=["POST"])
+def _sync_teachers_from_juz40_groups(conn, stream_id, groups):
+    """Juz40-тың топ тізімінде әр топтың нақты мұғалімі (practicalLessonTeachers)
+    көрсетілген — Juz40-тың өз "Каталог" бетіндегі дәл сол тағайындау. Осыны
+    пайдаланып 'Мұғалімдер' парағының teacher/teacher_curators кестелерін
+    ЕШБІР ҚОЛМЕН ЕНГІЗУСІЗ, әрдайым дәл, толық сәйкестендіреді.
+
+    curator_name — results.curator-мен ДӘЛ бірдей болу үшін тек firstname
+    (Phase 1 синхрондау да солай сақтайды, сол себепті 'Мұғалімдер'
+    беті ешбір қосымша fuzzy-сәйкестендірусіз дұрыс жұмыс істейді).
+
+    Алдымен осы поток мұғалімдерінің ЕСКІ куратор тізімін толық тазалаймыз
+    — Juz40-тан келетін дерек әрқашан АВТОРИТАРЛЫ болуы үшін (қолмен
+    енгізілген қате/ескірген жазбалар қалып қоймас үшін)."""
+    stream_teacher_ids = [
+        r["id"] for r in conn.execute("SELECT id FROM teachers WHERE stream_id = ?", (stream_id,)).fetchall()
+    ]
+    if stream_teacher_ids:
+        placeholders = ",".join("?" * len(stream_teacher_ids))
+        conn.execute(
+            f"DELETE FROM teacher_curators WHERE teacher_id IN ({placeholders})", stream_teacher_ids
+        )
+
+    teacher_id_by_name = {}
+    for g in groups:
+        curator = g.get("curator") or {}
+        curator_name = (curator.get("firstname") or "").strip()
+        if not curator_name:
+            continue
+        teachers_field = g.get("practicalLessonTeachers") or []
+        if not teachers_field:
+            continue
+        t = teachers_field[0]
+        teacher_name = f"{(t.get('lastname') or '').strip()} {(t.get('firstname') or '').strip()}".strip()
+        if not teacher_name:
+            continue
+
+        teacher_id = teacher_id_by_name.get(teacher_name)
+        if teacher_id is None:
+            row = conn.execute(
+                "SELECT id FROM teachers WHERE name = ? AND stream_id = ?", (teacher_name, stream_id)
+            ).fetchone()
+            if row:
+                teacher_id = row["id"]
+            else:
+                teacher_id = conn.execute(
+                    "INSERT INTO teachers (name, stream_id) VALUES (?, ?) RETURNING id",
+                    (teacher_name, stream_id),
+                ).fetchone()["id"]
+            teacher_id_by_name[teacher_name] = teacher_id
+
+        conn.execute("DELETE FROM teacher_curators WHERE curator_name = ?", (curator_name,))
+        conn.execute(
+            "INSERT INTO teacher_curators (teacher_id, curator_name) VALUES (?, ?)",
+            (teacher_id, curator_name),
+        )
+    conn.commit()
+
+
 def import_juz40_start(week_id):
     """Juz40 синхрондау job-ын БАСТАЙДЫ: логин, курс іздеу, топтар тізімін
     алып, juz40_sync_jobs жазбасын құрады. Нақты нәтижелерді бұл әлі
@@ -1741,6 +1799,8 @@ def import_juz40_start(week_id):
 
         groups = juz40_client.get_groups(token, course_id)
         default_max_score = db.score_defaults_for(program["slug"], stream["category"])[0]
+
+        _sync_teachers_from_juz40_groups(conn, stream["id"], groups)
 
         import_id = conn.execute(
             "INSERT INTO imports (week_id, sheet_url, sheet_count, row_count, skipped_count) "
