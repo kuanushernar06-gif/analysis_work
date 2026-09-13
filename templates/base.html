@@ -84,14 +84,16 @@
         {% endif %}
       </nav>
       <div class="site-sidebar-footer">
-        <button type="button" class="sidebar-theme-toggle" id="theme-toggle" aria-pressed="false" aria-label="Жарық/қараңғы тақырыпты ауыстыру">
-          <span class="ic ic-theme-toggle theme-toggle-icon"></span> Тақырып
-        </button>
         <form method="post" action="{{ url_for('logout') }}" class="site-sidebar-logout">
           <button type="submit">Шығу</button>
         </form>
       </div>
     </aside>
+    <div class="top-right-actions no-print">
+      <button type="button" class="top-right-chip theme-toggle-chip" id="theme-toggle" aria-pressed="false" aria-label="Жарық/қараңғы тақырыпты ауыстыру">
+        <span class="ic ic-theme-toggle theme-toggle-icon"></span>
+      </button>
+    </div>
     {% else %}
       <div class="top-right-actions no-print">
         {% if request.endpoint == 'index' %}
