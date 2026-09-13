@@ -758,7 +758,8 @@ def compute_teacher_stats_for_week(conn, week_id, combine_week_ids=None):
     placeholders = ",".join("?" * len(week_ids))
     rows = conn.execute(
         f"SELECT curator, student, student_id, score FROM results WHERE week_id IN ({placeholders}) "
-        "AND score IS NOT NULL AND curator IS NOT NULL AND curator != ''",
+        "AND score IS NOT NULL AND curator IS NOT NULL AND curator != '' "
+        "AND (excused IS NULL OR excused = 0)",
         week_ids,
     ).fetchall()
 
