@@ -67,39 +67,83 @@
     </button>
     <div class="teacher-student-breakdown" id="teacher-students-{{ t.id }}" hidden>
       <div class="teacher-student-group">
-        <h4>Нашар оқушылар (0–{{ t.weak_max_score }} балл)</h4>
+        <h4>Деңгейі нашар оқушылар (0–{{ t.weak_max_score }} балл)</h4>
         {% if t.weak_students %}
-        <ul class="teacher-curators-list">
-          {% for s in t.weak_students %}
-          <li>
-            {{ s.student }} — {{ s.curator }} <span class="muted">({{ '%.2f'|format(s.avg_score)|kk_num }})</span>
-            {% if s.student_id %}
-            <button type="button" class="wa-btn no-print" data-student-id="{{ s.student_id }}" title="WhatsApp-қа жазу">
-              <span class="wa-btn-label">WhatsApp</span>
-            </button>
-            {% endif %}
-          </li>
-          {% endfor %}
-        </ul>
+        <div class="student-table-wrap">
+          <table class="student-table">
+            <thead>
+              <tr>
+                <th class="student-table-check-col no-print">Оқушымен жұмыс жасалды ма?</th>
+                <th>Оқушы аты-жөні</th>
+                <th>Куратор</th>
+                <th>(Балы)</th>
+                <th class="no-print"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for s in t.weak_students %}
+              <tr>
+                <td class="student-table-check-col no-print">
+                  {% if s.student_id %}
+                  <input type="checkbox" class="contacted-checkbox" data-week-id="{{ week['id'] }}" data-student-id="{{ s.student_id }}" {% if s.contacted %}checked{% endif %}>
+                  {% endif %}
+                </td>
+                <td>{{ s.student }}</td>
+                <td>{{ s.curator }}</td>
+                <td>{{ '%.2f'|format(s.avg_score)|kk_num }}</td>
+                <td class="no-print">
+                  {% if s.student_id %}
+                  <button type="button" class="wa-btn no-print" data-student-id="{{ s.student_id }}" title="WhatsApp-қа жазу">
+                    <span class="wa-btn-label">WhatsApp</span>
+                  </button>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
         {% else %}
         <p class="muted">Жоқ.</p>
         {% endif %}
       </div>
       <div class="teacher-student-group">
-        <h4>Мықты оқушылар ({{ t.strong_min_score }}–{{ t.program_max_score }} балл)</h4>
+        <h4>Деңгейі мықты оқушылар ({{ t.strong_min_score }}–{{ t.program_max_score }} балл)</h4>
         {% if t.strong_students %}
-        <ul class="teacher-curators-list">
-          {% for s in t.strong_students %}
-          <li>
-            {{ s.student }} — {{ s.curator }} <span class="muted">({{ '%.2f'|format(s.avg_score)|kk_num }})</span>
-            {% if s.student_id %}
-            <button type="button" class="wa-btn no-print" data-student-id="{{ s.student_id }}" title="WhatsApp-қа жазу">
-              <span class="wa-btn-label">WhatsApp</span>
-            </button>
-            {% endif %}
-          </li>
-          {% endfor %}
-        </ul>
+        <div class="student-table-wrap">
+          <table class="student-table">
+            <thead>
+              <tr>
+                <th class="student-table-check-col no-print">Оқушымен жұмыс жасалды ма?</th>
+                <th>Оқушы аты-жөні</th>
+                <th>Куратор</th>
+                <th>(Балы)</th>
+                <th class="no-print"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for s in t.strong_students %}
+              <tr>
+                <td class="student-table-check-col no-print">
+                  {% if s.student_id %}
+                  <input type="checkbox" class="contacted-checkbox" data-week-id="{{ week['id'] }}" data-student-id="{{ s.student_id }}" {% if s.contacted %}checked{% endif %}>
+                  {% endif %}
+                </td>
+                <td>{{ s.student }}</td>
+                <td>{{ s.curator }}</td>
+                <td>{{ '%.2f'|format(s.avg_score)|kk_num }}</td>
+                <td class="no-print">
+                  {% if s.student_id %}
+                  <button type="button" class="wa-btn no-print" data-student-id="{{ s.student_id }}" title="WhatsApp-қа жазу">
+                    <span class="wa-btn-label">WhatsApp</span>
+                  </button>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
         {% else %}
         <p class="muted">Жоқ.</p>
         {% endif %}
@@ -121,7 +165,18 @@
      жолға сыймай, орамдалып жатқандықтан, тек осы беттің өзінде негізгі
      контейнерді кеңейтеміз (басқа беттерге тимейді). */
   .site-main { max-width: 1360px; }
-  .teacher-student-breakdown { grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); }
+  .teacher-student-breakdown { grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); }
+  .student-table-wrap { overflow-x: auto; }
+  .student-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  .student-table th, .student-table td {
+    padding: 6px 8px;
+    text-align: left;
+    border-bottom: 1px solid var(--border, #e5e7eb);
+    white-space: nowrap;
+  }
+  .student-table th { font-weight: 700; color: var(--text-muted, #6b7280); font-size: 0.72rem; }
+  .student-table-check-col { text-align: center; width: 1%; white-space: normal; max-width: 90px; }
+  .student-table-check-col input[type="checkbox"] { width: 18px; height: 18px; cursor: pointer; }
   .wa-btn {
     display: inline-flex;
     align-items: center;
@@ -167,6 +222,31 @@
         } finally {
           btn.disabled = false;
           label.textContent = originalText;
+        }
+      });
+    });
+  })();
+  (function () {
+    document.querySelectorAll(".contacted-checkbox").forEach(function (box) {
+      box.addEventListener("change", async function () {
+        var weekId = box.getAttribute("data-week-id");
+        var studentId = box.getAttribute("data-student-id");
+        var wasChecked = box.checked;
+        box.disabled = true;
+        try {
+          var resp = await fetch("/weeks/" + weekId + "/students/" + studentId + "/contacted", { method: "POST" });
+          var data = await resp.json();
+          if (!data.ok) {
+            box.checked = !wasChecked;
+            alert("Қате: " + (data.error || "белгісіз қате"));
+          } else {
+            box.checked = data.contacted;
+          }
+        } catch (e) {
+          box.checked = !wasChecked;
+          alert("Желі қатесі: " + e);
+        } finally {
+          box.disabled = false;
         }
       });
     });

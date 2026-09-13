@@ -1683,6 +1683,32 @@ def get_student_contact(student_id):
     return jsonify({"ok": True, **contact})
 
 
+@app.route("/weeks/<int:week_id>/students/<student_id>/contacted", methods=["POST"])
+def toggle_student_contacted(week_id, student_id):
+    """Мұғалім оқушымен сөйлескенін белгілейтін птицка — күйі
+    student_contact_log кестесінде осы апта/оқушы бойынша сақталады."""
+    conn = get_db()
+    row = conn.execute(
+        "SELECT contacted FROM student_contact_log WHERE week_id = ? AND student_id = ?",
+        (week_id, student_id),
+    ).fetchone()
+    new_value = 0 if (row is not None and row["contacted"]) else 1
+    if row is not None:
+        conn.execute(
+            "UPDATE student_contact_log SET contacted = ?, contacted_at = CURRENT_TIMESTAMP "
+            "WHERE week_id = ? AND student_id = ?",
+            (new_value, week_id, student_id),
+        )
+    else:
+        conn.execute(
+            "INSERT INTO student_contact_log (week_id, student_id, contacted, contacted_at) "
+            "VALUES (?, ?, ?, CURRENT_TIMESTAMP)",
+            (week_id, student_id, new_value),
+        )
+    conn.commit()
+    return jsonify({"ok": True, "contacted": bool(new_value)})
+
+
 def _fetch_group_juz40_results(
     token, group_id, curator_name, month, week_number, default_max_score, lessons_cache, lessons_lock
 ):

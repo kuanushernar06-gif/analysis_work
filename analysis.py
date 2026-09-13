@@ -762,6 +762,14 @@ def compute_teacher_stats_for_week(conn, week_id, combine_week_ids=None):
         week_ids,
     ).fetchall()
 
+    contacted_ids = {
+        r["student_id"]
+        for r in conn.execute(
+            "SELECT student_id FROM student_contact_log WHERE week_id = ? AND contacted = 1",
+            (week_id,),
+        ).fetchall()
+    }
+
     curator_scores = {}
     curator_student_rows = {}
     for r in rows:
@@ -812,11 +820,13 @@ def compute_teacher_stats_for_week(conn, week_id, combine_week_ids=None):
         strong_students = []
         for student, scores in student_scores.items():
             avg = sum(scores) / len(scores)
+            student_id = student_id_by_name.get(student)
             entry = {
                 "student": student,
                 "curator": student_curator[student],
                 "avg_score": round(avg, 2),
-                "student_id": student_id_by_name.get(student),
+                "student_id": student_id,
+                "contacted": bool(student_id) and student_id in contacted_ids,
             }
             if avg <= WEAK_STUDENT_MAX_SCORE:
                 weak_students.append(entry)

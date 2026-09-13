@@ -160,6 +160,14 @@ CREATE TABLE IF NOT EXISTS juz40_student_contacts (
     fetched_at TIMESTAMPTZ DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS student_contact_log (
+    week_id INTEGER NOT NULL REFERENCES weeks(id) ON DELETE CASCADE,
+    student_id TEXT NOT NULL,
+    contacted INTEGER DEFAULT 0,
+    contacted_at TIMESTAMPTZ,
+    PRIMARY KEY (week_id, student_id)
+);
+
 CREATE TABLE IF NOT EXISTS curator_notes (
     id SERIAL PRIMARY KEY,
     week_id INTEGER NOT NULL REFERENCES weeks(id) ON DELETE CASCADE,
@@ -361,6 +369,14 @@ CREATE TABLE IF NOT EXISTS juz40_student_contacts (
     parent_phone TEXT,
     parent_name TEXT,
     fetched_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS student_contact_log (
+    week_id INTEGER NOT NULL REFERENCES weeks(id) ON DELETE CASCADE,
+    student_id TEXT NOT NULL,
+    contacted INTEGER DEFAULT 0,
+    contacted_at TEXT,
+    PRIMARY KEY (week_id, student_id)
 );
 
 CREATE TABLE IF NOT EXISTS curator_notes (
