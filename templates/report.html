@@ -95,7 +95,7 @@
 <div class="card">
   <p class="muted">
     Сандық деректер әлі жоқ (кесте импортталмаған), сондықтан балл бойынша есеп көрсетілмейді.
-    {% if not (stream and stream['category'] == 'baiqau_test') %}Бірақ кураторлардың сапалы анализін төменде қоса аласыз.{% endif %}
+    {% if not (stream and stream['category'] in ('baiqau_test', 'sabaq_tapsyru', 'aylyq_test')) %}Бірақ кураторлардың сапалы анализін төменде қоса аласыз.{% endif %}
   </p>
   <a class="btn btn-primary" href="{{ url_for('week_import', week_id=week['id']) }}">Кестені импорттау</a>
 </div>
@@ -214,7 +214,7 @@
 
 {% endif %}
 
-{% if not (stream and stream['category'] in ('baiqau_test', 'sabaq_tapsyru')) %}
+{% if not (stream and stream['category'] in ('baiqau_test', 'sabaq_tapsyru', 'aylyq_test')) %}
 <div class="card">
   <h2>Кураторлардың жиынтық анализі</h2>
   {% if is_month_summary %}
@@ -262,7 +262,7 @@
   .qstat-percent-gold { color: var(--warning); }
   .qstat-percent-good { color: var(--good); }
 </style>
-<div class="card">
+<div class="card" id="question-stats">
   <h2>Ең көп қате кеткен сұрақтар</h2>
   <p class="section-intro">
     Juz40 платформасындағы әр оқушының сұрақ-сұрақ жауабы негізінде — оқушылар ЕҢ КӨП қате
@@ -302,7 +302,7 @@
 </div>
 {% endif %}
 
-{% if not is_month_summary and stream and stream['category'] == 'sabaq_tapsyru' %}
+{% if not is_month_summary and stream and stream['category'] in ('sabaq_tapsyru', 'aylyq_test') %}
 <div class="card" id="summary">
   <h2>Жалпы қорытынды</h2>
   <p class="muted">
@@ -362,7 +362,7 @@
 {% endif %}
 {% endif %}
 
-{% if not (stream and stream['category'] == 'sabaq_tapsyru') %}
+{% if not (stream and stream['category'] in ('sabaq_tapsyru', 'aylyq_test')) %}
 <div class="card" id="summary">
   <h2>Жалпы қорытынды</h2>
   {% if is_month_summary %}
@@ -440,7 +440,7 @@
 </div>
 {% endif %}
 
-{% if not is_month_summary and week['summary'] and not (stream and stream['category'] == 'sabaq_tapsyru') %}
+{% if not is_month_summary and week['summary'] and not (stream and stream['category'] in ('sabaq_tapsyru', 'aylyq_test')) %}
 <script>
   (function () {
     const btn = document.getElementById("summary-delete-btn");

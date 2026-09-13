@@ -510,7 +510,7 @@ def _format_question_stats(question_stats):
     return "\n".join(lines)
 
 
-def generate_question_analysis(question_stats) -> str:
+def generate_question_analysis(question_stats, label="СТ сұрақ-сұрақ") -> str:
     """Juz40-тың сұрақ-сұрақ статистикасы (куратор жазбасы емес, нақты
     сұрақ мәтіні мен қате пайызы) негізінде AI-ден қысқа қорытынды
     сұрайды — ең көп қате кеткен сұрақтар қандай тақырыпты қамтиды,
@@ -518,7 +518,7 @@ def generate_question_analysis(question_stats) -> str:
     керек."""
     api_key = _get_gemini_api_key()
     if not question_stats:
-        raise CuratorAnalysisError("Алдымен «Сұрақтар анализін синхрондау» батырмасын басыңыз — деректер жоқ.")
+        raise CuratorAnalysisError("Алдымен «ТАЛДАУ ЖАСАУ» батырмасын басыңыз — деректер жоқ.")
 
     avg_wrong = round(sum(q["wrong_percent"] for q in question_stats) / len(question_stats), 1)
     stats_text = (
@@ -526,7 +526,7 @@ def generate_question_analysis(question_stats) -> str:
         "Ең көп қате кеткен сұрақтар (әр сұрақ бөлек нұсқада, пайыз тек сол нұсқаны тапсырған "
         "оқушыларға қатысты):\n" + _format_question_stats(question_stats)
     )
-    prompt = RESULTS_PROMPT_TEMPLATE.format(label="СТ сұрақ-сұрақ", stats_section=stats_text)
+    prompt = RESULTS_PROMPT_TEMPLATE.format(label=label, stats_section=stats_text)
     prompt += (
         "\nБірінші сөйлемде осы сұрақтар бойынша ЖАЛПЫ орташа қате пайызын (жоғарыда берілген) "
         "нақты санмен міндетті түрде айт."

@@ -1474,8 +1474,9 @@ def generate_question_summary(week_id):
         return redirect(url_for("index"))
 
     question_stats = compute_question_stats(conn, week_id, limit=20)
+    label = "АТ сұрақ-сұрақ" if stream["category"] == "aylyq_test" else "СТ сұрақ-сұрақ"
     try:
-        analysis_text = generate_question_analysis(question_stats)
+        analysis_text = generate_question_analysis(question_stats, label=label)
     except CuratorAnalysisError as e:
         flash(f"Қорытынды анализ жасау сәтсіз аяқталды: {e}", "error")
         return redirect(url_for("week_report", week_id=week_id))
