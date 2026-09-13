@@ -1780,6 +1780,63 @@ def _fetch_group_juz40_results(
     return rows, "ok", None
 
 
+# Кейде бір тақырыпта сабақтың ЕСКІ версиясы да қалып қалады (атауында
+# " 1.0" секілді қосымшамен) — АЙЛЫҚ ТЕСТ-те кездескен. Соны ешқашан
+# есептемейміз, тек ағымдағы (версия қосымшасыз атаумен) сабақты аламыз.
+_LESSON_VERSION_SUFFIX_RE = re.compile(r"\s+\d+\.\d+$")
+
+
+def _fetch_group_juz40_aylyq_results(
+    token, group_id, curator_name, month, default_max_score, lessons_cache, lessons_lock
+):
+    """Бір топ үшін Juz40-тан осы айдың АЙЛЫҚ ТЕСТ балын алады. Тақырып
+    әрқашан Juz40-тың 4-аптасында (db.WEEKS_PER_MONTH) орналасады — біздің
+    өз апта нөміріміз (aylyq_test санатында әрқашан 1) емес.
+
+    Бір тақырыпта дәл БІР ағымдағы сабақ анықталмаса (мыс. ескі версиясы
+    да қалып қойса және екеуін ажырата алмасақ), 'ambiguous' статусымен
+    бос қайтарады — ешқашан қайсысы дұрыс екенін жуықтап болжамаймыз."""
+    rows = []
+    try:
+        themes = juz40_client.get_group_themes(token, group_id, month, db.WEEKS_PER_MONTH)
+        theme = juz40_client.find_theme_by_name_part(themes, "АЙЛЫҚ ТЕСТ")
+        if theme is None:
+            return rows, "no_theme", None
+
+        theme_id = theme["themeId"]
+        with lessons_lock:
+            lessons = lessons_cache.get(theme_id)
+        if lessons is None:
+            lessons = juz40_client.get_theme_lessons(token, theme_id)
+            with lessons_lock:
+                lessons_cache[theme_id] = lessons
+
+        current_lessons = [
+            l for l in lessons if not _LESSON_VERSION_SUFFIX_RE.search(l.get("name") or "")
+        ]
+        if len(current_lessons) != 1:
+            return rows, "ambiguous", (
+                f"'{theme.get('themeName')}' тақырыбында {len(lessons)} сабақ табылды, "
+                "қайсысы ағымдағы екені анық емес."
+            )
+        lesson_id = current_lessons[0].get("id")
+
+        progresses = juz40_client.get_lesson_progresses(token, group_id, lesson_id)
+        for p in progresses:
+            student = (
+                f"{(p.get('studentFirstname') or '').strip()} "
+                f"{(p.get('studentLastname') or '').strip()}"
+            ).strip()
+            score = p.get("score")
+            if not student or score is None:
+                continue
+            student_id = p.get("studentId")
+            rows.append((curator_name, student, student_id, score, default_max_score, None, 0))
+    except Juz40Error as e:
+        return rows, "error", str(e)
+    return rows, "ok", None
+
+
 # Топтарды бір-бірлеп (реттік) сұраса, 80+ топ бар кезде Vercel-дің
 # серверлес функция уақыты (504 GATEWAY_TIMEOUT) жетпей қалады, ӘРІ Juz40
 # API-дің өзі көп қатарлас сұранысты шектеп тастайды (60 топ бір реттік
@@ -1866,8 +1923,11 @@ def import_juz40_start(week_id):
     week, stream, program = get_week_context(conn, week_id)
     if week is None or stream is None or program is None:
         return jsonify({"ok": False, "error": "Апта табылмады."})
-    if stream["category"] != "sabaq_tapsyru":
-        return jsonify({"ok": False, "error": "Бұл сынақ тек САБАҚ ТАПСЫРУ АНАЛИЗ санатында қолжетімді."})
+    if stream["category"] not in ("sabaq_tapsyru", "aylyq_test"):
+        return jsonify({
+            "ok": False,
+            "error": "Бұл сынақ тек САБАҚ ТАПСЫРУ АНАЛИЗ немесе АЙЛЫҚ ТЕСТ АНАЛИЗ санатында қолжетімді.",
+        })
 
     try:
         token = juz40_client.login()
@@ -1938,6 +1998,9 @@ def import_juz40_step(week_id):
     if job is None:
         return jsonify({"ok": False, "error": "Job табылмады."})
 
+    _, job_stream, _ = get_week_context(conn, week_id)
+    is_aylyq = bool(job_stream and job_stream["category"] == "aylyq_test")
+
     def _job_progress(done):
         return jsonify({
             "ok": True, "done": done,
@@ -1975,15 +2038,27 @@ def import_juz40_step(week_id):
     processed_now = 0
     retry_later = []
 
+    subject_label = "Айлық тест" if is_aylyq else "Сабақ тапсыру"
+
     with ThreadPoolExecutor(max_workers=JUZ40_IMPORT_WORKERS) as executor:
-        future_map = {
-            executor.submit(
-                _fetch_group_juz40_results,
-                token, g["id"], g["curator"], job["month_number"], job["week_number"],
-                job["default_max_score"], lessons_cache, lessons_lock,
-            ): g
-            for g in chunk
-        }
+        if is_aylyq:
+            future_map = {
+                executor.submit(
+                    _fetch_group_juz40_aylyq_results,
+                    token, g["id"], g["curator"], job["month_number"],
+                    job["default_max_score"], lessons_cache, lessons_lock,
+                ): g
+                for g in chunk
+            }
+        else:
+            future_map = {
+                executor.submit(
+                    _fetch_group_juz40_results,
+                    token, g["id"], g["curator"], job["month_number"], job["week_number"],
+                    job["default_max_score"], lessons_cache, lessons_lock,
+                ): g
+                for g in chunk
+            }
         for future in as_completed(future_map):
             g = future_map[future]
             rows, status, err = future.result()
@@ -1995,7 +2070,7 @@ def import_juz40_step(week_id):
                         " excuse_note, excused) "
                         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                         (
-                            week_id, job["import_id"], curator_name, student, student_id, "Сабақ тапсыру",
+                            week_id, job["import_id"], curator_name, student, student_id, subject_label,
                             None, score, max_score, excuse_note, excused,
                         ),
                     )
