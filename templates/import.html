@@ -130,15 +130,6 @@
     </div>
   </div>
   {% endif %}
-  {% if stream and stream['category'] == 'aylyq_test' %}
-  <div class="import-submit-row no-print" style="margin-top:16px">
-    <a class="btn btn-primary" href="{{ url_for('week_report', week_id=week['id']) }}#question-stats" style="display:block; width:max-content;">СҰРАҚТАР АНАЛИЗІН ШЫҒАРУ</a>
-    <p class="muted" style="margin-top:14px; font-size:13px">
-      «ТАЛДАУ ЖАСАУ» кезінде жиналған сұрақ-сұрақ деректері негізінде — ең көп қате кеткен
-      сұрақтар мен пайызын «Ортақ анализ» бетінде көрсетеді.
-    </p>
-  </div>
-  {% endif %}
   {% endif %}
 </div>
 
