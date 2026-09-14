@@ -1999,7 +1999,10 @@ def import_juz40_start(week_id):
                 ),
             })
 
-        groups = juz40_client.get_groups(token, course_id)
+        # Juz40 бос (әлі бір де оқушысы қосылмаған, "заготовка") топтарды да
+        # қайтарады — солар нақты куратор/оқушы саны емес, сондықтан есепке
+        # (топ саны, куратор тізімі) кірмеуі керек.
+        groups = [g for g in juz40_client.get_groups(token, course_id) if (g.get("studentCount") or 0) > 0]
         default_max_score = db.score_defaults_for(program["slug"], stream["category"])[0]
 
         _sync_teachers_from_juz40_groups(conn, stream["id"], groups)
@@ -2327,7 +2330,7 @@ def import_juz40_questions_start(week_id):
                 ),
             })
 
-        groups = juz40_client.get_groups(token, course_id)
+        groups = [g for g in juz40_client.get_groups(token, course_id) if (g.get("studentCount") or 0) > 0]
 
         import_id = conn.execute(
             "INSERT INTO imports (week_id, sheet_url, sheet_count, row_count, skipped_count) "
