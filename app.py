@@ -581,6 +581,7 @@ LS_TEACHER_PHOTOS = {
     "Қойшыбай Ақан": "koishybai-akan.jpg",
     "Мартай Жасұлан": "martai-zhasulan.jpg",
     "Түсіпбек Қуаныш": "tusipbek-kuanysh.jpg",
+    "Абатайқызы Бибі": "abataikyzy-bibi.jpg",
 }
 _LS_TEACHER_PHOTOS_COMPACT = {_compact_name(name): fname for name, fname in LS_TEACHER_PHOTOS.items()}
 
