@@ -1556,6 +1556,7 @@ def import_sheet(week_id):
         inserted = 0
         skipped = 0
         empty_sheets = 0
+        rows_to_insert = []
 
         for sheet_name, rows in sheets:
             if is_template_sheet(sheet_name):
@@ -1601,13 +1602,14 @@ def import_sheet(week_id):
                 subject = cell(idx_subject) or None
                 topic = cell(idx_topic) or None
 
-                conn.execute(
-                    "INSERT INTO results (week_id, import_id, curator, student, subject, topic, score, max_score) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                    (week_id, import_id, sheet_name, student, subject, topic, score, max_score),
-                )
+                rows_to_insert.append((week_id, import_id, sheet_name, student, subject, topic, score, max_score))
                 inserted += 1
 
+        db.bulk_insert(
+            conn, "results",
+            ("week_id", "import_id", "curator", "student", "subject", "topic", "score", "max_score"),
+            rows_to_insert,
+        )
         conn.execute(
             "UPDATE imports SET row_count = ?, skipped_count = ? WHERE id = ?",
             (inserted, skipped, import_id),
@@ -2543,12 +2545,15 @@ def upload_results_file(week_id):
         (week_id, file.filename),
     ).fetchone()["id"]
 
-    for entry in entries:
-        conn.execute(
-            "INSERT INTO results (week_id, import_id, curator, student, subject, topic, score, max_score) "
-            "VALUES (?, ?, NULL, ?, ?, NULL, ?, ?)",
-            (week_id, import_id, entry["student"], entry["subject"], entry["score"], entry.get("max_score", default_max_score)),
-        )
+    db.bulk_insert(
+        conn, "results",
+        ("week_id", "import_id", "curator", "student", "subject", "topic", "score", "max_score"),
+        [
+            (week_id, import_id, None, entry["student"], entry["subject"], None,
+             entry["score"], entry.get("max_score", default_max_score))
+            for entry in entries
+        ],
+    )
     conn.execute("UPDATE imports SET row_count = ? WHERE id = ?", (len(entries), import_id))
     conn.commit()
 
