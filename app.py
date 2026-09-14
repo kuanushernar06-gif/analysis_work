@@ -2131,27 +2131,26 @@ def import_juz40_step(week_id):
                 rows, status, err = future.result()
                 question_rows = []
             if status == "ok":
-                for curator_name, student, student_id, score, max_score, excuse_note, excused in rows:
-                    conn.execute(
-                        "INSERT INTO results "
-                        "(week_id, import_id, curator, student, student_id, subject, topic, score, max_score, "
-                        " excuse_note, excused) "
-                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                        (
-                            week_id, job["import_id"], curator_name, student, student_id, subject_label,
-                            None, score, max_score, excuse_note, excused,
-                        ),
-                    )
-                    inserted_now += 1
-                for curator_name, student, q_index, q_text, q_score in question_rows:
-                    conn.execute(
-                        "INSERT INTO juz40_question_results "
-                        "(week_id, import_id, curator, student, variant, question_index, question_text, score) "
-                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                        (
-                            week_id, job["import_id"], curator_name, student, None, q_index, q_text, q_score,
-                        ),
-                    )
+                db.bulk_insert(
+                    conn, "results",
+                    ("week_id", "import_id", "curator", "student", "student_id", "subject", "topic",
+                     "score", "max_score", "excuse_note", "excused"),
+                    [
+                        (week_id, job["import_id"], curator_name, student, student_id, subject_label,
+                         None, score, max_score, excuse_note, excused)
+                        for curator_name, student, student_id, score, max_score, excuse_note, excused in rows
+                    ],
+                )
+                inserted_now += len(rows)
+                db.bulk_insert(
+                    conn, "juz40_question_results",
+                    ("week_id", "import_id", "curator", "student", "variant", "question_index",
+                     "question_text", "score"),
+                    [
+                        (week_id, job["import_id"], curator_name, student, None, q_index, q_text, q_score)
+                        for curator_name, student, q_index, q_text, q_score in question_rows
+                    ],
+                )
                 processed_now += 1
             elif status == "no_theme":
                 no_theme_now += 1
@@ -2445,17 +2444,16 @@ def import_juz40_questions_step(week_id):
             if status in ("ok", "no_theme"):
                 for pdf_url, questions in newly_fetched:
                     all_new_pdfs.setdefault(pdf_url, questions)
-                for curator_name, student, variant, q_index, q_text, score in question_rows:
-                    conn.execute(
-                        "INSERT INTO juz40_question_results "
-                        "(week_id, import_id, curator, student, variant, question_index, question_text, score) "
-                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                        (
-                            week_id, job["import_id"], curator_name, student, variant,
-                            q_index, q_text, score,
-                        ),
-                    )
-                    inserted_now += 1
+                db.bulk_insert(
+                    conn, "juz40_question_results",
+                    ("week_id", "import_id", "curator", "student", "variant", "question_index",
+                     "question_text", "score"),
+                    [
+                        (week_id, job["import_id"], curator_name, student, variant, q_index, q_text, score)
+                        for curator_name, student, variant, q_index, q_text, score in question_rows
+                    ],
+                )
+                inserted_now += len(question_rows)
                 if status == "ok" and has_more:
                     # Топ әлі толық аяқталған жоқ — СОЛ ЖЕРДЕН (cursor)
                     # жалғасу үшін кезектің басына қоямыз, "өңделді" деп

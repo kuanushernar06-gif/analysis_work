@@ -555,6 +555,28 @@ def get_connection():
     return _get_sqlite_connection()
 
 
+def bulk_insert(conn, table, columns, rows, chunk_size=200):
+    """Көп жолды БІР INSERT-пен (VALUES (...),(...),...) жазады — production-да
+    (Neon Postgres) әр жол үшін жеке conn.execute() шақыру желі бойынша
+    жеке round-trip болғандықтан, жүздеген жол болғанда бұл нақты, өлшенген
+    баяулықтың басты себебі еді (Juz40 сұрақ-сұрақ синхрондауы кезінде бір
+    топтан 500+ жол келуі кәдімгі жағдай). rows — параметр tuple-дерінің
+    тізімі, chunk_size — бір INSERT-тегі ЕҢ КӨП жол саны (SQLite/Postgres
+    параметр санының шегінен аулақ болу үшін)."""
+    if not rows:
+        return
+    col_list = ", ".join(columns)
+    row_placeholder = "(" + ", ".join("?" * len(columns)) + ")"
+    for i in range(0, len(rows), chunk_size):
+        batch = rows[i:i + chunk_size]
+        values_sql = ", ".join([row_placeholder] * len(batch))
+        flat_params = [v for row in batch for v in row]
+        conn.execute(
+            f"INSERT INTO {table} ({col_list}) VALUES {values_sql}",
+            flat_params,
+        )
+
+
 _MIGRATE_TABLES = (
     "weeks", "imports", "programs", "teachers", "streams", "ls_imports", "results",
 )
