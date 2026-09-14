@@ -580,7 +580,7 @@ LS_STREAM_PREFIX_BY_PROGRAM = {"smart": "ТАРИХ", "junior": "JUNIOR"}
 # емес, брендтік атаумен жазылады (мыс. 'ZEREK' — JUNIOR-01, 'USHQYN' —
 # JUNIOR-11 потогінің баламасы, екеуі бір поток). Тек Junior бағдарламасына
 # қатысты — Smart-та мұндай балама атаулар жоқ.
-LS_JUNIOR_STREAM_NAME_ALIASES = {"ZEREK": "JUNIOR-01", "USHQYN": "JUNIOR-11"}
+LS_JUNIOR_STREAM_NAME_ALIASES = {"ZEREK": "JUNIOR-01", "USHQYN": "JUNIOR-11", "ALAU": "JUNIOR-21"}
 # Ағым кодынан LS интерфейсінде көрсетілетін атауға (керісінше бағыт) —
 # осы потоктар LS бетінде де кестедегідей 'ZEREK'/'USHQYN' болып көрінуі үшін.
 LS_STREAM_DISPLAY_NAMES = {code: name for name, code in LS_JUNIOR_STREAM_NAME_ALIASES.items()}
