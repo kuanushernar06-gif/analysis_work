@@ -1837,8 +1837,9 @@ def _fetch_group_juz40_aylyq_results(
     да қалып қойса және екеуін ажырата алмасақ), 'ambiguous' статусымен
     бос қайтарады — ешқашан қайсысы дұрыс екенін жуықтап болжамаймыз.
 
-    questions_cache — lessonId -> {questionId: {"text", "index"}}, бүкіл
-    курс бойынша ортақ (get_lesson_detail бір рет қана шақырылады)."""
+    questions_cache — (variantedLessonId немесе lessonId) -> {questionId:
+    {"text", "index"}}, бүкіл курс бойынша ортақ (бір нұсқа үшін
+    get_lesson_detail тек бір рет қана шақырылады)."""
     rows = []
     question_rows = []
     try:
@@ -1865,18 +1866,6 @@ def _fetch_group_juz40_aylyq_results(
             )
         lesson_id = current_lessons[0].get("id")
 
-        with lessons_lock:
-            question_map = questions_cache.get(lesson_id)
-        if question_map is None:
-            detail = juz40_client.get_lesson_detail(token, lesson_id)
-            question_map = {
-                q["id"]: {"text": _strip_question_html(q.get("questionText")), "index": idx}
-                for idx, q in enumerate((detail or {}).get("questions") or [])
-                if q.get("id")
-            }
-            with lessons_lock:
-                questions_cache[lesson_id] = question_map
-
         progresses = juz40_client.get_lesson_progresses(token, group_id, lesson_id)
         for p in progresses:
             student = (
@@ -1889,7 +1878,31 @@ def _fetch_group_juz40_aylyq_results(
             student_id = p.get("studentId")
             rows.append((curator_name, student, student_id, score, default_max_score, None, 0))
 
-            for qp in p.get("questionPassingDtos") or []:
+            question_passings = p.get("questionPassingDtos") or []
+            if not question_passings:
+                continue
+
+            # Кейбір курста айлық тест НҰСҚАЛАНҒАН (isVarianted) — сол кезде
+            # сұрақ мәтіні ортақ сабақтан (lesson_id) емес, ӘР ОҚУШЫНЫҢ ӨЗ
+            # нұсқасынан (variantedLessonId) алынады, әйтпесе get_lesson_detail
+            # бос "questions" тізімін қайтарады (нәтижесінде сұрақ статистикасы
+            # мүлде жиналмай қалады — нақты production деректерімен расталған
+            # қате). Нұсқаланбаған болса, variantedLessonId жоқ, lesson_id
+            # өзі қолданылады.
+            question_lesson_id = p.get("variantedLessonId") or lesson_id
+            with lessons_lock:
+                question_map = questions_cache.get(question_lesson_id)
+            if question_map is None:
+                detail = juz40_client.get_lesson_detail(token, question_lesson_id)
+                question_map = {
+                    q["id"]: {"text": _strip_question_html(q.get("questionText")), "index": idx}
+                    for idx, q in enumerate((detail or {}).get("questions") or [])
+                    if q.get("id")
+                }
+                with lessons_lock:
+                    questions_cache[question_lesson_id] = question_map
+
+            for qp in question_passings:
                 q_info = question_map.get(qp.get("questionId"))
                 if not q_info or not q_info["text"] or qp.get("score") is None:
                     continue
