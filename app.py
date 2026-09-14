@@ -805,7 +805,17 @@ def stream_detail(stream_id):
     for w in weeks:
         weeks_by_month.setdefault(w["month_number"], []).append(w)
 
-    is_sabaq_tapsyru = stream["category"] == "sabaq_tapsyru"
+    has_question_analysis = stream["category"] in ("sabaq_tapsyru", "aylyq_test")
+    question_result_counts = {}
+    if has_question_analysis:
+        question_result_counts = {
+            row["week_id"]: row["c"]
+            for row in conn.execute(
+                "SELECT week_id, COUNT(*) AS c FROM juz40_question_results WHERE week_id IN "
+                "(SELECT id FROM weeks WHERE stream_id = ?) GROUP BY week_id",
+                (stream_id,),
+            ).fetchall()
+        }
 
     months = {}
     for w in weeks:
@@ -815,14 +825,14 @@ def stream_detail(stream_id):
                 if cw["week_number"] < db.WEEKS_PER_MONTH
             ]
             result_count = sum(result_counts.get(cw["id"], 0) for cw in component_weeks)
-            if is_sabaq_tapsyru:
-                note_count = 1 if (w["summary"] or any(cw["summary"] for cw in component_weeks)) else 0
+            if has_question_analysis:
+                note_count = 1 if any(question_result_counts.get(cw["id"], 0) for cw in component_weeks) else 0
             else:
                 note_count = 1 if any(cw["curators_doc_url"] for cw in component_weeks) else 0
         else:
             result_count = result_counts.get(w["id"], 0)
-            if is_sabaq_tapsyru:
-                note_count = 1 if w["summary"] else 0
+            if has_question_analysis:
+                note_count = 1 if question_result_counts.get(w["id"], 0) else 0
             else:
                 note_count = 1 if w["curators_doc_url"] else 0
         months.setdefault(w["month_number"], []).append(
@@ -832,7 +842,7 @@ def stream_detail(stream_id):
 
     return render_template(
         "stream.html", stream=stream, program=program, months=months_sorted,
-        analysis_label="Сұрақтар анализі" if is_sabaq_tapsyru else "Куратор анализі",
+        analysis_label="Сұрақтар анализі" if has_question_analysis else "Куратор анализі",
     )
 
 
