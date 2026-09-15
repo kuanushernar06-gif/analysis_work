@@ -1928,6 +1928,18 @@ JUZ40_STEP_CHUNK_SIZE = 10
 JUZ40_MAX_GROUP_ATTEMPTS = 3
 
 
+def _juz40_group_curator_full_name(g):
+    """Топтың curator өрісінен ТОЛЫҚ атпен ("Аты Тегі") қайтарады —
+    _sync_teachers_from_juz40_groups-тегі teacher_curators.curator_name-мен
+    БІРДЕЙ форматта, сол арқылы results.curator да дәл сол толық атпен
+    сақталады да, куратор сәйкестендіру ЕШБІР жуықтаусыз, дәл болады
+    (бұрын тек аты/firstname сақталатын, сол баламен бірнеше куратордың
+    аты қайталанса, сәйкестендіру жаңсақ/толымсыз болатын)."""
+    curator = g.get("curator") or {}
+    full_name = f"{(curator.get('firstname') or '').strip()} {(curator.get('lastname') or '').strip()}".strip()
+    return full_name or (g.get("name") or "")
+
+
 def _sync_teachers_from_juz40_groups(conn, stream_id, groups):
     """Juz40-тың топ тізімінде әр топтың нақты мұғалімі (practicalLessonTeachers)
     көрсетілген — Juz40-тың өз "Каталог" бетіндегі дәл сол тағайындау. Осыны
@@ -2043,9 +2055,7 @@ def import_juz40_start(week_id):
         pending = [
             {
                 "id": g.get("id"),
-                "curator": (
-                    ((g.get("curator") or {}).get("firstname") or "").strip() or (g.get("name") or "")
-                ),
+                "curator": _juz40_group_curator_full_name(g),
                 "attempts": 0,
             }
             for g in groups
@@ -2370,9 +2380,7 @@ def import_juz40_questions_start(week_id):
         pending = [
             {
                 "id": g.get("id"),
-                "curator": (
-                    ((g.get("curator") or {}).get("firstname") or "").strip() or (g.get("name") or "")
-                ),
+                "curator": _juz40_group_curator_full_name(g),
                 "attempts": 0,
             }
             for g in groups
