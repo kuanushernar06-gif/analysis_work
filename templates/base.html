@@ -204,6 +204,47 @@
     })();
   </script>
 
+  <div id="wake-overlay" class="wake-overlay" hidden>
+    <div class="wake-overlay-card">
+      <img src="{{ url_for('static', filename='img/juz40-logo.png') }}" alt="JUZ40" class="wake-overlay-logo">
+      <p class="wake-overlay-text">Сайт біраз уақыт бойы белсенді болмады.<br>Жалғастыру үшін жаңартыңыз.</p>
+      <button type="button" class="btn btn-primary" id="wake-overlay-refresh">Жаңарту</button>
+    </div>
+  </div>
+  <script>
+    (function () {
+      // Сервер (Neon Postgres) біраз уақыт сұраныссыз қалса, автоматты
+      // "ұйқы" режиміне кетеді — содан кейінгі бірінші нақты сұраныс баяу
+      // жауап береді. Пайдаланушы қойындыны ұзақ уақыт жауып/ауыстырып
+      // қойып, қайта оралғанда осыны көрсетеміз — әрі дереу /ping арқылы
+      // DB-ні фондық түрде "оятамыз", сол арқылы "Жаңарту" басылғанда
+      // нақты бет тезірек ашылады.
+      var STALE_MS = 5 * 60 * 1000;
+      var hiddenAt = null;
+      var overlay = document.getElementById('wake-overlay');
+      var refreshBtn = document.getElementById('wake-overlay-refresh');
+      if (!overlay) return;
+
+      document.addEventListener('visibilitychange', function () {
+        if (document.hidden) {
+          hiddenAt = Date.now();
+          return;
+        }
+        if (hiddenAt && (Date.now() - hiddenAt) > STALE_MS) {
+          overlay.hidden = false;
+          fetch('/ping', { cache: 'no-store' }).catch(function () {});
+        }
+        hiddenAt = null;
+      });
+
+      if (refreshBtn) {
+        refreshBtn.addEventListener('click', function () {
+          window.location.reload();
+        });
+      }
+    })();
+  </script>
+
   {% block scripts %}{% endblock %}
 </body>
 </html>

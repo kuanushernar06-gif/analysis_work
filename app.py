@@ -128,10 +128,25 @@ def inject_category_label():
 
 @app.before_request
 def require_login():
-    if request.endpoint in ("login", "static", "favicon") or request.endpoint is None:
+    if request.endpoint in ("login", "static", "favicon", "ping") or request.endpoint is None:
         return
     if not session.get("logged_in"):
         return redirect(url_for("login", next=request.path))
+
+
+@app.route("/ping")
+def ping():
+    """Neon Postgres ұйықтап қалған соң (біраз уақыт белсенді сұраныс
+    болмаса, автоматты суспендіге кетеді) бірінші нақты сұраныс баяу
+    жауап береді — осы жеңіл маршрут base.html-дегі "қайта оянтқыш"
+    JS-тен фондық түрде шақырылады, нақты бетті ашпай тұрып DB-ні
+    оятып қою үшін (login талап етпейді — авторланбаған қалса да
+    жылдам жауап беруі керек)."""
+    try:
+        get_db().execute("SELECT 1")
+    except Exception:
+        pass
+    return jsonify({"ok": True})
 
 
 @app.errorhandler(413)
