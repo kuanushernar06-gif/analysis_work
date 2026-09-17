@@ -257,33 +257,6 @@ a { color: var(--accent); }
 .theme-toggle-chip { padding: 9px; }
 .theme-toggle-icon { width: 17px; height: 17px; background-color: var(--text-secondary); }
 .theme-toggle-chip:hover .theme-toggle-icon { background-color: var(--accent); }
-
-.wake-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 2000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--page);
-  animation: wake-overlay-fade-in .2s ease;
-}
-@keyframes wake-overlay-fade-in { from { opacity: 0; } to { opacity: 1; } }
-.wake-overlay-card {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 18px;
-  max-width: 320px;
-  padding: 32px 28px;
-  text-align: center;
-  background: var(--surface-raised);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg, 20px);
-  box-shadow: var(--shadow-hover);
-}
-.wake-overlay-logo { width: 96px; height: auto; border-radius: 14px; }
-.wake-overlay-text { margin: 0; color: var(--text-secondary); font-size: 0.95rem; line-height: 1.5; }
 /* Сайдбар қолмен ашық қалдырылғанда (.is-pinned), артындағы мазмұн жабылып
    қалмасын деп негізгі контентті де оң жаққа ысырамыз ("push" layout) —
    бұрынғыдай тек үстінен жауып тұратын overlay емес. Тек desktop енінде
