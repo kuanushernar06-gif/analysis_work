@@ -1741,6 +1741,18 @@ def toggle_student_contacted(week_id, student_id):
     return jsonify({"ok": True, "contacted": bool(new_value)})
 
 
+def _juz40_not_submitted(p):
+    """Оқушы бұл тапсырманы мүлде ТАПСЫРМАҒАН ба — Juz40 сабақ тағайындалған
+    сәтте әр оқушыға автоматты 'CREATED' күйіндегі бос жазба жасайды, ол
+    score=0.0 болып қайтады, бірақ бұл НАҚТЫ 0 балл емес (оқушы ешқашан
+    ашпаған/жауап бермеген). Нақты production деректерімен тексерілген:
+    'CREATED'+finished=false жазбалардың бәрі осындай бос "заготовка"
+    (тапсырмаған), ал нақты 0 балл алған жазбалар 'FAILED'/'SUCCESS'
+    секілді басқа статуспен, finished=true болып келеді — сол
+    соңғыларды әдеттегідей НАҚТЫ 0 балл деп есептейміз."""
+    return p.get("status") == "CREATED" and not p.get("finished")
+
+
 def _fetch_group_juz40_results(
     token, group_id, curator_name, month, week_number, default_max_score, lessons_cache, lessons_lock
 ):
@@ -1780,7 +1792,7 @@ def _fetch_group_juz40_results(
                     f"{(p.get('studentLastname') or '').strip()}"
                 ).strip()
                 score = p.get("score")
-                if not student or score is None:
+                if not student or score is None or _juz40_not_submitted(p):
                     continue
                 # Juz40 өзінің aiMaxScore-ін қайтарады (мыс. 20), бірақ
                 # сайттың СТ үшін бекітілген максимум баллы бағдарламаға
@@ -1873,7 +1885,7 @@ def _fetch_group_juz40_aylyq_results(
                 f"{(p.get('studentLastname') or '').strip()}"
             ).strip()
             score = p.get("score")
-            if not student or score is None:
+            if not student or score is None or _juz40_not_submitted(p):
                 continue
             student_id = p.get("studentId")
             rows.append((curator_name, student, student_id, score, default_max_score, None, 0))
@@ -2019,12 +2031,18 @@ def import_juz40_start(week_id):
             "error": "Бұл сынақ тек САБАҚ ТАПСЫРУ АНАЛИЗ немесе АЙЛЫҚ ТЕСТ АНАЛИЗ санатында қолжетімді.",
         })
 
+    # "ТАЛДАУ ЖАСАУ" қайта басылса (мыс. куратор кейінірек бағалаған соң
+    # жаңарту үшін), ЕСКІ нәтижелерді алдын ала тазалаймыз — әйтпесе жаңа
+    # жол ескісіне ҮСТЕЛІП қосылады да, бір оқушының ескі (мыс. 0, әлі
+    # бағаланбаған) және жаңа (нақты) баллы бірге ОРТАША алынып, қате
+    # көрсетеді (production-да нақты кездескен, тексерілген мәселе).
+    conn.execute("DELETE FROM results WHERE week_id = ?", (week_id,))
     if stream["category"] == "aylyq_test":
         # АЙЛЫҚ ТЕСТ-те сұрақ-сұрақ статистикасы да ОСЫ БІР синхрондаумен
         # бірге жиналады (СТ-дегідей бөлек батырма емес) — қайта басқанда
         # оқушылар қосарланып, статистика бұрмаланбас үшін алдын ала тазалаймыз.
         conn.execute("DELETE FROM juz40_question_results WHERE week_id = ?", (week_id,))
-        conn.commit()
+    conn.commit()
 
     try:
         token = juz40_client.login()
@@ -2316,6 +2334,8 @@ def _fetch_group_juz40_questions(token, group_id, curator_name, month, week_numb
             lesson_id = lesson.get("id")
             progresses = juz40_client.get_lesson_progresses(token, group_id, lesson_id)
             for p in progresses:
+                if _juz40_not_submitted(p):
+                    continue
                 flat.append((lesson_id, p))
 
         batch = flat[cursor:cursor + JUZ40_QUESTION_STUDENT_BATCH]
