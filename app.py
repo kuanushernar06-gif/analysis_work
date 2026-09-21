@@ -5,6 +5,7 @@ import os
 import re
 import secrets
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 from urllib.parse import urlparse
@@ -2256,6 +2257,7 @@ def import_juz40_step(week_id):
 JUZ40_QUESTION_CHUNK_SIZE = 1
 JUZ40_QUESTION_STUDENT_WORKERS = 20
 JUZ40_QUESTION_STUDENT_BATCH = 40
+JUZ40_QUESTION_STEP_BUDGET_SECONDS = 25
 JUZ40_MAX_QUESTION_GROUP_ATTEMPTS = 3
 
 
@@ -2309,6 +2311,7 @@ def _fetch_group_juz40_questions(token, group_id, curator_name, month, week_numb
     - newly_fetched_pdfs: [(pdf_url, questions_list), ...] — pdf_cache_snapshot-та
       жоқ, осы шақыруда жаңадан жүктеп-оқылған PDF-тер (негізгі ағын DB-ге
       жазады, бұл функция тек оқиды/жүктейді — жіп қауіпсіздігі үшін)."""
+    started_at = time.monotonic()
     question_rows = []
     newly_fetched = {}
     newly_fetched_lock = threading.Lock()
@@ -2339,20 +2342,32 @@ def _fetch_group_juz40_questions(token, group_id, curator_name, month, week_numb
                 flat.append((lesson_id, p))
 
         batch = flat[cursor:cursor + JUZ40_QUESTION_STUDENT_BATCH]
-        next_cursor = cursor + len(batch)
-        has_more = next_cursor < len(flat)
 
+        # Vercel функциясының қатаң шегі 60с (vercel.json maxDuration) —
+        # бір қадам одан асып созылса, жауап HTML-қате болып келіп, фронтенд
+        # "Уақытша желі қатесі" деп САНЫ ҚАЙТАЛАП, дәл сол ауыр қадамды қайта
+        # орындайды (ешқашан аяқталмайды). Сондықтан оқушыларды толқынмен
+        # (WORKERS-тен) өңдейміз де, бюджет таусылса, қалғанын келесі қадамға
+        # (cursor арқылы) қалдырамыз.
+        processed = 0
         with ThreadPoolExecutor(max_workers=JUZ40_QUESTION_STUDENT_WORKERS) as executor:
-            futures = [
-                executor.submit(
-                    _fetch_student_juz40_questions,
-                    token, group_id, lesson_id, curator_name, p,
-                    pdf_cache_snapshot, newly_fetched, newly_fetched_lock,
-                )
-                for lesson_id, p in batch
-            ]
-            for future in as_completed(futures):
-                question_rows.extend(future.result())
+            for i in range(0, len(batch), JUZ40_QUESTION_STUDENT_WORKERS):
+                if processed and time.monotonic() - started_at > JUZ40_QUESTION_STEP_BUDGET_SECONDS:
+                    break
+                wave = batch[i:i + JUZ40_QUESTION_STUDENT_WORKERS]
+                futures = [
+                    executor.submit(
+                        _fetch_student_juz40_questions,
+                        token, group_id, lesson_id, curator_name, p,
+                        pdf_cache_snapshot, newly_fetched, newly_fetched_lock,
+                    )
+                    for lesson_id, p in wave
+                ]
+                for future in as_completed(futures):
+                    question_rows.extend(future.result())
+                processed += len(wave)
+        next_cursor = cursor + processed
+        has_more = next_cursor < len(flat)
     except Juz40Error as e:
         return question_rows, list(newly_fetched.items()), "error", str(e), cursor, True
     return question_rows, list(newly_fetched.items()), "ok", None, next_cursor, has_more
