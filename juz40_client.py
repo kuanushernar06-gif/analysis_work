@@ -10,6 +10,7 @@ import io
 import json
 import os
 import re
+import threading
 import time
 import urllib.error
 import urllib.parse
@@ -77,8 +78,12 @@ def _call(url, method="GET", body=None, token=None, timeout=15):
     raise last_error or Juz40Error(f"Juz40 API-ге сұраныс сәтсіз аяқталды: {url}")
 
 
-def login():
-    """Juz40-ға кіріп, Bearer токен қайтарады."""
+_TOKEN_CACHE_SECONDS = 300  # 5 минут
+_token_cache = {"token": None, "expires_at": 0.0}
+_token_lock = threading.Lock()
+
+
+def _login_fresh():
     username, password = _get_credentials()
     body = _call(
         f"{API_BASE}/v1/auth/signin",
@@ -89,6 +94,26 @@ def login():
     if not token:
         raise Juz40Error("Juz40 логин жауабында токен табылмады.")
     return token
+
+
+def login(force=False):
+    """Juz40-ға кіріп, Bearer токен қайтарады — бірнеше минут (5) ішінде
+    ҚАЙТА ШАҚЫРЫЛСА, ЖАҢАДАН ЛОГИН БОЛМАЙ, кэштелген токенді қайтарады.
+
+    Бір синхрондау (/step) көп рет қатарынан шақырылғанда (әр group үшін
+    бөлек емес, әр step-тің басында бір рет) бұрын ӘРҚАШАН жаңадан логин
+    болатын — production-да Juz40-тың өз /v1/auth/signin эндпоинті кейде
+    HTTP 500 қайтарғаны нақты байқалды, бұл әдеттегіден тым жиі логин
+    сұранысынан (Juz40 тарапынан шектеу/жүктеме) болуы мүмкін. Кэштеу осы
+    сұраныс санын күрт азайтады. force=True — токен 401 алғаннан кейін
+    (жарамсыз болуы мүмкін) мәжбүрлеп жаңарту үшін."""
+    with _token_lock:
+        if not force and _token_cache["token"] and time.time() < _token_cache["expires_at"]:
+            return _token_cache["token"]
+        token = _login_fresh()
+        _token_cache["token"] = token
+        _token_cache["expires_at"] = time.time() + _TOKEN_CACHE_SECONDS
+        return token
 
 
 def get_all_streams(token, max_pages=40):
