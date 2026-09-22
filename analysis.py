@@ -921,6 +921,36 @@ def get_prior_year_comparison(conn, category_slug, stream_code, month_number):
     return None
 
 
+def get_sibling_stream_comparison(conn, stream, week):
+    """Дәл сол бағдарламаның (program) БАСҚА ағымдарының (мыс. ТАРИХ-01,
+    ТАРИХ-11) дәл СОЛ (month_number, week_number) нәтижесімен салыстыру —
+    ағымдар әртүрлі күнтізбелік айда басталса да, өз ішкі оқу
+    күнтізбесінің бірдей нүктесінде (мыс. '2-АЙ 3-АПТА') қалай өткенін
+    көру үшін. Тек нәтижесі бар (has_data) ағымдар қайтарылады, коды
+    бойынша сұрыпталған. Ағымдағы поток өзі қосылмайды."""
+    if week["month_number"] is None or week["week_number"] is None:
+        return []
+    siblings = conn.execute(
+        "SELECT s.id AS stream_id, s.code, w.id AS week_id "
+        "FROM streams s JOIN weeks w ON w.stream_id = s.id "
+        "WHERE s.program_id = ? AND s.category = ? AND s.id != ? "
+        "AND w.month_number = ? AND w.week_number = ? "
+        "ORDER BY s.sort_order, s.code",
+        (stream["program_id"], stream["category"], stream["id"], week["month_number"], week["week_number"]),
+    ).fetchall()
+    result = []
+    for row in siblings:
+        sib_report = compute_report(conn, row["week_id"])
+        if sib_report and sib_report.get("has_data"):
+            result.append({
+                "stream_code": row["code"],
+                "avg_score": sib_report.get("overall_avg_score"),
+                "avg_percent": sib_report.get("overall_avg_percent"),
+                "ref_max_score": sib_report.get("ref_max_score"),
+            })
+    return result
+
+
 _LS_WEEK_SORT_RE = re.compile(r"(\d+)-АЙ (\d+)-АПТА")
 _LS_TEACHER_MIN_MATCH_LEN = 5
 

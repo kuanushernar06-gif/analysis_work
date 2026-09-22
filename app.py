@@ -26,6 +26,7 @@ from analysis import (
     count_students_at_or_above,
     compute_teacher_stats_for_week,
     get_prior_year_comparison,
+    get_sibling_stream_comparison,
     compute_ls_teacher_data,
     compute_ls_stream_week_stats,
     compute_question_stats,
@@ -1507,7 +1508,11 @@ def generate_question_summary(week_id):
             for entry in prior_year.values():
                 entry["delta"] = _delta(current_score, entry["avg_score"])
 
-    summary_text = build_question_summary_text(report, prior_year, analysis_text)
+    sibling_streams = get_sibling_stream_comparison(conn, stream, week)
+    summary_text = build_question_summary_text(
+        report, prior_year, analysis_text,
+        sibling_streams=sibling_streams, week_label=week["title"],
+    )
 
     conn.execute("UPDATE weeks SET summary = ? WHERE id = ?", (summary_text, week_id))
     conn.commit()

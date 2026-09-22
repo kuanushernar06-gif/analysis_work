@@ -537,11 +537,13 @@ def generate_question_analysis(question_stats, label="СТ сұрақ-сұрақ
     return _call_gemini_text(prompt, api_key)
 
 
-def build_question_summary_text(report, prior_year, analysis_text) -> str:
+def build_question_summary_text(report, prior_year, analysis_text, sibling_streams=None, week_label=None) -> str:
     """СТ (sabaq_tapsyru) аптасының 'Жалпы қорытындысы' — есеп бетінің
     жоғарғы тайлдарымен ДӘЛ бірдей сандарды (ортақ балл, мақсат орындалу,
     өткен жылмен салыстыру, макс/0 балл алғандар) мәтін түрінде қайталап,
-    астына AI сұрақ-анализін қосады."""
+    астына AI сұрақ-анализін қосады. sibling_streams берілсе — дәл сол
+    (month_number, week_number) бойынша БАСҚА ағымдардың (мыс. ТАРИХ-01,
+    ТАРИХ-11) нәтижесімен салыстыратын жол да қосылады."""
     lines = []
     if report and report.get("has_data"):
         max_score = report.get("ref_max_score")
@@ -567,6 +569,16 @@ def build_question_summary_text(report, prior_year, analysis_text) -> str:
 
         lines.append(f"Макс балл жинаған оқушылар: {report.get('max_achiever_students')}")
         lines.append(f"0 балл жинаған оқушылар: {report.get('zero_students')}")
+
+        if sibling_streams:
+            label = f" ({week_label})" if week_label else ""
+            parts = [
+                f"{s['stream_code']} — {_kk_num(s['avg_score'])} балл"
+                for s in sibling_streams if s.get("avg_score") is not None
+            ]
+            if parts:
+                lines.append(f"Басқа ағымдармен салыстыру{label}: " + ", ".join(parts))
+
         lines.append("")
 
     lines.append("Анализ:")
