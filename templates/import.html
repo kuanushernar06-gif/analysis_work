@@ -374,6 +374,14 @@
           setSyncing(false);
           return;
         }
+        if (data.done) {
+          setProgress(data.total, data.total);
+          text.textContent = data.already_done
+            ? `Бұл апта үшін сұрақтар анализі бұрын жасалған: ${data.inserted || 0} сұрақ-жауап жазбасы сақталған.`
+            : `Дайын: ${data.inserted || 0} сұрақ-жауап жазбасы сақталды.`;
+          setSyncing(false);
+          return;
+        }
         setProgress(0, data.total);
         runStep(data.job_id);
       } catch (e) {
