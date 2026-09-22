@@ -2037,9 +2037,24 @@ def import_juz40_start(week_id):
             "error": "Бұл сынақ тек САБАҚ ТАПСЫРУ АНАЛИЗ немесе АЙЛЫҚ ТЕСТ АНАЛИЗ санатында қолжетімді.",
         })
 
-    # "ТАЛДАУ ЖАСАУ" қайта басылса (мыс. куратор кейінірек бағалаған соң
-    # жаңарту үшін), ЕСКІ нәтижелерді алдын ала тазалаймыз — әйтпесе жаңа
-    # жол ескісіне ҮСТЕЛІП қосылады да, бір оқушының ескі (мыс. 0, әлі
+    # Осы аптаға АЯҚТАЛМАҒАН (browser жабылып/интернет үзіліп қалған) job
+    # бар ма — солай болса, ЖАҢАДАН бастамай, СОНЫ жалғастырамыз: нәтижелерді
+    # тазаламаймыз, топтар тізімін Juz40-тан қайта алмаймыз. Бұлай болмаса,
+    # мыс. 106 куратор өңделіп, сақталып қойған соң қайта басқанда, бәрі
+    # тазаланып, 1-куратордан қайта басталар еді.
+    existing_job = conn.execute(
+        "SELECT id, total_groups, pending_json FROM juz40_sync_jobs "
+        "WHERE week_id = ? AND status = 'running' ORDER BY id DESC LIMIT 1",
+        (week_id,),
+    ).fetchone()
+    if existing_job and json.loads(existing_job["pending_json"] or "[]"):
+        return jsonify({
+            "ok": True, "job_id": existing_job["id"], "total": existing_job["total_groups"],
+        })
+
+    # "ТАЛДАУ ЖАСАУ" ЖАҢАДАН басталса (алдыңғы job толық аяқталған не мүлде
+    # болмаған), ЕСКІ нәтижелерді алдын ала тазалаймыз — әйтпесе жаңа жол
+    # ескісіне ҮСТЕЛІП қосылады да, бір оқушының ескі (мыс. 0, әлі
     # бағаланбаған) және жаңа (нақты) баллы бірге ОРТАША алынып, қате
     # көрсетеді (production-да нақты кездескен, тексерілген мәселе).
     conn.execute("DELETE FROM results WHERE week_id = ?", (week_id,))
@@ -2389,10 +2404,23 @@ def import_juz40_questions_start(week_id):
     if stream["category"] != "sabaq_tapsyru":
         return jsonify({"ok": False, "error": "Бұл сынақ тек САБАҚ ТАПСЫРУ АНАЛИЗ санатында қолжетімді."})
 
-    # Батырманы қайта бассаңыз (мыс. алдыңғы синхрондау желі қатесінен
-    # үзілсе), әр рет ЖАҢА job басталады — сол себепті осы аптаның
-    # алдыңғы (аяқталмаған да, аяқталған да) сұрақ-жауап деректерін алдын
-    # ала тазалаймыз, әйтпесе оқушылар қосарланып, статистика бұрмаланады.
+    # Осы аптаға АЯҚТАЛМАҒАН job бар ма (browser жабылып/интернет үзіліп
+    # қалған) — солай болса, ЖАҢАДАН бастамай СОНЫ жалғастырамыз: бұрын
+    # сақталған сұрақ-жауап деректерін тазаламаймыз, топтар тізімін Juz40-тан
+    # қайта алмаймыз.
+    existing_job = conn.execute(
+        "SELECT id, total_groups, pending_json FROM juz40_question_jobs "
+        "WHERE week_id = ? AND status = 'running' ORDER BY id DESC LIMIT 1",
+        (week_id,),
+    ).fetchone()
+    if existing_job and json.loads(existing_job["pending_json"] or "[]"):
+        return jsonify({
+            "ok": True, "job_id": existing_job["id"], "total": existing_job["total_groups"],
+        })
+
+    # Батырманы ЖАҢАДАН бассаңыз (алдыңғы job толық аяқталған не мүлде
+    # болмаған), осы аптаның алдыңғы сұрақ-жауап деректерін алдын ала
+    # тазалаймыз, әйтпесе оқушылар қосарланып, статистика бұрмаланады.
     conn.execute("DELETE FROM juz40_question_results WHERE week_id = ?", (week_id,))
     conn.execute("DELETE FROM juz40_question_jobs WHERE week_id = ?", (week_id,))
     conn.commit()
