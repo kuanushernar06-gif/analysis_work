@@ -300,6 +300,16 @@ def _call_gemini_raw(prompt, api_key, json_mode=True):
             raise CuratorAnalysisError(f"Gemini API қатесі (HTTP {e.code}): {detail[:300]}") from e
         except urllib.error.URLError as e:
             raise CuratorAnalysisError(f"Gemini API-ге қосыла алмадым: {e.reason}") from e
+        except TimeoutError as e:
+            # urllib кейде желі "timeout"-ын URLError-ге орамай, шикі
+            # TimeoutError түрінде шығарады (Python нұсқасына байланысты) —
+            # соны ұстамасақ, бүкіл сұраныс (generate_question_summary
+            # секілді шақырушы route-та) күтпеген 500 қатесімен құлап,
+            # пайдаланушыға ешбір хабарлама шықпай қалады. REQUEST_TIMEOUT
+            # (120с) өзі де Vercel-дің функция шегіне (60с) жақын/асып тұр,
+            # сондықтан бұл жерде қайталап көрмейміз — дереу нақты
+            # хабарламамен қайтарамыз.
+            raise CuratorAnalysisError(f"Gemini API-ден жауап күту уақыты бітті: {e}") from e
     else:
         raise CuratorAnalysisError("Gemini API-дің минуттық сұраныс шегінен байланыса алмадым (тегін тариф).")
 
