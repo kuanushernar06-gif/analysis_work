@@ -119,6 +119,11 @@
   </div>
   {% endblock %}
 
+  <div class="cold-start-hint" id="cold-start-hint" role="status" aria-live="polite">
+    <span class="btn-spinner" aria-hidden="true"></span>
+    <span>Серверді ояту үшін біраз уақыт кетуі мүмкін, күте тұрыңыз...</span>
+  </div>
+
   <script>
     (function () {
       var themeBtn = document.getElementById('theme-toggle');
@@ -150,6 +155,21 @@
         });
       }
 
+      // Сервер (Vercel/Neon) ұзақ уақыт бос тұрғаннан кейін бірінші сұраныс
+      // әдеттегіден баяу жауап беруі мүмкін ("cold start"). Мұны алдын ала
+      // білу мүмкін емес, сондықтан жай ғана: navigate/submit сол сәтте
+      // таймер қойылады, БЕТ АУЫСПАЙ 2.5 секундтан асса ғана (яғни шынымен
+      // баяу болса ғана) жұмсақ "күте тұрыңыз" хабары шығады — жылдам
+      // жауапта бет ауысып кетеді де, таймер іске аспай қалады.
+      var coldStartTimer = null;
+      function scheduleColdStartHint() {
+        if (coldStartTimer) return;
+        coldStartTimer = setTimeout(function () {
+          var hint = document.getElementById('cold-start-hint');
+          if (hint) hint.classList.add('is-visible');
+        }, 2500);
+      }
+
       // Сервер жауап беруге уақыт кететін формалар (Google Sheets импорт,
       // AI анализ/қорытынды жасау) кезінде батырма "қатып қалғандай"
       // көрінбесін — жіберілген сәтте айналмалы белгішемен "Өңделуде..."
@@ -166,6 +186,7 @@
 
         var main = document.querySelector('.site-main');
         if (main) main.classList.add('is-loading');
+        scheduleColdStartHint();
       });
 
       // Сол эффект кәдімгі сілтемелерде де (сайдбар, санат/бөлім/поток/апта/ай
@@ -183,6 +204,7 @@
         link.classList.add('is-loading-link');
         var main = document.querySelector('.site-main');
         if (main) main.classList.add('is-loading');
+        scheduleColdStartHint();
       });
 
       // Сайдбардағы мұғалім атын басқанда оның кураторлар тізімі ашылып/
