@@ -431,15 +431,29 @@ LS_SAPALINE_START_PERIOD = (3, 3)
 LS_SAPALINE_SUBJECT = "tarih"
 
 
+def _sapaline_attendance_percent(row):
+    """'survey' өрісінен (jalpy/qatysty/sebepti/sebepsiz) нақты қатысым %-ін
+    есептейді — jalpy әрдайым qatysty+sebepti+sebepsiz-ге тең (жалпы жауап
+    берген = қатысқан + себепті/себепсіз қатыспаған), сондықтан
+    qatysty/jalpy — дәл қатысым пайызы. Деректі болмаса не jalpy=0 болса
+    None қайтарады."""
+    survey = row.get("survey")
+    if not isinstance(survey, dict):
+        return None
+    jalpy = survey.get("jalpy")
+    qatysty = survey.get("qatysty")
+    if not jalpy or qatysty is None:
+        return None
+    return round(qatysty / jalpy * 100, 2)
+
+
 def _run_ls_sapaline_sync(conn, program="smart", division="smart"):
     """Sapaline API-дан LS_SAPALINE_START_PERIOD-тан бастап (қоса алғанда)
-    барлық периодтың 'Ұнау %' (like_pct) деректерін тартып, ls_sessions-қа
-    ҚОСЫМША ретінде сақтайды — Google Sheets-тен бұрын жүктелген басқа
-    периодтардың деректерін ЕШҚАШАН тазаламайды. Әр период үшін тек СОЛ
-    периодтың бұрынғы sapaline-жазбалары ауыстырылады (қайта басқанда
-    қосарланбас үшін). Sapaline-де 'қатысым %'-ге бөлек баған жоқ болғандықтан,
-    attendance_percent бос (NULL) қалады — жинақ есепте like_percent жалғыз
-    өзі қолданылады (analysis.py-дағы _avg/combined_avg нөлдей алады).
+    барлық периодтың 'Ұнау %' (like_pct) және 'Қатысым %' (survey.qatysty/
+    jalpy) деректерін тартып, ls_sessions-қа ҚОСЫМША ретінде сақтайды —
+    Google Sheets-тен бұрын жүктелген басқа периодтардың деректерін ЕШҚАШАН
+    тазаламайды. Әр период үшін тек СОЛ периодтың бұрынғы sapaline-жазбалары
+    ауыстырылады (қайта басқанда қосарланбас үшін).
     Қайтарады: (synced_periods: [{"label", "count"}], errors: [str])."""
     token = sapaline_client.login()
     periods = sapaline_client.get_periods(token, division=division)
@@ -469,6 +483,7 @@ def _run_ls_sapaline_sync(conn, program="smart", division="smart"):
                 "teacher_name": (r.get("teacher") or "").strip(),
                 "stream_code": r.get("stream"),
                 "like_percent": round(r["like_pct"] * 100, 2),
+                "attendance_percent": _sapaline_attendance_percent(r),
             })
         entries = [e for e in entries if e["teacher_name"] and e["stream_code"]]
 
@@ -491,8 +506,11 @@ def _run_ls_sapaline_sync(conn, program="smart", division="smart"):
             conn.execute(
                 "INSERT INTO ls_sessions "
                 "(import_id, session_date, teacher_name, stream_code, week_label, like_percent, attendance_percent) "
-                "VALUES (?, ?, ?, ?, ?, ?, NULL)",
-                (import_id, e["session_date"], e["teacher_name"], e["stream_code"], label, e["like_percent"]),
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (
+                    import_id, e["session_date"], e["teacher_name"], e["stream_code"], label,
+                    e["like_percent"], e["attendance_percent"],
+                ),
             )
         conn.commit()
         synced.append({"label": label, "count": len(entries)})

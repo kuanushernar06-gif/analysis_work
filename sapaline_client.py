@@ -111,10 +111,13 @@ def get_periods(token, division="smart"):
 def get_live_sabaq_rows(token, division, subject, period_id):
     """Берілген период үшін барлық Live сабақ жолын қайтарады:
     [{"teacher":.., "stream":.., "lesson_date":.., "time_from":..,
-    "like_pct":.., "search_status":..}, ...]."""
+    "like_pct":.., "search_status":.., "survey":..}, ...]. 'survey' —
+    {"jalpy": жалпы жауап берген сан, "qatysty": қатысқандар,
+    "sebepti"/"sebepsiz": себепті/себепсіз қатыспағандар} — jalpy әрдайым
+    qatysty+sebepti+sebepsiz-ге тең, сондықтан қатысым % осыдан есептеледі."""
     path = (
         "/rest/v1/live_sabaq_rows?"
-        "select=teacher,stream,lesson_date,time_from,like_pct,search_status"
+        "select=teacher,stream,lesson_date,time_from,like_pct,search_status,survey"
         f"&division=eq.{division}&subject=eq.{subject}&period_id=eq.{period_id}"
         "&order=lesson_date.asc&limit=1000"
     )
