@@ -19,6 +19,8 @@ load_dotenv()
 import db
 import juz40_client
 from juz40_client import Juz40Error
+import sapaline_client
+from sapaline_client import SapalineError
 from analysis import (
     compute_report,
     compute_curator_extremes,
@@ -420,6 +422,103 @@ def _run_ls_import(conn, sheet_url, program):
     return len(entries)
 
 
+# Sapaline-нан автоматты тартылатын LIVE САБАҚ синхрондауы 3-АЙ 3-АПТА-дан
+# басталады (осы функция алғаш қосылған кездегі ағымдағы период) — бұдан
+# АЛДЫҢҒЫ периодтар Google Sheets арқылы қолмен жүктелген деректе қалады,
+# оларды бұл синхрондау ешқашан қозғамайды. (month, week) осы мәннен
+# КІШІ ЕМЕС период болса, синхрондалады.
+LS_SAPALINE_START_PERIOD = (3, 3)
+LS_SAPALINE_SUBJECT = "tarih"
+
+
+def _run_ls_sapaline_sync(conn, program="smart", division="smart"):
+    """Sapaline API-дан LS_SAPALINE_START_PERIOD-тан бастап (қоса алғанда)
+    барлық периодтың 'Ұнау %' (like_pct) деректерін тартып, ls_sessions-қа
+    ҚОСЫМША ретінде сақтайды — Google Sheets-тен бұрын жүктелген басқа
+    периодтардың деректерін ЕШҚАШАН тазаламайды. Әр период үшін тек СОЛ
+    периодтың бұрынғы sapaline-жазбалары ауыстырылады (қайта басқанда
+    қосарланбас үшін). Sapaline-де 'қатысым %'-ге бөлек баған жоқ болғандықтан,
+    attendance_percent бос (NULL) қалады — жинақ есепте like_percent жалғыз
+    өзі қолданылады (analysis.py-дағы _avg/combined_avg нөлдей алады).
+    Қайтарады: (synced_periods: [{"label", "count"}], errors: [str])."""
+    token = sapaline_client.login()
+    periods = sapaline_client.get_periods(token, division=division)
+    periods = [p for p in periods if (p["month"], p["week"]) >= LS_SAPALINE_START_PERIOD]
+    periods.sort(key=lambda p: (p["month"], p["week"]))
+
+    synced, errors = [], []
+    for p in periods:
+        label = f"{p['month']}-АЙ {p['week']}-АПТА"
+        try:
+            rows = sapaline_client.get_live_sabaq_rows(
+                token, division, LS_SAPALINE_SUBJECT, p["id"]
+            )
+        except SapalineError as e:
+            errors.append(f"{label}: {e}")
+            continue
+
+        entries = []
+        for r in rows:
+            if r.get("like_pct") is None:
+                continue
+            lesson_date = r.get("lesson_date")
+            time_from = r.get("time_from")
+            session_date = f"{lesson_date}T{time_from}:00" if lesson_date and time_from else lesson_date
+            entries.append({
+                "session_date": session_date,
+                "teacher_name": (r.get("teacher") or "").strip(),
+                "stream_code": r.get("stream"),
+                "like_percent": round(r["like_pct"] * 100, 2),
+            })
+        entries = [e for e in entries if e["teacher_name"] and e["stream_code"]]
+
+        # Осы (program, period) үшін алдыңғы sapaline синхрондауын ауыстырамыз
+        # (cascade арқылы ls_sessions да өшеді) — Sheets-тен келген жазбаларға
+        # (source='sheet') тимейді.
+        conn.execute(
+            "DELETE FROM ls_imports WHERE program = ? AND source = 'sapaline' AND week_label = ?",
+            (program, label),
+        )
+        if not entries:
+            conn.commit()
+            continue
+        import_id = conn.execute(
+            "INSERT INTO ls_imports (sheet_url, row_count, program, source, week_label) "
+            "VALUES (?, ?, ?, 'sapaline', ?) RETURNING id",
+            (f"sapaline:{division}:{LS_SAPALINE_SUBJECT}", len(entries), program, label),
+        ).fetchone()["id"]
+        for e in entries:
+            conn.execute(
+                "INSERT INTO ls_sessions "
+                "(import_id, session_date, teacher_name, stream_code, week_label, like_percent, attendance_percent) "
+                "VALUES (?, ?, ?, ?, ?, ?, NULL)",
+                (import_id, e["session_date"], e["teacher_name"], e["stream_code"], label, e["like_percent"]),
+            )
+        conn.commit()
+        synced.append({"label": label, "count": len(entries)})
+
+    return synced, errors
+
+
+@app.route("/ls/import/sapaline", methods=["POST"])
+def ls_import_sapaline():
+    conn = get_db()
+    try:
+        synced, errors = _run_ls_sapaline_sync(conn)
+    except SapalineError as e:
+        flash(f"Sapaline синхрондауы сәтсіз аяқталды: {e}", "error")
+        return redirect(url_for("ls_import"))
+
+    if synced:
+        summary = "; ".join(f"{s['label']}: {s['count']}" for s in synced)
+        flash(f"Sapaline-нан синхрондалды — {summary}", "ok")
+    if errors:
+        flash("Sapaline қатесі — " + "; ".join(errors), "error")
+    if not synced and not errors:
+        flash("Sapaline-де синхрондауға жаңа период табылмады.", "ok")
+    return redirect(url_for("ls_import"))
+
+
 @app.route("/ls/import", methods=["GET", "POST"])
 def ls_import():
     conn = get_db()
@@ -443,11 +542,17 @@ def ls_import():
     last_imports = {}
     for program in LS_PROGRAM_LABELS:
         last_imports[program] = conn.execute(
-            "SELECT * FROM ls_imports WHERE program = ? ORDER BY id DESC LIMIT 1", (program,)
+            "SELECT * FROM ls_imports WHERE program = ? AND source = 'sheet' ORDER BY id DESC LIMIT 1",
+            (program,),
         ).fetchone()
+    sapaline_periods = conn.execute(
+        "SELECT week_label, row_count, created_at FROM ls_imports "
+        "WHERE source = 'sapaline' ORDER BY id DESC"
+    ).fetchall()
     return render_template(
         "ls_import.html", ls_page=True, active_page="ls_import",
         last_import_smart=last_imports["smart"], last_import_junior=last_imports["junior"],
+        sapaline_periods=sapaline_periods,
     )
 
 
@@ -460,7 +565,8 @@ def ls_import_refresh():
     updated, errors = [], []
     for program, label in LS_PROGRAM_LABELS.items():
         row = conn.execute(
-            "SELECT sheet_url FROM ls_imports WHERE program = ? ORDER BY id DESC LIMIT 1", (program,)
+            "SELECT sheet_url FROM ls_imports WHERE program = ? AND source = 'sheet' ORDER BY id DESC LIMIT 1",
+            (program,),
         ).fetchone()
         if row is None or not row["sheet_url"]:
             continue

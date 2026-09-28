@@ -207,6 +207,8 @@ CREATE TABLE IF NOT EXISTS ls_imports (
     sheet_url TEXT,
     row_count INTEGER,
     program TEXT,
+    source TEXT DEFAULT 'sheet',
+    week_label TEXT,
     created_at TIMESTAMPTZ DEFAULT now()
 );
 
@@ -418,6 +420,8 @@ CREATE TABLE IF NOT EXISTS ls_imports (
     sheet_url TEXT,
     row_count INTEGER,
     program TEXT,
+    source TEXT DEFAULT 'sheet',
+    week_label TEXT,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -699,6 +703,14 @@ def _migrate(conn):
         conn.commit()
     conn.execute("UPDATE ls_imports SET program = 'smart' WHERE program IS NULL")
     conn.commit()
+    if not _column_exists(existing_columns, "ls_imports", "source"):
+        conn.execute("ALTER TABLE ls_imports ADD COLUMN source TEXT DEFAULT 'sheet'")
+        conn.commit()
+    conn.execute("UPDATE ls_imports SET source = 'sheet' WHERE source IS NULL")
+    conn.commit()
+    if not _column_exists(existing_columns, "ls_imports", "week_label"):
+        conn.execute("ALTER TABLE ls_imports ADD COLUMN week_label TEXT")
+        conn.commit()
     if not _column_exists(existing_columns, "results", "excuse_note"):
         conn.execute("ALTER TABLE results ADD COLUMN excuse_note TEXT")
         conn.commit()
