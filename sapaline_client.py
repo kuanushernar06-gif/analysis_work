@@ -99,6 +99,19 @@ def login(force=False):
         return token
 
 
+def get_teachers(token, subject):
+    """live_sabaq_teachers кестесінен барлық жазбаны қайтарады:
+    [{"id":.., "full_name":.., "subject":.., "merged_into":..}, ...].
+    'merged_into' — осы жазбаның аты (мыс. 'Бердібек Ағай') сол ЖЫЛДЫ адамның
+    БАСҚА (қанондық) жазбасына (мыс. 'Әбдіразақ Бердібек') сілтейді —
+    координаторлар бір мұғалімнің атын әртүрлі жазған кезде осылай
+    сәйкестендіріледі."""
+    return _request(
+        f"/rest/v1/live_sabaq_teachers?select=id,full_name,subject,merged_into&subject=eq.{subject}",
+        token=token,
+    )
+
+
 def get_periods(token, division="smart"):
     """live_sabaq_periods кестесінен период тізімін қайтарады:
     [{"id":.., "division":.., "month":.., "week":..}, ...]."""

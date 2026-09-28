@@ -447,15 +447,39 @@ def _sapaline_attendance_percent(row):
     return round(qatysty / jalpy * 100, 2)
 
 
+def _sapaline_teacher_canonical_names(teachers):
+    """live_sabaq_teachers тізімінен {шикі_ат: қанондық_ат} сөздігін құрады —
+    'merged_into' тізбегін (бірнеше қадам болса да, циклге тап болмай) толық
+    жүріп, ең соңғы (біреуге бірікпеген) атты қанондық деп алады. Осы
+    арқылы бір мұғалімнің Sapaline-де әртүрлі жазылған аты (мыс. 'Бердібек
+    Ағай' vs 'Әбдіразақ Бердібек') бір ғана карточкаға жиналады."""
+    by_id = {t["id"]: t for t in teachers}
+    mapping = {}
+    for t in teachers:
+        name = t["full_name"]
+        current = t
+        seen_ids = {t["id"]}
+        while current.get("merged_into") and current["merged_into"] in by_id and current["merged_into"] not in seen_ids:
+            current = by_id[current["merged_into"]]
+            seen_ids.add(current["id"])
+            name = current["full_name"]
+        mapping[t["full_name"]] = name
+    return mapping
+
+
 def _run_ls_sapaline_sync(conn, program="smart", division="smart"):
     """Sapaline API-дан LS_SAPALINE_START_PERIOD-тан бастап (қоса алғанда)
     барлық периодтың 'Ұнау %' (like_pct) және 'Қатысым %' (survey.qatysty/
     jalpy) деректерін тартып, ls_sessions-қа ҚОСЫМША ретінде сақтайды —
     Google Sheets-тен бұрын жүктелген басқа периодтардың деректерін ЕШҚАШАН
     тазаламайды. Әр период үшін тек СОЛ периодтың бұрынғы sapaline-жазбалары
-    ауыстырылады (қайта басқанда қосарланбас үшін).
+    ауыстырылады (қайта басқанда қосарланбас үшін). Мұғалім аты Sapaline-нің
+    өз 'merged_into' сәйкестендіруі арқылы қанондық атқа айналдырылады.
     Қайтарады: (synced_periods: [{"label", "count"}], errors: [str])."""
     token = sapaline_client.login()
+    teacher_names = _sapaline_teacher_canonical_names(
+        sapaline_client.get_teachers(token, LS_SAPALINE_SUBJECT)
+    )
     periods = sapaline_client.get_periods(token, division=division)
     periods = [p for p in periods if (p["month"], p["week"]) >= LS_SAPALINE_START_PERIOD]
     periods.sort(key=lambda p: (p["month"], p["week"]))
@@ -478,9 +502,10 @@ def _run_ls_sapaline_sync(conn, program="smart", division="smart"):
             lesson_date = r.get("lesson_date")
             time_from = r.get("time_from")
             session_date = f"{lesson_date}T{time_from}:00" if lesson_date and time_from else lesson_date
+            raw_teacher_name = (r.get("teacher") or "").strip()
             entries.append({
                 "session_date": session_date,
-                "teacher_name": (r.get("teacher") or "").strip(),
+                "teacher_name": teacher_names.get(raw_teacher_name, raw_teacher_name),
                 "stream_code": r.get("stream"),
                 "like_percent": round(r["like_pct"] * 100, 2),
                 "attendance_percent": _sapaline_attendance_percent(r),
