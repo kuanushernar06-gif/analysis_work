@@ -18,26 +18,6 @@
   </p>
 </div>
 
-<div class="card">
-  <h2>Sapaline-нан автоматты синхрондау (Смарт / ТАРИХ)</h2>
-  <p class="section-intro">
-    {{ "3-АЙ 3-АПТА" }}-дан бастап (қоса алғанда) және бұдан кейінгі барлық периодтың
-    «Ұнау %» көрсеткішін Sapaline API-дан тікелей тартады. Бұдан АЛДЫҢҒЫ периодтар
-    (жоғарыдағы Google Sheets жүктемесінен келген деректер) тимейді — олар сол
-    қалпында қалады. Жаңа период шыққан сайын (апта сайын) осы батырманы қайта
-    басуға болады, қайталап басу бұрынғы деректі қосарламайды.
-  </p>
-  <form method="post" action="{{ url_for('ls_import_sapaline') }}">
-    <button type="submit" class="btn btn-primary">Sapaline-нан синхрондау</button>
-  </form>
-  {% if sapaline_periods %}
-  <p class="muted" style="margin-top:10px">
-    Синхрондалған периодтар:
-    {% for p in sapaline_periods %}{{ p['week_label'] }} ({{ p['row_count'] }} жол){% if not loop.last %}, {% endif %}{% endfor %}
-  </p>
-  {% endif %}
-</div>
-
 {% for program, label, last_import in [("smart", "Смарт", last_import_smart), ("junior", "Джуниор", last_import_junior)] %}
 <div class="card">
   <h2>{{ label }}</h2>

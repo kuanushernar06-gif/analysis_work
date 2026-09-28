@@ -500,25 +500,6 @@ def _run_ls_sapaline_sync(conn, program="smart", division="smart"):
     return synced, errors
 
 
-@app.route("/ls/import/sapaline", methods=["POST"])
-def ls_import_sapaline():
-    conn = get_db()
-    try:
-        synced, errors = _run_ls_sapaline_sync(conn)
-    except SapalineError as e:
-        flash(f"Sapaline синхрондауы сәтсіз аяқталды: {e}", "error")
-        return redirect(url_for("ls_import"))
-
-    if synced:
-        summary = "; ".join(f"{s['label']}: {s['count']}" for s in synced)
-        flash(f"Sapaline-нан синхрондалды — {summary}", "ok")
-    if errors:
-        flash("Sapaline қатесі — " + "; ".join(errors), "error")
-    if not synced and not errors:
-        flash("Sapaline-де синхрондауға жаңа период табылмады.", "ok")
-    return redirect(url_for("ls_import"))
-
-
 @app.route("/ls/import", methods=["GET", "POST"])
 def ls_import():
     conn = get_db()
@@ -545,22 +526,19 @@ def ls_import():
             "SELECT * FROM ls_imports WHERE program = ? AND source = 'sheet' ORDER BY id DESC LIMIT 1",
             (program,),
         ).fetchone()
-    sapaline_periods = conn.execute(
-        "SELECT week_label, row_count, created_at FROM ls_imports "
-        "WHERE source = 'sapaline' ORDER BY id DESC"
-    ).fetchall()
     return render_template(
         "ls_import.html", ls_page=True, active_page="ls_import",
         last_import_smart=last_imports["smart"], last_import_junior=last_imports["junior"],
-        sapaline_periods=sapaline_periods,
     )
 
 
 @app.route("/ls/import/refresh", methods=["POST"])
 def ls_import_refresh():
-    """Смарт пен джуниордың соңғы жүктелген сілтемелерін қайта оқып,
-    деректерін жаңартады — экзельге жаңа нәтиже қосылған сайын, пайдаланушы
-    сілтемені қайта теріп жатпай, осы батырманы басу арқылы жаңартады."""
+    """Смарт пен джуниордың соңғы жүктелген сілтемелерін қайта оқиды, ӘРІ
+    Sapaline API-дан LIVE САБАҚ-тың соңғы период(тар)ын тартады (Google
+    Sheets-тен бұрын жүктелген деректерге тимейді) — экзельге жаңа нәтиже
+    қосылған сайын НЕМЕСЕ Sapaline-де жаңа период шыққан сайын, пайдаланушы
+    осы БІР батырманы басу арқылы екеуін де жаңартады."""
     conn = get_db()
     updated, errors = [], []
     for program, label in LS_PROGRAM_LABELS.items():
@@ -575,6 +553,13 @@ def ls_import_refresh():
             updated.append(f"{label}: {count}")
         except SheetFetchError as e:
             errors.append(f"{label}: {e}")
+
+    try:
+        synced, sap_errors = _run_ls_sapaline_sync(conn)
+        updated.extend(f"{s['label']}: {s['count']}" for s in synced)
+        errors.extend(sap_errors)
+    except SapalineError as e:
+        errors.append(f"Sapaline: {e}")
 
     if not updated and not errors:
         flash("Алдымен LS бағалау экзелінің сілтемесін жүктеңіз.", "error")
