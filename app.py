@@ -73,7 +73,12 @@ from curator_analysis import (
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "juz40-local-dev-secret")
-app.permanent_session_lifetime = timedelta(days=30)
+# Сессия мерзімі әдейі қысқа етіп қойылған (бұрын 30 күн болатын) — ұзақ
+# уақыт әрекетсіз қалған соң (сайт "ұйқыға кеткен" кезде), пайдаланушы
+# ескі бетте "ілініп" қалмай, келесі әрекетте (қай беттен болса да)
+# require_login арқылы дереу Авторизация бетіне шығарылады — Sapaline
+# секілді сайттардың мінез-құлқымен бірдей.
+app.permanent_session_lifetime = timedelta(minutes=30)
 
 ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL")
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD")
