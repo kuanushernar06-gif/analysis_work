@@ -1242,3 +1242,44 @@ def compute_question_stats(conn, week_id, limit=20, min_attempts=3):
     result.sort(key=lambda e: e["wrong_percent"], reverse=True)
     return result[:limit]
 
+
+def compute_question_stats_combined(conn, week_ids, limit=20, min_attempts=3):
+    """compute_question_stats-тің АЙ ДЕҢГЕЙІНДЕГІ нұсқасы — бірнеше апта
+    (бір айдың құрамдас апталары) бойынша БІРІКТІРІП есептейді. Әр
+    аптаның өз материалы (PDF) бөлек болғандықтан, variant/question_index
+    апта сайын ӘРТҮРЛІ сұраққа сәйкес келуі мүмкін — сондықтан бұл жерде
+    тек сұрақ МӘТІНІ (question_text) бойынша топтастырамыз, variant/
+    question_number-ды шаблонға бермейміз (None — карточкада сол пилл
+    жай көрінбей қалады)."""
+    if not week_ids:
+        return []
+    placeholders = ",".join("?" * len(week_ids))
+    rows = conn.execute(
+        "SELECT question_text, COUNT(*) AS total, "
+        "SUM(CASE WHEN score <= 0 THEN 1 ELSE 0 END) AS wrong "
+        "FROM juz40_question_results "
+        f"WHERE week_id IN ({placeholders}) AND question_text IS NOT NULL AND score IS NOT NULL "
+        "GROUP BY question_text "
+        "HAVING COUNT(*) >= ?",
+        list(week_ids) + [min_attempts],
+    ).fetchall()
+
+    result = []
+    for r in rows:
+        text = (r["question_text"] or "").strip()
+        if not text:
+            continue
+        total = r["total"]
+        wrong = r["wrong"] or 0
+        result.append({
+            "question": text,
+            "variant": None,
+            "question_number": None,
+            "total": total,
+            "wrong": wrong,
+            "wrong_percent": round(wrong / total * 100, 1),
+        })
+
+    result.sort(key=lambda e: e["wrong_percent"], reverse=True)
+    return result[:limit]
+

@@ -32,6 +32,7 @@ from analysis import (
     compute_ls_teacher_data,
     compute_ls_stream_week_stats,
     compute_question_stats,
+    compute_question_stats_combined,
     _match_teacher_curators,
     _registered_name_candidates,
     _compact_name,
@@ -1395,8 +1396,11 @@ def week_report(week_id):
     # емес, нақты сұрақ мәтініне негізделген "ең көп қате кеткен сұрақтар"
     # тізімі.
     question_stats = []
-    if not is_summary and stream and stream["category"] in ("sabaq_tapsyru", "aylyq_test"):
-        question_stats = compute_question_stats(conn, week_id)
+    if stream and stream["category"] in ("sabaq_tapsyru", "aylyq_test"):
+        if is_summary:
+            question_stats = compute_question_stats_combined(conn, combine_ids)
+        else:
+            question_stats = compute_question_stats(conn, week_id)
 
     return render_template(
         "report.html",
