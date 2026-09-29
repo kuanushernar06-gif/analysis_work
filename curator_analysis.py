@@ -582,10 +582,17 @@ def build_question_summary_text(report, prior_year, analysis_text, sibling_strea
 
         if sibling_streams:
             label = f" ({week_label})" if week_label else ""
-            parts = [
-                f"{s['stream_code']} — {_kk_num(s['avg_score'])} балл"
-                for s in sibling_streams if s.get("avg_score") is not None
-            ]
+            own_score = report.get("overall_avg_score")
+            parts = []
+            for s in sibling_streams:
+                if s.get("avg_score") is None:
+                    continue
+                part = f"{s['stream_code']} — {_kk_num(s['avg_score'])} балл"
+                if own_score is not None:
+                    delta = round(own_score - s["avg_score"], 2)
+                    sign = "+" if delta > 0 else ""
+                    part += f" ({sign}{_kk_num(delta)})"
+                parts.append(part)
             if parts:
                 lines.append(f"Басқа ағымдармен салыстыру{label}: " + ", ".join(parts))
 
