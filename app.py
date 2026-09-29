@@ -473,6 +473,23 @@ def _sapaline_teacher_canonical_names(teachers):
     return mapping
 
 
+_SAPALINE_STREAM_SUFFIX_RE = re.compile(r"-(\d+)$")
+
+
+def _sapaline_stream_code(raw_stream, program):
+    """Sapaline-нің шикі ағым кодын біздің LS жүйесінің бар конвенциясына
+    сәйкестендіреді. Sapaline-де Junior бөлімінің ағымдары да ('ZEREK'/
+    'USHQYN'/'ALAU') сырты 'ТАРИХ-01'/'ТАРИХ-11'/'ТАРИХ-21' болып келеді —
+    Smart-пен АРАЛАСЫП КЕТПЕС үшін, sheets.py-дегі LS_STREAM_PREFIX_BY_PROGRAM
+    конвенциясымен бірдей, Junior үшін 'JUNIOR-NN' префиксіне ауыстырамыз."""
+    if not raw_stream or program == "smart":
+        return raw_stream
+    match = _SAPALINE_STREAM_SUFFIX_RE.search(raw_stream)
+    if not match:
+        return raw_stream
+    return f"JUNIOR-{match.group(1)}"
+
+
 def _run_ls_sapaline_sync(conn, program="smart", division="smart"):
     """Sapaline API-дан LS_SAPALINE_START_PERIOD-тан бастап (қоса алғанда)
     барлық периодтың 'Ұнау %' (like_pct) және 'Қатысым %' (survey.qatysty/
@@ -512,7 +529,7 @@ def _run_ls_sapaline_sync(conn, program="smart", division="smart"):
             entries.append({
                 "session_date": session_date,
                 "teacher_name": teacher_names.get(raw_teacher_name, raw_teacher_name),
-                "stream_code": r.get("stream"),
+                "stream_code": _sapaline_stream_code(r.get("stream"), program),
                 "like_percent": round(r["like_pct"] * 100, 2),
                 "attendance_percent": _sapaline_attendance_percent(r),
             })
@@ -603,12 +620,14 @@ def ls_import_refresh():
         except SheetFetchError as e:
             errors.append(f"{label}: {e}")
 
-    try:
-        synced, sap_errors = _run_ls_sapaline_sync(conn)
-        updated.extend(f"{s['label']}: {s['count']}" for s in synced)
-        errors.extend(sap_errors)
-    except SapalineError as e:
-        errors.append(f"Sapaline: {e}")
+    for program, division in (("smart", "smart"), ("junior", "junior")):
+        label = LS_PROGRAM_LABELS[program]
+        try:
+            synced, sap_errors = _run_ls_sapaline_sync(conn, program=program, division=division)
+            updated.extend(f"{label} {s['label']}: {s['count']}" for s in synced)
+            errors.extend(f"{label} {e}" for e in sap_errors)
+        except SapalineError as e:
+            errors.append(f"Sapaline ({label}): {e}")
 
     if not updated and not errors:
         flash("Алдымен LS бағалау экзелінің сілтемесін жүктеңіз.", "error")
