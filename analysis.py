@@ -357,7 +357,7 @@ def compute_program_overview(conn, program_id):
         FROM results r
         JOIN weeks w ON w.id = r.week_id
         JOIN streams s ON s.id = w.stream_id
-        WHERE s.program_id = ?
+        WHERE s.program_id = ? AND (r.excused IS NULL OR r.excused = 0)
         """,
         (program_id,),
     ).fetchall()
