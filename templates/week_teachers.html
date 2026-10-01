@@ -59,7 +59,10 @@
       {% endif %}
     </div>
     {% else %}
-    <p class="muted">Бұл аптада нәтиже жоқ.</p>
+    <p class="muted">
+      Бұл аптада нәтиже жоқ.
+      <a href="{{ url_for('debug_teacher_curators', week_id=week['id'], teacher_id=t.id) }}" target="_blank" class="no-print">Себебін тексеру →</a>
+    </p>
     {% endif %}
 
     <button type="button" class="teacher-students-toggle" data-teacher-toggle="teacher-students-{{ t.id }}">
