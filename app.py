@@ -2009,9 +2009,13 @@ def _fetch_group_juz40_aylyq_results(
     """Бір топ үшін Juz40-тан осы айдың АЙЛЫҚ ТЕСТ балын АЛАДЫ, әрі — ПДФ-сыз,
     себебі QUIZ түрдегі сабақта әр оқушының сұрақ-сұрақ жауабы (score/maxScore)
     lesson progresses-тің өзінде бар — бірден сол оқушының сұрақ-сұрақ
-    статистикасын да жинайды (question_rows). Тақырып әрқашан Juz40-тың
+    статистикасын да жинайды (question_rows). Тақырып ӘДЕТТЕ Juz40-тың
     4-аптасында (db.WEEKS_PER_MONTH) орналасады — біздің өз апта нөміріміз
-    (aylyq_test санатында әрқашан 1) емес.
+    (aylyq_test санатында әрқашан 1) емес — БІРАҚ кейбір айда координатор
+    оны ертерек (мыс. 3-аптада) қоюы мүмкін екені production-да нақты
+    расталған (3-АЙ-да 4-аптаның орнына 3-аптада табылған), сондықтан 4-
+    аптадан таппасақ, қалған апталарды да (соңынан алдыға қарай, 4-аптаға
+    жақыны бірінші) тексереміз.
 
     Бір тақырыпта дәл БІР ағымдағы сабақ анықталмаса (мыс. ескі версиясы
     да қалып қойса және екеуін ажырата алмасақ), 'ambiguous' статусымен
@@ -2023,8 +2027,13 @@ def _fetch_group_juz40_aylyq_results(
     rows = []
     question_rows = []
     try:
-        themes = juz40_client.get_group_themes(token, group_id, month, db.WEEKS_PER_MONTH)
-        theme = juz40_client.find_theme_by_name_part(themes, "АЙЛЫҚ ТЕСТ")
+        theme = None
+        search_weeks = [db.WEEKS_PER_MONTH] + list(range(db.WEEKS_PER_MONTH - 1, 0, -1))
+        for week_num in search_weeks:
+            themes = juz40_client.get_group_themes(token, group_id, month, week_num)
+            theme = juz40_client.find_theme_by_name_part(themes, "АЙЛЫҚ ТЕСТ")
+            if theme is not None:
+                break
         if theme is None:
             return rows, question_rows, "no_theme", None
 
